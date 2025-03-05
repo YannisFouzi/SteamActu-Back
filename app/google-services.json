@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "6529355188",
+    "project_id": "steamactunotif",
+    "storage_bucket": "steamactunotif.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:6529355188:android:249316e5e868c6aa1f36e1",
+        "android_client_info": {
+          "package_name": "com.steamactunotif"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCaQCh_Yl3vLL1nGHFSvuuJ2qpmwnmSQgM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
