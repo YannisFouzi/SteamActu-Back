@@ -44,7 +44,29 @@ const UserSchema = new mongoose.Schema({
     pushToken: {
       type: String,
     },
+    autoFollowNewGames: {
+      type: Boolean,
+      default: false,
+    },
   },
+  lastSyncedGames: [
+    {
+      appId: {
+        type: String,
+        required: true,
+      },
+      name: {
+        type: String,
+      },
+      logoUrl: {
+        type: String,
+      },
+      addedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
   createdAt: {
     type: Date,
     default: Date.now,

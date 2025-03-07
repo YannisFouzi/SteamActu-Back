@@ -11,6 +11,7 @@ const steamRoutes = require("./src/routes/steam");
 
 // Import des services
 const steamService = require("./src/services/steamService");
+const gamesSyncService = require("./src/services/gamesSyncService");
 
 // Import des utilitaires
 const newsChecker = require("./src/utils/newsChecker");
@@ -49,6 +50,23 @@ cron.schedule("*/10 * * * *", async () => {
     await newsChecker.checkNewsForAllUsers();
   } catch (error) {
     console.error("Erreur lors de la vérification des actualités:", error);
+  }
+});
+
+// Tâche cron pour synchroniser les bibliothèques de jeux (tous les jours à minuit)
+cron.schedule("0 0 * * *", async () => {
+  console.log(
+    "Démarrage de la synchronisation quotidienne des bibliothèques de jeux..."
+  );
+
+  try {
+    const stats = await gamesSyncService.syncAllUsersGames();
+    console.log("Synchronisation quotidienne terminée avec succès:", stats);
+  } catch (error) {
+    console.error(
+      "Erreur lors de la synchronisation quotidienne des bibliothèques:",
+      error
+    );
   }
 });
 

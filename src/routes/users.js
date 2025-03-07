@@ -91,7 +91,7 @@ router.put("/:steamId/games", async (req, res) => {
 router.put("/:steamId/notifications", async (req, res) => {
   try {
     const { steamId } = req.params;
-    const { enabled, pushToken } = req.body;
+    const { enabled, pushToken, autoFollowNewGames } = req.body;
 
     const user = await User.findOne({ steamId });
 
@@ -106,6 +106,10 @@ router.put("/:steamId/notifications", async (req, res) => {
 
     if (pushToken) {
       user.notificationSettings.pushToken = pushToken;
+    }
+
+    if (autoFollowNewGames !== undefined) {
+      user.notificationSettings.autoFollowNewGames = autoFollowNewGames;
     }
 
     await user.save();
