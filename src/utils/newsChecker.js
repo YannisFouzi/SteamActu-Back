@@ -66,6 +66,9 @@ async function checkNewsForUser(user) {
             ...newNews.map((item) => item.date)
           );
 
+          // Mettre à jour également le timestamp de dernière mise à jour
+          game.lastUpdateTimestamp = Date.now();
+
           // Ajouter les nouvelles actualités au batch
           newsBatch[game.appId] = newNews;
         }
