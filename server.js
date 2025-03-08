@@ -1,13 +1,15 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const cron = require("node-cron");
 require("dotenv").config();
 
 // Import des routes
 const userRoutes = require("./src/routes/users");
 const newsRoutes = require("./src/routes/news");
 const steamRoutes = require("./src/routes/steam");
+
+// Import du configurateur de tâches planifiées
+const cronJobs = require("./src/config/cronJobs");
 
 // Import des services
 const steamService = require("./src/services/steamService");
@@ -29,7 +31,12 @@ app.use(express.json());
 // Connexion à MongoDB
 mongoose
   .connect(process.env.MONGODB_URI)
-  .then(() => console.log("Connecté à MongoDB"))
+  .then(() => {
+    console.log("Connecté à MongoDB");
+
+    // Initialiser les tâches planifiées après connexion à la base de données
+    cronJobs.initCronJobs();
+  })
   .catch((err) => console.error("Erreur de connexion à MongoDB:", err));
 
 // Routes
@@ -42,31 +49,29 @@ app.get("/", (req, res) => {
   res.send("API de notifications Steam opérationnelle !");
 });
 
-// Tâche cron pour vérifier les nouvelles actualités (toutes les 10 minutes)
-cron.schedule("*/10 * * * *", async () => {
-  console.log("Vérification des nouvelles actualités Steam...");
-
+// Route pour déclencher manuellement une synchronisation (utile pour le développement et les tests)
+app.post("/api/admin/sync", async (req, res) => {
   try {
-    await newsChecker.checkNewsForAllUsers();
-  } catch (error) {
-    console.error("Erreur lors de la vérification des actualités:", error);
-  }
-});
-
-// Tâche cron pour synchroniser les bibliothèques de jeux (tous les jours à minuit)
-cron.schedule("0 0 * * *", async () => {
-  console.log(
-    "Démarrage de la synchronisation quotidienne des bibliothèques de jeux..."
-  );
-
-  try {
-    const stats = await gamesSyncService.syncAllUsersGames();
-    console.log("Synchronisation quotidienne terminée avec succès:", stats);
-  } catch (error) {
-    console.error(
-      "Erreur lors de la synchronisation quotidienne des bibliothèques:",
-      error
+    console.log(
+      "Déclenchement manuel de la synchronisation des bibliothèques..."
     );
+
+    // Lancer la synchronisation
+    const stats = await gamesSyncService.syncAllUsersGames();
+
+    // Répondre avec les statistiques
+    res.json({
+      status: "success",
+      message: "Synchronisation manuelle terminée avec succès",
+      stats,
+    });
+  } catch (error) {
+    console.error("Erreur lors de la synchronisation manuelle:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Erreur lors de la synchronisation manuelle",
+      error: error.message,
+    });
   }
 });
 
