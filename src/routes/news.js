@@ -6,12 +6,14 @@ const steamService = require("../services/steamService");
 router.get("/game/:appId", async (req, res) => {
   try {
     const { appId } = req.params;
-    const { count, maxLength } = req.query;
+    const { count, maxLength, language, steamOnly } = req.query;
 
     const news = await steamService.getGameNews(
       appId,
       count ? parseInt(count) : 5,
-      maxLength ? parseInt(maxLength) : 300
+      maxLength ? parseInt(maxLength) : 300,
+      language || "fr",
+      steamOnly === "false" ? false : true // Convertit la chaîne en booléen
     );
 
     res.json(news);

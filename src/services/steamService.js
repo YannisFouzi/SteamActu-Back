@@ -34,26 +34,40 @@ async function getUserGames(steamId) {
  * @param {string} appId - ID de l'application Steam
  * @param {number} count - Nombre d'actualités à récupérer
  * @param {number} maxLength - Longueur maximale du contenu
+ * @param {string} language - Langue des actualités
+ * @param {boolean} steamOnly - Filtrer les actualités uniquement hébergées sur Steam
  * @returns {Promise<Array>} Liste des actualités
  */
-async function getGameNews(appId, count = 5, maxLength = 300) {
+async function getGameNews(
+  appId,
+  count = 5,
+  maxLength = 300,
+  language = "fr",
+  steamOnly = true
+) {
   try {
+    const params = {
+      appid: appId,
+      count: count,
+      maxlength: maxLength,
+      format: "json",
+      language: language,
+    };
+
+    // Ajouter le filtre feeds si steamOnly est activé
+    if (steamOnly) {
+      params.feeds = "steam_community_announcements,steam_updates";
+    }
+
     const response = await axios.get(
       `http://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/`,
-      {
-        params: {
-          appid: appId,
-          count: count,
-          maxlength: maxLength,
-          format: "json",
-        },
-      }
+      { params }
     );
 
     return response.data.appnews.newsitems || [];
   } catch (error) {
     console.error(
-      `Erreur lors de la récupération des actualités pour l'appId ${appId}:`,
+      `Erreur lors de la récupération des actualités:`,
       error.message
     );
     throw error;
