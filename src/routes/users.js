@@ -124,4 +124,65 @@ router.put("/:steamId/notifications", async (req, res) => {
   }
 });
 
+// Suivre un jeu
+router.post("/:steamId/follow", async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    const { appId, name, logoUrl } = req.body;
+
+    const user = await User.findOne({ steamId });
+
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    // Vérifier si le jeu est déjà suivi
+    const isAlreadyFollowed = user.followedGames.some(
+      (game) => game.appId === appId
+    );
+    if (isAlreadyFollowed) {
+      return res.status(400).json({ message: "Ce jeu est déjà suivi" });
+    }
+
+    // Ajouter le jeu aux jeux suivis
+    user.followedGames.push({
+      appId,
+      name,
+      logoUrl,
+      lastNewsTimestamp: 0,
+      lastUpdateTimestamp: Date.now(),
+    });
+
+    await user.save();
+    res.json(user);
+  } catch (error) {
+    console.error("Erreur lors de l'ajout du jeu aux suivis:", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+// Ne plus suivre un jeu
+router.delete("/:steamId/follow/:appId", async (req, res) => {
+  try {
+    const { steamId, appId } = req.params;
+
+    const user = await User.findOne({ steamId });
+
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    // Retirer le jeu des jeux suivis
+    user.followedGames = user.followedGames.filter(
+      (game) => game.appId !== appId
+    );
+
+    await user.save();
+    res.json(user);
+  } catch (error) {
+    console.error("Erreur lors du retrait du jeu des suivis:", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
 module.exports = router;
