@@ -238,4 +238,66 @@ router.get("/profile/:steamId", async (req, res) => {
   }
 });
 
+// Résoudre un nom d'utilisateur Steam en SteamID
+router.get("/resolve-vanity/:vanityUrl", async (req, res) => {
+  try {
+    const { vanityUrl } = req.params;
+
+    if (!vanityUrl || vanityUrl.trim() === "") {
+      return res.status(400).json({ message: "Nom d'utilisateur invalide" });
+    }
+
+    const steamId = await steamService.resolveVanityURL(vanityUrl);
+
+    if (!steamId) {
+      return res
+        .status(404)
+        .json({ message: "Nom d'utilisateur Steam non trouvé" });
+    }
+
+    res.json({ steamId });
+  } catch (error) {
+    console.error("Erreur lors de la résolution du nom d'utilisateur:", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+// Gérer le retour d'authentification Steam OpenID
+router.get("/auth/steam/return", async (req, res) => {
+  try {
+    // Valider la réponse OpenID
+    if (!req.query["openid.identity"]) {
+      return res.status(400).json({ error: "Réponse OpenID invalide" });
+    }
+
+    // Récupérer le SteamID de la réponse OpenID
+    const identity = req.query["openid.identity"];
+    const matches = identity.match(/\/id\/(\d+)$/);
+
+    if (!matches || !matches[1]) {
+      return res
+        .status(400)
+        .json({ error: "SteamID non trouvé dans la réponse" });
+    }
+
+    const steamId = matches[1];
+
+    // Enregistrer l'utilisateur s'il n'existe pas déjà
+    try {
+      await steamService.registerOrUpdateUser(steamId);
+    } catch (error) {
+      console.error("Erreur lors de l'enregistrement de l'utilisateur:", error);
+      // On continue même en cas d'erreur pour ne pas bloquer l'authentification
+    }
+
+    // Rediriger vers l'application mobile avec le SteamID
+    // Note: Dans un cas réel, vous devriez utiliser un mécanisme plus sécurisé
+    // comme un token JWT à durée limitée au lieu de passer directement le SteamID
+    res.redirect(`steamnotif://auth?steamId=${steamId}`);
+  } catch (error) {
+    console.error("Erreur lors de l'authentification Steam:", error);
+    res.status(500).json({ error: "Erreur lors de l'authentification" });
+  }
+});
+
 module.exports = router;

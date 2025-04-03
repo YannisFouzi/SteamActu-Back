@@ -1,5 +1,6 @@
 const axios = require("axios");
 require("dotenv").config();
+const User = require("../models/User");
 
 const STEAM_API_KEY = process.env.STEAM_API_KEY;
 
@@ -100,8 +101,93 @@ async function getUserProfile(steamId) {
   }
 }
 
+/**
+ * Convertit un nom d'utilisateur Steam (vanity URL) en SteamID
+ * @param {string} vanityUrl - Nom d'utilisateur Steam
+ * @returns {Promise<string|null>} SteamID correspondant au nom d'utilisateur, ou null si introuvable
+ */
+async function resolveVanityURL(vanityUrl) {
+  try {
+    const response = await axios.get(
+      `http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/`,
+      {
+        params: {
+          key: STEAM_API_KEY,
+          vanityurl: vanityUrl,
+          format: "json",
+        },
+      }
+    );
+
+    const result = response.data.response;
+
+    // Success = 1 indique que le nom d'utilisateur a été trouvé
+    if (result.success === 1 && result.steamid) {
+      return result.steamid;
+    }
+
+    // Nom d'utilisateur non trouvé
+    return null;
+  } catch (error) {
+    console.error(
+      "Erreur lors de la résolution du nom d'utilisateur:",
+      error.message
+    );
+    throw error;
+  }
+}
+
+/**
+ * Enregistre ou met à jour un utilisateur dans notre base de données
+ * @param {string} steamId - ID Steam de l'utilisateur
+ * @returns {Promise<Object>} L'utilisateur enregistré
+ */
+async function registerOrUpdateUser(steamId) {
+  try {
+    // Vérifier si l'utilisateur existe déjà
+    let user = await User.findOne({ steamId });
+
+    if (user) {
+      // Mettre à jour la date de dernière connexion
+      user.lastLogin = new Date();
+      await user.save();
+      return user;
+    }
+
+    // Si l'utilisateur n'existe pas, récupérer ses informations et l'enregistrer
+    const profileData = await getUserProfile(steamId);
+
+    if (!profileData) {
+      throw new Error(
+        "Impossible de récupérer les informations du profil Steam"
+      );
+    }
+
+    // Créer un nouvel utilisateur
+    user = new User({
+      steamId,
+      displayName:
+        profileData.personaname || `Utilisateur ${steamId.slice(-4)}`,
+      avatarUrl: profileData.avatarfull || null,
+      followedGames: [],
+      lastLogin: new Date(),
+    });
+
+    await user.save();
+    return user;
+  } catch (error) {
+    console.error(
+      "Erreur lors de l'enregistrement/mise à jour de l'utilisateur:",
+      error.message
+    );
+    throw error;
+  }
+}
+
 module.exports = {
   getUserGames,
   getGameNews,
   getUserProfile,
+  resolveVanityURL,
+  registerOrUpdateUser,
 };
