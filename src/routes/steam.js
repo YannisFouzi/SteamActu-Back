@@ -3,13 +3,6 @@ const router = express.Router();
 const steamService = require("../services/steamService");
 const User = require("../models/User");
 
-// Jeux populaires qui auront des timestamps manuels pour les tests
-const TEST_GAMES_WITH_UPDATES = {
-  730: { name: "Counter-Strike 2", timestamp: Date.now() - 3600000 }, // Mis à jour il y a 1 heure
-  570: { name: "Dota 2", timestamp: Date.now() - 7200000 }, // Mis à jour il y a 2 heures
-  440: { name: "Team Fortress 2", timestamp: Date.now() - 86400000 }, // Mis à jour il y a 24 heures
-};
-
 // Récupérer les jeux d'un utilisateur Steam
 router.get("/games/:steamId", async (req, res) => {
   console.log(`Requête reçue pour le SteamID: ${req.params.steamId}`);
@@ -26,22 +19,6 @@ router.get("/games/:steamId", async (req, res) => {
 
     // Récupérer les jeux
     const games = await steamService.getUserGames(steamId);
-
-    // Identifiez Split Fiction et assurez-vous qu'il est traité en priorité
-    const splitFictionIndex = games.findIndex(
-      (game) => game.name === "Split Fiction"
-    );
-    if (splitFictionIndex !== -1 && splitFictionIndex >= 50) {
-      console.log(
-        "Split Fiction trouvé à l'index",
-        splitFictionIndex,
-        "- Traitement prioritaire"
-      );
-      const splitFiction = games[splitFictionIndex];
-      // Déplacer Split Fiction dans les 50 premiers jeux pour s'assurer qu'il est traité
-      games.splice(splitFictionIndex, 1);
-      games.unshift(splitFiction);
-    }
 
     // Traitement des jeux en plusieurs lots pour éviter de surcharger l'API et améliorer les performances
     const BATCH_SIZE = 50; // Taille de chaque lot
@@ -291,8 +268,6 @@ router.get("/auth/steam/return", async (req, res) => {
     }
 
     // Rediriger vers l'application mobile avec le SteamID
-    // Note: Dans un cas réel, vous devriez utiliser un mécanisme plus sécurisé
-    // comme un token JWT à durée limitée au lieu de passer directement le SteamID
     res.redirect(`steamnotif://auth?steamId=${steamId}`);
   } catch (error) {
     console.error("Erreur lors de l'authentification Steam:", error);
