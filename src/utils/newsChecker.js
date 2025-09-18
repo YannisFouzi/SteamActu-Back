@@ -72,12 +72,7 @@ async function checkNewsForUser(user) {
           // Ajouter les nouvelles actualités au batch
           newsBatch[game.appId] = newNews;
         }
-      } catch (error) {
-        console.error(
-          `Erreur lors de la récupération des actualités pour ${game.appId}:`,
-          error
-        );
-      }
+      } catch (error) {}
     }
 
     // Si des nouvelles actualités ont été trouvées

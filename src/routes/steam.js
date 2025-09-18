@@ -6,14 +6,6 @@ const User = require("../models/User");
 // Récupérer les jeux d'un utilisateur Steam
 router.get("/games/:steamId", async (req, res) => {
   const requestId = Date.now();
-  console.log(
-    `[${requestId}] 🔵 DÉBUT - Requête reçue pour SteamID: ${req.params.steamId}, followedOnly: ${req.query.followedOnly}`
-  );
-
-  // Détecter si c'est un refresh (deuxième requête)
-  if (global.firstRequestDone) {
-    console.log(`\n🔄 ========== DÉBUT DU REFRESH (Backend) ==========`);
-  }
   global.firstRequestDone = true;
   try {
     const { steamId } = req.params;
@@ -42,9 +34,6 @@ router.get("/games/:steamId", async (req, res) => {
       games = games.filter((game) =>
         followedAppIds.includes(game.appid.toString())
       );
-      console.log(
-        `Filtrage activé: ${games.length} jeux suivis sur ${totalGamesCount} jeux totaux`
-      );
     }
 
     // Traitement des jeux en plusieurs lots pour éviter de surcharger l'API et améliorer les performances
@@ -56,18 +45,8 @@ router.get("/games/:steamId", async (req, res) => {
       batches.push(games.slice(i, i + BATCH_SIZE));
     }
 
-    console.log(
-      `Traitement de ${games.length} jeux en ${batches.length} lots de ${BATCH_SIZE} jeux maximum`
-    );
-
     // Fonction pour traiter un lot de jeux
     const processGameBatch = async (gameBatch, batchIndex) => {
-      console.log(
-        `Traitement du lot ${batchIndex + 1}/${batches.length} (${
-          gameBatch.length
-        } jeux)`
-      );
-
       const formattedGamesPromises = gameBatch.map(async (game) => {
         const appId = game.appid.toString();
 
@@ -90,19 +69,9 @@ router.get("/games/:steamId", async (req, res) => {
             const latestNewsDate = news[0].date * 1000; // Convertir de secondes en millisecondes
             if (latestNewsDate > 0) {
               lastUpdateTimestamp = latestNewsDate;
-              console.log(
-                `Actualité trouvée pour ${game.name}: ${new Date(
-                  lastUpdateTimestamp
-                ).toLocaleString()}`
-              );
             }
           }
-        } catch (error) {
-          console.error(
-            `Erreur lors de la récupération des actualités pour ${appId}:`,
-            error.message
-          );
-        }
+        } catch (error) {}
 
         return {
           appid: appId, // Utiliser appid (lowercase) pour compatibilité mobile
@@ -134,11 +103,6 @@ router.get("/games/:steamId", async (req, res) => {
     const allProcessedGames = [];
 
     for (let i = 0; i < batches.length; i++) {
-      console.log(
-        `Traitement du lot ${i + 1}/${batches.length} (${
-          batches[i].length
-        } jeux)`
-      );
       const batchGames = await processGameBatch(batches[i], i);
 
       // Stocker tous les jeux traités
@@ -156,11 +120,6 @@ router.get("/games/:steamId", async (req, res) => {
 
       // LOG B : Compter les timestamps dans le cache après chaque lot
       const cacheCount = Object.keys(global.gameNewsCache || {}).length;
-      console.log(
-        `[${requestId}] 🔄 LOG B - LOT ${i + 1}/${
-          batches.length
-        } terminé, cache mis à jour avec ${cacheCount} timestamps`
-      );
 
       // Pause entre les lots pour éviter de surcharger l'API
       if (i < batches.length - 1) {
@@ -170,9 +129,6 @@ router.get("/games/:steamId", async (req, res) => {
 
     // LOG C : Compter le cache final
     const finalCacheCount = Object.keys(global.gameNewsCache || {}).length;
-    console.log(
-      `[${requestId}] ✅ LOG C - TOUS LOTS TERMINÉS, cache final avec ${finalCacheCount} timestamps`
-    );
 
     // Formater tous les jeux, en utilisant les données traitées
     const formattedGames = games.map((game) => {
@@ -219,18 +175,11 @@ router.get("/games/:steamId", async (req, res) => {
     const gamesWithTimestamp = formattedGames.filter(
       (game) => game.lastUpdateTimestamp > 0
     );
-    console.log(
-      `[${requestId}] 📤 LOG A - ENVOI RÉPONSE avec ${formattedGames.length} jeux dont ${gamesWithTimestamp.length} ont des timestamps`
-    );
 
     res.json(formattedGames);
 
     // Log final pour débogage - après envoi de la réponse
-    console.log(
-      `\n🎯 ========== FIN DU TRAITEMENT DU DÉMARRAGE DE L'APP (Backend) ==========`
-    );
   } catch (error) {
-    console.error(`[${requestId}] 🔴 ERREUR - ${error.message}`);
     res.status(500).json({ message: "Erreur serveur" });
   }
 });
@@ -254,7 +203,6 @@ router.get("/profile/:steamId", async (req, res) => {
 
     res.json(profile);
   } catch (error) {
-    console.error("Erreur lors de la récupération du profil:", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 });

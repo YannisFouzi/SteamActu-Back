@@ -25,7 +25,6 @@ async function getUserGames(steamId) {
 
     return response.data.response.games || [];
   } catch (error) {
-    console.error("Erreur lors de la récupération des jeux:", error.message);
     throw error;
   }
 }
@@ -67,10 +66,6 @@ async function getGameNews(
 
     return response.data.appnews.newsitems || [];
   } catch (error) {
-    console.error(
-      `Erreur lors de la récupération des actualités:`,
-      error.message
-    );
     throw error;
   }
 }
@@ -96,7 +91,6 @@ async function getUserProfile(steamId) {
     const players = response.data.response.players || [];
     return players.length > 0 ? players[0] : null;
   } catch (error) {
-    console.error("Erreur lors de la récupération du profil:", error.message);
     throw error;
   }
 }

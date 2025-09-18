@@ -18,7 +18,6 @@ router.get("/game/:appId", async (req, res) => {
 
     res.json(news);
   } catch (error) {
-    console.error("Erreur lors de la récupération des actualités:", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 });
