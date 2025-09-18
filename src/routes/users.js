@@ -56,37 +56,6 @@ router.get("/:steamId", async (req, res) => {
   }
 });
 
-// Mettre à jour les jeux suivis par l'utilisateur
-router.put("/:steamId/games", async (req, res) => {
-  try {
-    const { steamId } = req.params;
-    const { games } = req.body;
-
-    if (!Array.isArray(games)) {
-      return res
-        .status(400)
-        .json({ message: 'Format invalide, "games" doit être un tableau' });
-    }
-
-    const user = await User.findOne({ steamId });
-
-    if (!user) {
-      return res.status(404).json({ message: "Utilisateur non trouvé" });
-    }
-
-    // Mettre à jour la liste des jeux suivis
-    user.followedGames = games;
-    user.lastChecked = new Date();
-
-    await user.save();
-
-    res.json(user);
-  } catch (error) {
-    console.error("Erreur lors de la mise à jour des jeux:", error);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-});
-
 // Mettre à jour les paramètres de notification
 router.put("/:steamId/notifications", async (req, res) => {
   try {

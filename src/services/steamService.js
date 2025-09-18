@@ -102,42 +102,6 @@ async function getUserProfile(steamId) {
 }
 
 /**
- * Convertit un nom d'utilisateur Steam (vanity URL) en SteamID
- * @param {string} vanityUrl - Nom d'utilisateur Steam
- * @returns {Promise<string|null>} SteamID correspondant au nom d'utilisateur, ou null si introuvable
- */
-async function resolveVanityURL(vanityUrl) {
-  try {
-    const response = await axios.get(
-      `http://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/`,
-      {
-        params: {
-          key: STEAM_API_KEY,
-          vanityurl: vanityUrl,
-          format: "json",
-        },
-      }
-    );
-
-    const result = response.data.response;
-
-    // Success = 1 indique que le nom d'utilisateur a été trouvé
-    if (result.success === 1 && result.steamid) {
-      return result.steamid;
-    }
-
-    // Nom d'utilisateur non trouvé
-    return null;
-  } catch (error) {
-    console.error(
-      "Erreur lors de la résolution du nom d'utilisateur:",
-      error.message
-    );
-    throw error;
-  }
-}
-
-/**
  * Enregistre ou met à jour un utilisateur dans notre base de données
  * @param {string} steamId - ID Steam de l'utilisateur
  * @returns {Promise<Object>} L'utilisateur enregistré
@@ -148,9 +112,7 @@ async function registerOrUpdateUser(steamId) {
     let user = await User.findOne({ steamId });
 
     if (user) {
-      // Mettre à jour la date de dernière connexion
-      user.lastLogin = new Date();
-      await user.save();
+      // L'utilisateur existe déjà, le retourner
       return user;
     }
 
@@ -166,11 +128,9 @@ async function registerOrUpdateUser(steamId) {
     // Créer un nouvel utilisateur
     user = new User({
       steamId,
-      displayName:
-        profileData.personaname || `Utilisateur ${steamId.slice(-4)}`,
+      username: profileData.personaname || `Utilisateur ${steamId.slice(-4)}`,
       avatarUrl: profileData.avatarfull || null,
       followedGames: [],
-      lastLogin: new Date(),
     });
 
     await user.save();
@@ -188,6 +148,5 @@ module.exports = {
   getUserGames,
   getGameNews,
   getUserProfile,
-  resolveVanityURL,
   registerOrUpdateUser,
 };

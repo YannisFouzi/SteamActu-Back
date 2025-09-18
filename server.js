@@ -15,12 +15,6 @@ const cronJobs = require("./src/config/cronJobs");
 const steamService = require("./src/services/steamService");
 const gamesSyncService = require("./src/services/gamesSyncService");
 
-// Import des utilitaires
-const newsChecker = require("./src/utils/newsChecker");
-
-// Modèles
-const User = require("./src/models/User");
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -105,32 +99,6 @@ const checkApiKey = (req, res, next) => {
 
 // Appliquer le middleware de vérification d'API key à toutes les routes d'API
 app.use("/api", checkApiKey);
-
-// Route pour déclencher manuellement une synchronisation (utile pour le développement et les tests)
-app.post("/api/admin/sync", async (req, res) => {
-  try {
-    console.log(
-      "Déclenchement manuel de la synchronisation des bibliothèques..."
-    );
-
-    // Lancer la synchronisation
-    const stats = await gamesSyncService.syncAllUsersGames();
-
-    // Répondre avec les statistiques
-    res.json({
-      status: "success",
-      message: "Synchronisation manuelle terminée avec succès",
-      stats,
-    });
-  } catch (error) {
-    console.error("Erreur lors de la synchronisation manuelle:", error);
-    res.status(500).json({
-      status: "error",
-      message: "Erreur lors de la synchronisation manuelle",
-      error: error.message,
-    });
-  }
-});
 
 // Démarrage du serveur
 app.listen(PORT, () => {
