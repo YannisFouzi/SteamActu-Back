@@ -5,9 +5,19 @@ const User = require("../models/User");
 
 // Récupérer les jeux d'un utilisateur Steam
 router.get("/games/:steamId", async (req, res) => {
-  console.log(`Requête reçue pour le SteamID: ${req.params.steamId}`);
+  const requestId = Date.now();
+  console.log(
+    `[${requestId}] 🔵 DÉBUT - Requête reçue pour SteamID: ${req.params.steamId}, followedOnly: ${req.query.followedOnly}`
+  );
+
+  // Détecter si c'est un refresh (deuxième requête)
+  if (global.firstRequestDone) {
+    console.log(`\n🔄 ========== DÉBUT DU REFRESH (Backend) ==========`);
+  }
+  global.firstRequestDone = true;
   try {
     const { steamId } = req.params;
+    const { followedOnly } = req.query; // Nouveau paramètre pour filtrer
 
     // Valider le SteamID
     if (!steamId || steamId.length < 10) {
@@ -18,7 +28,24 @@ router.get("/games/:steamId", async (req, res) => {
     const user = await User.findOne({ steamId });
 
     // Récupérer les jeux
-    const games = await steamService.getUserGames(steamId);
+    let games = await steamService.getUserGames(steamId);
+
+    // Si followedOnly est demandé, filtrer pour ne garder que les jeux suivis
+    if (
+      followedOnly === "true" &&
+      user &&
+      user.followedGames &&
+      user.followedGames.length > 0
+    ) {
+      const totalGamesCount = games.length;
+      const followedAppIds = user.followedGames.map((g) => g.appId);
+      games = games.filter((game) =>
+        followedAppIds.includes(game.appid.toString())
+      );
+      console.log(
+        `Filtrage activé: ${games.length} jeux suivis sur ${totalGamesCount} jeux totaux`
+      );
+    }
 
     // Traitement des jeux en plusieurs lots pour éviter de surcharger l'API et améliorer les performances
     const BATCH_SIZE = 50; // Taille de chaque lot
@@ -78,7 +105,8 @@ router.get("/games/:steamId", async (req, res) => {
         }
 
         return {
-          appId,
+          appid: appId, // Utiliser appid (lowercase) pour compatibilité mobile
+          appId, // Garder appId aussi pour compatibilité
           name: game.name,
           logoUrl: game.img_logo_url
             ? `http://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_logo_url}.jpg`
@@ -97,66 +125,68 @@ router.get("/games/:steamId", async (req, res) => {
       return Promise.all(formattedGamesPromises);
     };
 
-    // Traiter le premier lot immédiatement pour une réponse rapide
-    const firstBatchGames = await processGameBatch(batches[0], 0);
-
-    // Traiter le reste des lots en arrière-plan et les stocker en cache pour les prochaines requêtes
-    if (batches.length > 1) {
-      // On n'attend pas que ce traitement se termine pour renvoyer la réponse
-      (async () => {
-        try {
-          console.log(
-            "Lancement du traitement des lots restants en arrière-plan"
-          );
-
-          // Utiliser un objet global pour stocker les résultats (simple cache en mémoire)
-          if (!global.gameNewsCache) {
-            global.gameNewsCache = {};
-          }
-
-          // Traiter les lots restants
-          for (let i = 1; i < batches.length; i++) {
-            const batchGames = await processGameBatch(batches[i], i);
-
-            // Stocker les résultats dans le cache
-            batchGames.forEach((game) => {
-              if (game.lastUpdateTimestamp > 0) {
-                global.gameNewsCache[game.appId] = {
-                  timestamp: game.lastUpdateTimestamp,
-                  updated: Date.now(),
-                };
-              }
-            });
-
-            // Pause entre les lots pour éviter de surcharger l'API
-            if (i < batches.length - 1) {
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-            }
-          }
-
-          console.log(
-            "Traitement de tous les lots terminé et cache mis à jour"
-          );
-        } catch (error) {
-          console.error(
-            "Erreur lors du traitement des lots en arrière-plan:",
-            error
-          );
-        }
-      })();
+    // Initialiser le cache global si nécessaire
+    if (!global.gameNewsCache) {
+      global.gameNewsCache = {};
     }
 
-    // Formater tous les jeux, en utilisant les données du cache si disponibles
+    // Traiter TOUS les lots avant d'envoyer la réponse
+    const allProcessedGames = [];
+
+    for (let i = 0; i < batches.length; i++) {
+      console.log(
+        `Traitement du lot ${i + 1}/${batches.length} (${
+          batches[i].length
+        } jeux)`
+      );
+      const batchGames = await processGameBatch(batches[i], i);
+
+      // Stocker tous les jeux traités
+      allProcessedGames.push(...batchGames);
+
+      // Mettre à jour le cache avec les nouveaux timestamps
+      batchGames.forEach((game) => {
+        if (game.lastUpdateTimestamp > 0) {
+          global.gameNewsCache[game.appId] = {
+            timestamp: game.lastUpdateTimestamp,
+            updated: Date.now(),
+          };
+        }
+      });
+
+      // LOG B : Compter les timestamps dans le cache après chaque lot
+      const cacheCount = Object.keys(global.gameNewsCache || {}).length;
+      console.log(
+        `[${requestId}] 🔄 LOG B - LOT ${i + 1}/${
+          batches.length
+        } terminé, cache mis à jour avec ${cacheCount} timestamps`
+      );
+
+      // Pause entre les lots pour éviter de surcharger l'API
+      if (i < batches.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+
+    // LOG C : Compter le cache final
+    const finalCacheCount = Object.keys(global.gameNewsCache || {}).length;
+    console.log(
+      `[${requestId}] ✅ LOG C - TOUS LOTS TERMINÉS, cache final avec ${finalCacheCount} timestamps`
+    );
+
+    // Formater tous les jeux, en utilisant les données traitées
     const formattedGames = games.map((game) => {
       const appId = game.appid.toString();
 
-      // Chercher d'abord dans le premier lot déjà traité
-      const processedGame = firstBatchGames.find((g) => g.appId === appId);
+      // Chercher dans tous les jeux traités
+      const processedGame = allProcessedGames.find(
+        (g) => g.appId === appId || g.appid === appId
+      );
       if (processedGame) {
         return processedGame;
       }
 
-      // Sinon, vérifier dans le cache global
+      // Si pas trouvé dans les jeux traités, vérifier dans le cache global
       let lastUpdateTimestamp = 0;
       if (global.gameNewsCache && global.gameNewsCache[appId]) {
         lastUpdateTimestamp = global.gameNewsCache[appId].timestamp;
@@ -168,7 +198,8 @@ router.get("/games/:steamId", async (req, res) => {
       }
 
       return {
-        appId,
+        appid: appId, // Utiliser appid (lowercase) pour compatibilité mobile
+        appId, // Garder appId aussi pour compatibilité
         name: game.name,
         logoUrl: game.img_logo_url
           ? `http://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_logo_url}.jpg`
@@ -184,9 +215,22 @@ router.get("/games/:steamId", async (req, res) => {
       };
     });
 
+    // LOG A : Compter les timestamps avant envoi
+    const gamesWithTimestamp = formattedGames.filter(
+      (game) => game.lastUpdateTimestamp > 0
+    );
+    console.log(
+      `[${requestId}] 📤 LOG A - ENVOI RÉPONSE avec ${formattedGames.length} jeux dont ${gamesWithTimestamp.length} ont des timestamps`
+    );
+
     res.json(formattedGames);
+
+    // Log final pour débogage - après envoi de la réponse
+    console.log(
+      `\n🎯 ========== FIN DU TRAITEMENT DU DÉMARRAGE DE L'APP (Backend) ==========`
+    );
   } catch (error) {
-    console.error("Erreur lors de la récupération des jeux:", error);
+    console.error(`[${requestId}] 🔴 ERREUR - ${error.message}`);
     res.status(500).json({ message: "Erreur serveur" });
   }
 });
