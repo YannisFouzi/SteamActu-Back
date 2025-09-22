@@ -185,11 +185,18 @@ async function syncUserGames(user) {
       return result;
     }
 
-    // Liste des jeux actuellement suivis
-    const followedGamesMap = new Map();
+    // Liste des jeux actuellement suivis (nouvelle structure : array d'IDs)
+    const followedGamesSet = new Set();
     if (user.followedGames && Array.isArray(user.followedGames)) {
+      // Gérer les deux structures (ancienne et nouvelle)
       user.followedGames.forEach((game) => {
-        followedGamesMap.set(game.appId, game);
+        if (typeof game === "string") {
+          // Nouvelle structure : juste l'appId
+          followedGamesSet.add(game);
+        } else if (game && game.appId) {
+          // Ancienne structure : objet avec appId
+          followedGamesSet.add(game.appId);
+        }
       });
     }
 
@@ -204,7 +211,7 @@ async function syncUserGames(user) {
     // Nouveaux jeux détectés
     const newGames = [];
     const updatedSyncedGames = [];
-    const updatedFollowedGames = Array.from(followedGamesMap.values());
+    const updatedFollowedGames = Array.from(followedGamesSet); // Nouvelle structure : array d'IDs
 
     // Pour chaque jeu dans la bibliothèque Steam
     for (const game of userGames) {
@@ -239,18 +246,10 @@ async function syncUserGames(user) {
           user.notificationSettings &&
           user.notificationSettings.autoFollowNewGames
         ) {
-          if (!followedGamesMap.has(appId)) {
-            const followedGame = {
-              appId,
-              name: game.name,
-              logoUrl: game.img_logo_url
-                ? `http://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_logo_url}.jpg`
-                : null,
-              lastNewsTimestamp: 0,
-              lastUpdateTimestamp: Date.now(), // Marquer comme récemment ajouté
-            };
+          if (!followedGamesSet.has(appId)) {
+            // Nouvelle structure : ajouter juste l'appId
+            updatedFollowedGames.push(appId);
 
-            updatedFollowedGames.push(followedGame);
             result.updatedGames.push({
               appId,
               name: game.name,

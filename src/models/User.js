@@ -19,25 +19,7 @@ const UserSchema = new mongoose.Schema({
   },
   followedGames: [
     {
-      appId: {
-        type: String,
-        required: true,
-      },
-      name: {
-        type: String,
-        required: true,
-      },
-      logoUrl: {
-        type: String,
-      },
-      lastNewsTimestamp: {
-        type: Number,
-        default: 0,
-      },
-      lastUpdateTimestamp: {
-        type: Number,
-        default: 0,
-      },
+      type: String, // Juste les appIds (structure ultra-simplifiée)
     },
   ],
   notificationSettings: {
@@ -53,24 +35,7 @@ const UserSchema = new mongoose.Schema({
       default: false,
     },
   },
-  lastSyncedGames: [
-    {
-      appId: {
-        type: String,
-        required: true,
-      },
-      name: {
-        type: String,
-      },
-      logoUrl: {
-        type: String,
-      },
-      addedAt: {
-        type: Date,
-        default: Date.now,
-      },
-    },
-  ],
+  // lastSyncedGames supprimé - plus besoin de stocker tous les jeux Steam
 });
 
 module.exports = mongoose.model("User", UserSchema);

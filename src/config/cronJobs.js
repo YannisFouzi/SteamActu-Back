@@ -1,6 +1,6 @@
 const cron = require("node-cron");
 const gamesSyncService = require("../services/gamesSyncService");
-const newsChecker = require("../utils/newsChecker");
+const newsChecker = require("../utils/newsChecker-v2"); // Nouveau newsChecker optimisé
 
 /**
  * Initialise toutes les tâches planifiées de l'application
