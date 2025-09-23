@@ -93,6 +93,68 @@ router.put("/:steamId/notifications", async (req, res) => {
   }
 });
 
+// Mettre à jour la liste des jeux récemment actifs
+router.put('/:steamId/active-games', async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    const { games } = req.body || {};
+
+    const user = await User.findOne({ steamId });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    if (!Array.isArray(games)) {
+      return res.status(400).json({ message: 'Format invalide: games doit être un tableau' });
+    }
+
+    const now = Date.now();
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+    const sanitized = games
+      .map((game) => {
+        const appId = game?.appId ? String(game.appId) : null;
+        const name = game?.name ? String(game.name) : undefined;
+        let timestamp = null;
+
+        if (game?.lastNewsDate instanceof Date) {
+          timestamp = game.lastNewsDate.getTime();
+        } else if (typeof game?.lastNewsDate === 'number') {
+          timestamp = game.lastNewsDate;
+        } else if (typeof game?.lastNewsDate === 'string') {
+          const parsed = Date.parse(game.lastNewsDate);
+          timestamp = Number.isNaN(parsed) ? null : parsed;
+        }
+
+        if (!appId || !timestamp) {
+          return null;
+        }
+
+        return {
+          appId,
+          name: name || `Jeu ${appId}`,
+          lastNewsDate: new Date(timestamp),
+        };
+      })
+      .filter(Boolean)
+      .filter((entry) => {
+        const time = entry.lastNewsDate.getTime();
+        return time >= now - SEVEN_DAYS_MS && time <= now + 60 * 60 * 1000;
+      })
+      .sort((a, b) => b.lastNewsDate.getTime() - a.lastNewsDate.getTime())
+      .slice(0, 200);
+
+    user.recentActiveGames = sanitized;
+    await user.save();
+
+    res.json({ recentActiveGames: user.recentActiveGames });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour des jeux récents:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
 // Suivre un jeu
 router.post("/:steamId/follow", async (req, res) => {
   try {

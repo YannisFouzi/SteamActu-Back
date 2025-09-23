@@ -19,8 +19,11 @@ async function getNewsFeed({
   perGameLimit = 3,
   language = 'fr',
 } = {}) {
-  const safeLimit = Math.max(1, Math.min(limit, 100));
-  const safePerGameLimit = Math.max(1, Math.min(perGameLimit, 5));
+  const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+  const safeLimit = Math.max(200, Math.min(limit || 200, 200));
+  const safePerGameLimit = Math.max(10, Math.min(perGameLimit || 10, 20));
+  const now = Date.now();
+  const cutoffTimestamp = now - RECENT_WINDOW_MS;
 
   const followedSet = new Set();
   let user = null;
@@ -38,7 +41,37 @@ async function getNewsFeed({
     }
   }
 
+  const candidateMap = new Map();
+  const pushCandidate = (appId, name, source) => {
+    if (!appId) {
+      return;
+    }
+    const normalizedId = appId.toString();
+    if (!candidateMap.has(normalizedId)) {
+      candidateMap.set(normalizedId, {
+        appId: normalizedId,
+        name: name || `Jeu ${normalizedId}`,
+        source,
+      });
+    }
+  };
+
+  if (!followedOnly && user?.recentActiveGames?.length) {
+    const recentStored = user.recentActiveGames
+      .filter((item) => {
+        if (!item?.appId || !item?.lastNewsDate) {
+          return false;
+        }
+        const timestamp = new Date(item.lastNewsDate).getTime();
+        return !Number.isNaN(timestamp) && timestamp >= cutoffTimestamp;
+      })
+      .sort((a, b) => new Date(b.lastNewsDate).getTime() - new Date(a.lastNewsDate).getTime());
+
+    recentStored.forEach((item) => pushCandidate(item.appId, item.name, 'recent-cache'));
+  }
+
   let subscriptions = [];
+  const subscriptionMap = new Map();
 
   if (followedOnly) {
     if (followedSet.size === 0) {
@@ -58,122 +91,190 @@ async function getNewsFeed({
       .sort({ updatedAt: -1 })
       .lean();
   } else {
-    const estimatedGamesNeeded = Math.max(
-      safePerGameLimit,
-      Math.ceil(safeLimit / safePerGameLimit) + 2
-    );
+    subscriptions = await GameSubscription.find({}).lean();
+  }
 
-    subscriptions = await GameSubscription.find({})
-      .sort({ updatedAt: -1 })
-      .limit(estimatedGamesNeeded)
-      .lean();
-    const existingIds = new Set(subscriptions.map((sub) => sub.gameId));
+  const sortedSubscriptions = subscriptions.sort((a, b) => {
+    const aDate = a?.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+    const bDate = b?.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+    return bDate - aDate;
+  });
 
-    if (steamId) {
-      try {
-        const userLibrary = await steamService.getUserGames(steamId);
+  sortedSubscriptions.forEach((sub) => {
+    if (sub?.gameId) {
+      subscriptionMap.set(sub.gameId.toString(), sub);
+      pushCandidate(sub.gameId, sub.name, 'subscription');
+    }
+  });
 
-        if (Array.isArray(userLibrary) && userLibrary.length > 0) {
-          const libraryExtras = userLibrary
-            .map((game) => ({
-              appId: game.appid ? game.appid.toString() : game.appId?.toString(),
-              name: game.name,
-              playtime: game.playtime_forever || 0,
-              lastPlayed: game.rtime_last_played || 0,
-            }))
-            .filter((game) => game.appId && !existingIds.has(game.appId));
+  if (!followedOnly && candidateMap.size === 0 && steamId) {
+    try {
+      const userLibrary = await steamService.getUserGames(steamId);
 
-          libraryExtras.sort((a, b) => {
-            const playtimeDelta = (b.playtime || 0) - (a.playtime || 0);
-            if (playtimeDelta !== 0) {
-              return playtimeDelta;
+      if (Array.isArray(userLibrary) && userLibrary.length > 0) {
+        const libraryCandidates = userLibrary
+          .map((game) => ({
+            appId: game.appid ? game.appid.toString() : game.appId?.toString(),
+            name: game.name,
+            playtime: game.playtime_forever || 0,
+            lastPlayed: game.rtime_last_played || 0,
+          }))
+          .filter((game) => game.appId)
+          .sort((a, b) => {
+            const aLast = a.lastPlayed || 0;
+            const bLast = b.lastPlayed || 0;
+            if (bLast !== aLast) {
+              return bLast - aLast;
             }
-            return (b.lastPlayed || 0) - (a.lastPlayed || 0);
+            return (b.playtime || 0) - (a.playtime || 0);
           });
 
-          const missingGames = Math.max(
-            Math.ceil(safeLimit / safePerGameLimit) + 2 - subscriptions.length,
-            0
-          );
-
-          const extraLimit = Math.min(
-            Math.max(missingGames, safePerGameLimit),
-            libraryExtras.length
-          );
-
-          libraryExtras.slice(0, extraLimit).forEach((game) => {
-            existingIds.add(game.appId);
-            subscriptions.push({
-              gameId: game.appId,
-              name: game.name || `Jeu ${game.appId}`,
-              subscribers: [],
-              lastNewsTimestamp: 0,
-            });
-          });
-        }
-      } catch (error) {
-        console.error('Failed to extend news feed from user library:', error.message);
+        libraryCandidates.forEach((game) => {
+          pushCandidate(game.appId, game.name, 'library');
+        });
       }
+    } catch (error) {
+      console.error('Failed to extend news feed from user library:', error.message);
     }
   }
 
-  const feedItems = [];
+  let gamesToProcess = Array.from(candidateMap.values());
 
-  for (const subscription of subscriptions) {
+  if (!followedOnly) {
+    const maxCandidates = Math.max(safeLimit * 2, safePerGameLimit * 10, 100);
+    gamesToProcess = gamesToProcess
+      .sort((a, b) => {
+        const aStored = user?.recentActiveGames?.find((item) => item.appId === a.appId);
+        const bStored = user?.recentActiveGames?.find((item) => item.appId === b.appId);
+        const aDate = aStored ? new Date(aStored.lastNewsDate).getTime() : 0;
+        const bDate = bStored ? new Date(bStored.lastNewsDate).getTime() : 0;
+        return bDate - aDate;
+      })
+      .slice(0, maxCandidates);
+  }
+
+  if (gamesToProcess.length === 0) {
+    return {
+      items: [],
+      metadata: {
+        totalGamesQueried: 0,
+        totalNewsRetrieved: 0,
+        source: followedOnly ? 'followed' : 'all',
+      },
+    };
+  }
+
+  const feedItems = [];
+  const latestNewsByGame = new Map();
+
+  console.log('newsFeed: start', {
+    steamId,
+    followedOnly,
+    limit: safeLimit,
+    perGameLimit: safePerGameLimit,
+    candidates: gamesToProcess.length,
+  });
+
+  for (const game of gamesToProcess) {
     try {
       const newsItems = await steamService.getGameNews(
-        subscription.gameId,
+        game.appId,
         safePerGameLimit,
         800,
         language
       );
 
       if (!Array.isArray(newsItems) || newsItems.length === 0) {
+        console.log('newsFeed: no news for game', game.appId);
         continue;
       }
 
+      console.log('newsFeed: fetched news', {
+        gameId: game.appId,
+        count: newsItems.length,
+        firstDate: newsItems[0]?.date,
+        lastDate: newsItems[newsItems.length - 1]?.date,
+      });
+
       newsItems.forEach((item) => {
+        const newsDate = item.date * 1000;
         feedItems.push({
-          appId: subscription.gameId,
-          gameName: subscription.name,
-          isFollowed: followedSet.has(subscription.gameId),
-          subscribersCount: Array.isArray(subscription.subscribers)
-            ? subscription.subscribers.length
-            : 0,
+          appId: game.appId,
+          gameName: game.name,
+          isFollowed: followedSet.has(game.appId),
           news: {
             id: item.gid,
             title: item.title,
             url: item.url,
             author: item.author,
-            date: item.date * 1000,
+            date: newsDate,
             contents: item.contents,
             feedLabel: item.feedlabel,
           },
         });
+
+        const currentLatest = latestNewsByGame.get(game.appId) || 0;
+        if (newsDate > currentLatest) {
+          latestNewsByGame.set(game.appId, newsDate);
+        }
       });
     } catch (error) {
-      // Continue even if one game fails to load
-      console.error(
-        `Failed to fetch news for ${subscription.gameId}:`,
-        error.message
-      );
+      console.error(`Failed to fetch news for ${game.appId}:`, error.message);
     }
   }
 
   feedItems.sort((a, b) => b.news.date - a.news.date);
 
+  const recentItems = feedItems.filter((item) => item.news.date >= cutoffTimestamp);
+  const timeline = recentItems.length > 0 ? recentItems : feedItems;
+
+  if (!followedOnly && user) {
+    const activeGames = [];
+    latestNewsByGame.forEach((timestamp, appId) => {
+      if (timestamp >= cutoffTimestamp) {
+        const candidate = candidateMap.get(appId);
+        activeGames.push({
+          appId,
+          name: candidate?.name || `Jeu ${appId}`,
+          lastNewsDate: new Date(timestamp),
+        });
+      }
+    });
+
+    activeGames.sort((a, b) => new Date(b.lastNewsDate) - new Date(a.lastNewsDate));
+    const limitedActive = activeGames.slice(0, 200);
+
+    try {
+      await User.updateOne(
+        { steamId },
+        {
+          recentActiveGames: limitedActive,
+        }
+      );
+    } catch (error) {
+      console.error('Failed to store recentActiveGames for user', steamId, error);
+    }
+  }
+
+  console.log('newsFeed: final timeline', {
+    timelineCount: timeline.length,
+    recentCount: recentItems.length,
+    earliestDate: timeline[timeline.length - 1]?.news?.date || null,
+    latestDate: timeline[0]?.news?.date || null,
+  });
+
   return {
-    items: feedItems.slice(0, safeLimit),
+    items: timeline,
     metadata: {
-      totalGamesQueried: subscriptions.length,
+      totalGamesQueried: gamesToProcess.length,
       totalNewsRetrieved: feedItems.length,
-      returnedCount: Math.min(feedItems.length, safeLimit),
+      returnedCount: timeline.length,
+      recentCount: recentItems.length,
       source: followedOnly ? 'followed' : 'all',
       steamId: steamId || null,
     },
   };
 }
-
 module.exports = {
   getNewsFeed,
 };
