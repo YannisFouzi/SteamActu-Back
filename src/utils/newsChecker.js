@@ -1,206 +1,167 @@
-const User = require("../models/User");
-const steamService = require("../services/steamService");
-const notificationService = require("../services/notificationService");
+/**
+ * Service de vérification des actualités Steam
+ * Architecture optimisée utilisant GameSubscription pour minimiser les requêtes API
+ */
+
+const {
+  getAllGameSubscriptions,
+  calculateSubscriptionStats,
+  cleanupOrphanedSubscriptions,
+  findGameSubscription,
+} = require("./newsChecker/subscriptionManager");
+const {
+  processGameNews,
+  updateGameSubscriptionTimestamp,
+} = require("./newsChecker/gameProcessor");
+const {
+  processGameSubscribers,
+  sendNotificationsToUser,
+} = require("./newsChecker/userProcessor");
 
 /**
- * Vérifie les nouvelles actualités pour tous les utilisateurs (VERSION OPTIMISÉE)
- * Récupère les news une seule fois par jeu, même si plusieurs utilisateurs le suivent
+ * Vérifie les actualités pour tous les utilisateurs (méthode optimisée)
+ * Utilise GameSubscription pour minimiser les requêtes API Steam
  * @returns {Promise<number>} - Nombre de notifications envoyées
  */
 async function checkNewsForAllUsers() {
   try {
-    // Récupérer tous les utilisateurs avec notifications activées
-    const users = await User.find({
-      "notificationSettings.enabled": true,
-      "notificationSettings.pushToken": { $exists: true, $ne: null },
-    });
+    console.log("🔍 Début de la vérification des actualités...");
 
-    if (users.length === 0) {
-      console.log("Aucun utilisateur avec notifications activées");
+    // Récupérer tous les jeux suivis
+    const gameSubscriptions = await getAllGameSubscriptions();
+
+    if (gameSubscriptions.length === 0) {
+      console.log("📭 Aucun jeu suivi, aucune vérification nécessaire");
       return 0;
     }
 
+    // Calculer les statistiques
+    const stats = calculateSubscriptionStats(gameSubscriptions);
     console.log(
-      `Vérification optimisée des actualités pour ${users.length} utilisateurs`
+      `📊 ${stats.totalGames} jeux suivis, ${stats.totalSubscribers} abonnements totaux`
     );
 
-    // ÉTAPE 1: Collecter tous les jeux suivis par tous les utilisateurs
-    const gameSubscriptions = new Map(); // appId -> {gameInfo, subscribers: [users]}
-
-    users.forEach((user) => {
-      if (user.followedGames && user.followedGames.length > 0) {
-        user.followedGames.forEach((game) => {
-          const appId = game.appId;
-
-          if (!gameSubscriptions.has(appId)) {
-            gameSubscriptions.set(appId, {
-              gameInfo: game,
-              subscribers: [],
-            });
-          }
-
-          gameSubscriptions.get(appId).subscribers.push({
-            user: user,
-            gameData: game,
-          });
-        });
-      }
-    });
-
-    const uniqueGamesCount = gameSubscriptions.size;
-    const totalSubscriptions = Array.from(gameSubscriptions.values()).reduce(
-      (sum, game) => sum + game.subscribers.length,
-      0
-    );
-
-    console.log(
-      `${uniqueGamesCount} jeux uniques suivis (${totalSubscriptions} abonnements au total)`
-    );
-
-    // ÉTAPE 2: Vérifier les actualités pour chaque jeu unique
     let totalNotifications = 0;
     let processedGames = 0;
 
-    for (const [appId, gameData] of gameSubscriptions) {
+    // Traiter chaque jeu (1 requête API par jeu)
+    for (const gameSubscription of gameSubscriptions) {
       try {
         processedGames++;
+        const { gameId, subscribers, lastNewsTimestamp } = gameSubscription;
+
         console.log(
-          `[${processedGames}/${uniqueGamesCount}] Vérification des actualités pour ${gameData.gameInfo.name} (${gameData.subscribers.length} abonnés)`
+          `🎮 [${processedGames}/${stats.totalGames}] Traitement du jeu ${gameId} (${subscribers.length} abonnés)`
         );
 
-        // Récupérer les actualités du jeu (UNE SEULE FOIS)
-        const news = await steamService.getGameNews(appId, 5);
+        // Récupérer et filtrer les nouvelles actualités
+        const { newNews, latestTimestamp } = await processGameNews(
+          gameId,
+          lastNewsTimestamp
+        );
 
-        if (!news || news.length === 0) {
+        if (newNews.length === 0) {
           continue;
         }
 
-        // ÉTAPE 3: Distribuer les nouvelles actualités à tous les abonnés
-        for (const subscription of gameData.subscribers) {
-          const { user, gameData: userGameData } = subscription;
+        console.log(
+          `📰 ${newNews.length} nouvelles actualités trouvées pour ${gameId}`
+        );
 
-          // Filtrer pour ne garder que les nouvelles actualités pour cet utilisateur
-          const newNews = news.filter((item) => {
-            const newsDate = item.date;
-            return newsDate > userGameData.lastNewsTimestamp;
-          });
+        // Mettre à jour le timestamp
+        await updateGameSubscriptionTimestamp(
+          gameSubscription,
+          latestTimestamp
+        );
 
-          if (newNews.length > 0) {
-            // Mettre à jour le timestamp de la dernière actualité
-            userGameData.lastNewsTimestamp = Math.max(
-              ...newNews.map((item) => item.date)
-            );
+        // Distribuer les notifications à tous les abonnés
+        const gameNotifications = await processGameSubscribers(
+          subscribers,
+          gameId,
+          newNews
+        );
 
-            // Mettre à jour également le timestamp de dernière mise à jour
-            userGameData.lastUpdateTimestamp = Date.now();
+        totalNotifications += gameNotifications;
 
-            // Envoyer les notifications à cet utilisateur
-            const notificationCount =
-              await notificationService.sendNewsNotifications(user, {
-                [appId]: newNews,
-              });
-
-            totalNotifications += notificationCount;
-
-            // Sauvegarder les timestamps mis à jour pour cet utilisateur
-            user.lastChecked = new Date();
-            await user.save();
-
-            if (notificationCount > 0) {
-              console.log(
-                `  → ${notificationCount} notification(s) envoyée(s) à ${user.username}`
-              );
-            }
-          }
+        if (gameNotifications > 0) {
+          console.log(
+            `✅ ${gameNotifications} notifications envoyées pour ${gameId}`
+          );
         }
-      } catch (error) {
+      } catch (gameError) {
         console.error(
-          `Erreur lors du traitement du jeu ${appId}:`,
-          error.message
+          `❌ Erreur pour le jeu ${gameSubscription.gameId}:`,
+          gameError.message
         );
       }
     }
 
     console.log(
-      `✅ Vérification terminée: ${totalNotifications} notifications envoyées au total`
+      `🎯 Vérification terminée: ${totalNotifications} notifications envoyées au total`
     );
-    console.log(
-      `📊 Optimisation: ${processedGames} requêtes API au lieu de ${totalSubscriptions} (économie de ${
-        totalSubscriptions - processedGames
-      } requêtes)`
-    );
-
     return totalNotifications;
   } catch (error) {
-    console.error("Erreur lors de la vérification des actualités:", error);
+    console.error("💥 Erreur lors de la vérification des actualités:", error);
     return 0;
   }
 }
 
 /**
- * Vérifie les nouvelles actualités pour un utilisateur spécifique
+ * Vérifie les actualités pour un utilisateur spécifique (fonction de compatibilité)
  * @param {Object} user - Utilisateur pour lequel vérifier les actualités
  * @returns {Promise<number>} - Nombre de notifications envoyées
  */
 async function checkNewsForUser(user) {
   try {
-    // Si l'utilisateur n'a pas de jeux suivis, pas besoin de continuer
     if (!user.followedGames || user.followedGames.length === 0) {
       return 0;
     }
 
-    const newsBatch = {};
+    let totalNotifications = 0;
 
-    // Pour chaque jeu suivi
-    for (const game of user.followedGames) {
+    // Traiter chaque jeu suivi par cet utilisateur
+    for (const gameId of user.followedGames) {
       try {
-        // Récupérer les actualités du jeu
-        const news = await steamService.getGameNews(game.appId, 5);
+        // Trouver la GameSubscription correspondante
+        const gameSubscription = await findGameSubscription(gameId);
 
-        // Filtrer pour ne garder que les nouvelles actualités
-        const newNews = news.filter((item) => {
-          const newsDate = item.date;
-          return newsDate > game.lastNewsTimestamp;
-        });
-
-        if (newNews.length > 0) {
-          // Mettre à jour le timestamp de la dernière actualité
-          game.lastNewsTimestamp = Math.max(
-            ...newNews.map((item) => item.date)
-          );
-
-          // Mettre à jour également le timestamp de dernière mise à jour
-          game.lastUpdateTimestamp = Date.now();
-
-          // Ajouter les nouvelles actualités au batch
-          newsBatch[game.appId] = newNews;
+        if (!gameSubscription) {
+          continue;
         }
-      } catch (error) {}
+
+        // Traiter les actualités du jeu
+        const { newNews, latestTimestamp } = await processGameNews(
+          gameId,
+          gameSubscription.lastNewsTimestamp
+        );
+
+        if (newNews.length === 0) {
+          continue;
+        }
+
+        // Envoyer les notifications à cet utilisateur
+        const notificationCount = await sendNotificationsToUser(
+          user,
+          gameId,
+          newNews
+        );
+        totalNotifications += notificationCount;
+
+        // Mettre à jour le timestamp de la GameSubscription
+        await updateGameSubscriptionTimestamp(
+          gameSubscription,
+          latestTimestamp
+        );
+      } catch (error) {
+        console.error(`Erreur pour le jeu ${gameId}:`, error.message);
+      }
     }
 
-    // Si des nouvelles actualités ont été trouvées
-    if (Object.keys(newsBatch).length > 0) {
-      // Envoyer les notifications
-      const notificationCount = await notificationService.sendNewsNotifications(
-        user,
-        newsBatch
-      );
-
-      // Sauvegarder les timestamps mis à jour
-      user.lastChecked = new Date();
-      await user.save();
-
-      console.log(
-        `${notificationCount} notifications envoyées à l'utilisateur ${user.username}`
-      );
-      return notificationCount;
-    }
-
-    return 0;
+    return totalNotifications;
   } catch (error) {
     console.error(
-      `Erreur lors de la vérification des actualités pour l'utilisateur ${user.steamId}:`,
-      error
+      `Erreur lors de la vérification pour ${user.steamId}:`,
+      error.message
     );
     return 0;
   }
@@ -209,4 +170,5 @@ async function checkNewsForUser(user) {
 module.exports = {
   checkNewsForAllUsers,
   checkNewsForUser,
+  cleanupOrphanedSubscriptions,
 };

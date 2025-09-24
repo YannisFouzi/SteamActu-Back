@@ -3,7 +3,7 @@ const router = express.Router();
 const steamService = require("../services/steamService");
 const newsFeedService = require("../services/newsFeedService");
 
-// Recuperer les actualites pour un jeu specifique
+// Récupérer les actualités pour un jeu spécifique
 router.get("/game/:appId", async (req, res) => {
   try {
     const { appId } = req.params;
@@ -23,7 +23,7 @@ router.get("/game/:appId", async (req, res) => {
   }
 });
 
-// Recuperer un fil d'actualites global
+// Récupérer un fil d'actualités global
 router.get("/feed", async (req, res) => {
   try {
     const { steamId, followedOnly, limit, perGameLimit, language } = req.query;
@@ -38,10 +38,7 @@ router.get("/feed", async (req, res) => {
 
     res.json(feed);
   } catch (error) {
-    console.error(
-      "Erreur lors de la recuperation du fil d'actualites:",
-      error
-    );
+    console.error("Erreur lors de la récupération du fil d'actualités:", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 });

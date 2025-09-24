@@ -1,5 +1,10 @@
-// Ce service est un placeholder pour l'implémentation des notifications
-// Vous pourrez l'étendre pour utiliser OneSignal ou un autre service
+/**
+ * Service de notifications push
+ * Architecture modulaire prête pour l'évolution future
+ */
+
+const { getActiveProvider } = require("./notifications/providers");
+const { createNewsNotification } = require("./notifications/templates");
 
 /**
  * Envoie une notification à un utilisateur
@@ -12,29 +17,12 @@
  */
 async function sendNotification(token, notification) {
   try {
-    // Placeholder pour l'implémentation réelle
-    console.log(`Notification envoyée à ${token}:`, notification);
+    if (!token || !notification) {
+      return false;
+    }
 
-    // TODO: Implémenter l'intégration avec un service comme OneSignal
-    // Exemple d'implémentation avec OneSignal:
-    /*
-    const response = await axios.post('https://onesignal.com/api/v1/notifications', {
-      app_id: process.env.ONESIGNAL_APP_ID,
-      include_player_ids: [token],
-      headings: { fr: notification.title, en: notification.title },
-      contents: { fr: notification.body, en: notification.body },
-      data: notification.data
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${process.env.ONESIGNAL_API_KEY}`
-      }
-    });
-    
-    return response.status === 200;
-    */
-
-    return true;
+    const provider = getActiveProvider();
+    return await provider(token, notification);
   } catch (error) {
     console.error("Erreur lors de l'envoi de la notification:", error);
     return false;
@@ -59,23 +47,14 @@ async function sendNewsNotifications(user, newsItems) {
 
     // Pour chaque jeu ayant des nouvelles actualités
     for (const [appId, news] of Object.entries(newsItems)) {
-      // Trouver le jeu correspondant dans la liste des jeux suivis par l'utilisateur
-      const game = user.followedGames.find((g) => g.appId === appId);
+      // Vérifier si l'utilisateur suit ce jeu
+      const isFollowed = user.followedGames.includes(appId);
 
-      if (!game) continue;
+      if (!isFollowed) continue;
 
       // Pour chaque actualité du jeu
       for (const item of news) {
-        const notification = {
-          title: `${game.name} - Nouvelle actualité`,
-          body: item.title,
-          data: {
-            url: item.url,
-            appId,
-            newsId: item.gid,
-          },
-        };
-
+        const notification = createNewsNotification(appId, item);
         const success = await sendNotification(pushToken, notification);
 
         if (success) {

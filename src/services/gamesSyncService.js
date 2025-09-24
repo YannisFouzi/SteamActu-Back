@@ -1,5 +1,10 @@
 const User = require("../models/User");
-const steamService = require("./steamService");
+const { syncUserGames } = require("./gameSync/userProcessor");
+const {
+  createStats,
+  updateStats,
+  createUserGroup,
+} = require("./gameSync/statsManager");
 
 /**
  * Synchronise les jeux de tous les utilisateurs enregistrés
@@ -9,13 +14,7 @@ async function syncAllUsersGames() {
   console.log(
     "Démarrage de la synchronisation automatique des bibliothèques..."
   );
-  const stats = {
-    totalUsers: 0,
-    usersProcessed: 0,
-    usersWithNewGames: 0,
-    totalNewGames: 0,
-    errors: 0,
-  };
+  const stats = createStats();
 
   try {
     // Récupérer tous les utilisateurs
@@ -26,13 +25,8 @@ async function syncAllUsersGames() {
     // Pour chaque utilisateur
     for (const user of users) {
       try {
-        stats.usersProcessed++;
         const result = await syncUserGames(user);
-
-        if (result.newGames.length > 0) {
-          stats.usersWithNewGames++;
-          stats.totalNewGames += result.newGames.length;
-        }
+        updateStats(stats, result);
       } catch (error) {
         console.error(
           `Erreur lors de la synchronisation des jeux pour l'utilisateur ${user.username}:`,
@@ -65,15 +59,7 @@ async function syncUserGroupByIndex(groupIndex, totalGroups) {
     `Synchronisation du groupe ${groupIndex + 1}/${totalGroups} d'utilisateurs`
   );
 
-  const stats = {
-    groupIndex,
-    totalGroups,
-    totalUsers: 0,
-    usersProcessed: 0,
-    usersWithNewGames: 0,
-    totalNewGames: 0,
-    errors: 0,
-  };
+  const stats = createStats({ groupIndex, totalGroups });
 
   try {
     // Récupérer tous les utilisateurs
@@ -86,15 +72,12 @@ async function syncUserGroupByIndex(groupIndex, totalGroups) {
       return stats;
     }
 
-    // Calculer combien d'utilisateurs par groupe
-    const groupSize = Math.ceil(allUsers.length / totalGroups);
-
-    // Déterminer l'index de début et de fin pour ce groupe
-    const startIndex = groupIndex * groupSize;
-    const endIndex = Math.min(startIndex + groupSize, allUsers.length);
-
-    // Extraire les utilisateurs de ce groupe
-    const groupUsers = allUsers.slice(startIndex, endIndex);
+    // Créer le groupe d'utilisateurs
+    const { groupUsers, startIndex, endIndex } = createUserGroup(
+      allUsers,
+      groupIndex,
+      totalGroups
+    );
 
     console.log(
       `Traitement de ${groupUsers.length} utilisateurs du groupe ${
@@ -105,13 +88,8 @@ async function syncUserGroupByIndex(groupIndex, totalGroups) {
     // Synchroniser chaque utilisateur du groupe
     for (const user of groupUsers) {
       try {
-        stats.usersProcessed++;
         const result = await syncUserGames(user);
-
-        if (result.newGames && result.newGames.length > 0) {
-          stats.usersWithNewGames++;
-          stats.totalNewGames += result.newGames.length;
-        }
+        updateStats(stats, result);
       } catch (error) {
         console.error(
           `Erreur lors de la synchronisation de l'utilisateur ${user.username}:`,
@@ -135,188 +113,6 @@ async function syncUserGroupByIndex(groupIndex, totalGroups) {
     );
     stats.errors++;
     return stats;
-  }
-}
-
-/**
- * Synchronise les jeux d'un utilisateur spécifique
- * @param {Object} user - Utilisateur pour lequel synchroniser les jeux
- * @returns {Promise<Object>} Résultat de la synchronisation
- */
-async function syncUserGames(user) {
-  const result = {
-    userId: user._id,
-    steamId: user.steamId,
-    username: user.username,
-    newGames: [],
-    updatedGames: [],
-    error: null,
-    lastSyncTime: new Date(),
-  };
-
-  try {
-    console.log(
-      `Synchronisation des jeux pour ${user.username} (${user.steamId})`
-    );
-
-    // Vérifier si la dernière synchronisation est récente (moins de 6 heures)
-    const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
-    const lastSyncTime = user.lastChecked || new Date(0);
-
-    if (lastSyncTime > sixHoursAgo) {
-      console.log(
-        `Utilisateur ${
-          user.username
-        } synchronisé récemment (${lastSyncTime.toISOString()}), en attente.`
-      );
-      return {
-        ...result,
-        skipped: true,
-        message: "Synchronisation récente, ignorée",
-      };
-    }
-
-    // Récupérer la liste actuelle des jeux
-    const userGames = await steamService.getUserGames(user.steamId);
-
-    if (!userGames || !Array.isArray(userGames)) {
-      console.error(`Réponse invalide de l'API Steam pour ${user.username}`);
-      result.error = "Réponse invalide de l'API Steam";
-      return result;
-    }
-
-    // Liste des jeux actuellement suivis (nouvelle structure : array d'IDs)
-    const followedGamesSet = new Set();
-    if (user.followedGames && Array.isArray(user.followedGames)) {
-      // Gérer les deux structures (ancienne et nouvelle)
-      user.followedGames.forEach((game) => {
-        if (typeof game === "string") {
-          // Nouvelle structure : juste l'appId
-          followedGamesSet.add(game);
-        } else if (game && game.appId) {
-          // Ancienne structure : objet avec appId
-          followedGamesSet.add(game.appId);
-        }
-      });
-    }
-
-    // Liste des jeux actuellement synchronisés
-    const syncedGamesMap = new Map();
-    if (user.lastSyncedGames && Array.isArray(user.lastSyncedGames)) {
-      user.lastSyncedGames.forEach((game) => {
-        syncedGamesMap.set(game.appId, game);
-      });
-    }
-
-    // Nouveaux jeux détectés
-    const newGames = [];
-    const updatedSyncedGames = [];
-    const updatedFollowedGames = Array.from(followedGamesSet); // Nouvelle structure : array d'IDs
-
-    // Pour chaque jeu dans la bibliothèque Steam
-    for (const game of userGames) {
-      const appId = game.appid.toString();
-
-      // Si le jeu n'est pas dans lastSyncedGames, c'est un nouveau jeu
-      if (!syncedGamesMap.has(appId)) {
-        console.log(
-          `Nouveau jeu détecté pour ${user.username}: ${game.name} (${appId})`
-        );
-
-        // Ajouter aux jeux synchronisés
-        const newSyncedGame = {
-          appId,
-          name: game.name,
-          logoUrl: game.img_logo_url
-            ? `http://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_logo_url}.jpg`
-            : null,
-          addedAt: new Date(),
-        };
-
-        updatedSyncedGames.push(newSyncedGame);
-
-        // Ajouter aux nouveaux jeux détectés
-        newGames.push({
-          appId,
-          name: game.name,
-        });
-
-        // Si l'option autoFollowNewGames est activée, ajouter le jeu aux jeux suivis
-        if (
-          user.notificationSettings &&
-          user.notificationSettings.autoFollowNewGames
-        ) {
-          if (!followedGamesSet.has(appId)) {
-            // Nouvelle structure : ajouter juste l'appId
-            updatedFollowedGames.push(appId);
-
-            result.updatedGames.push({
-              appId,
-              name: game.name,
-              action: "added",
-            });
-          }
-        }
-      } else {
-        // Le jeu est déjà dans lastSyncedGames, conserver ses informations avec mises à jour si nécessaire
-        const existingGame = syncedGamesMap.get(appId);
-
-        // Mettre à jour le logo si nécessaire
-        if (game.img_logo_url && !existingGame.logoUrl) {
-          existingGame.logoUrl = `http://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_logo_url}.jpg`;
-          result.updatedGames.push({
-            appId,
-            name: game.name,
-            action: "updated",
-          });
-        }
-
-        updatedSyncedGames.push(existingGame);
-      }
-    }
-
-    // Mettre à jour l'utilisateur si des changements ont été détectés
-    const hasChanges = newGames.length > 0 || result.updatedGames.length > 0;
-
-    if (hasChanges) {
-      // Mettre à jour lastSyncedGames
-      user.lastSyncedGames = updatedSyncedGames;
-
-      // Mettre à jour followedGames si nécessaire
-      if (
-        user.notificationSettings &&
-        user.notificationSettings.autoFollowNewGames &&
-        newGames.length > 0
-      ) {
-        user.followedGames = updatedFollowedGames;
-      }
-
-      // Mettre à jour la date de dernière vérification
-      user.lastChecked = new Date();
-
-      // Enregistrer les modifications
-      await user.save();
-
-      console.log(
-        `${newGames.length} nouveaux jeux ajoutés pour ${user.username}`
-      );
-      result.newGames = newGames;
-    } else {
-      // Même s'il n'y a pas de changement, mettre à jour la date de dernière vérification
-      user.lastChecked = new Date();
-      await user.save();
-
-      console.log(`Aucun nouveau jeu détecté pour ${user.username}`);
-    }
-
-    return result;
-  } catch (error) {
-    console.error(
-      `Erreur lors de la synchronisation des jeux pour ${user.username}:`,
-      error
-    );
-    result.error = error.message;
-    return result;
   }
 }
 

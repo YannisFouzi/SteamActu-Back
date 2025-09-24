@@ -19,7 +19,7 @@ const UserSchema = new mongoose.Schema({
   },
   followedGames: [
     {
-      type: String, // Juste les appIds (structure ultra-simplifiÃ©e)
+      type: String, // Juste les appIds (structure ultra-simplifiée)
     },
   ],
   recentActiveGames: [
@@ -49,7 +49,6 @@ const UserSchema = new mongoose.Schema({
       default: false,
     },
   },
-  // lastSyncedGames supprimÃ© - plus besoin de stocker tous les jeux Steam
 });
 
 module.exports = mongoose.model("User", UserSchema);

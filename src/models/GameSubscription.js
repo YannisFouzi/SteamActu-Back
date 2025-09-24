@@ -20,18 +20,11 @@ const GameSubscriptionSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
   updatedAt: {
     type: Date,
     default: Date.now,
   },
 });
-
-// Index composé pour optimiser les requêtes
-GameSubscriptionSchema.index({ gameId: 1, subscribers: 1 });
 
 // Middleware pour mettre à jour updatedAt
 GameSubscriptionSchema.pre("save", function (next) {
