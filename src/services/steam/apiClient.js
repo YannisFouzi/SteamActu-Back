@@ -44,6 +44,7 @@ async function fetchUserGames(steamId) {
     steamid: steamId,
     format: "json",
     include_appinfo: true,
+    include_played_free_games: true,
   };
 
   const data = await makeApiCall(ENDPOINTS.OWNED_GAMES, params, `getUserGames`);

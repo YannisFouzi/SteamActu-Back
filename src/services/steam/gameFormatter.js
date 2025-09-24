@@ -26,6 +26,7 @@ function formatGame(game, lastUpdateTimestamp = 0) {
       recent: game.playtime_2weeks || 0,
     },
     lastUpdateTimestamp,
+    rtime_last_played: game.rtime_last_played || 0,
   };
 }
 
