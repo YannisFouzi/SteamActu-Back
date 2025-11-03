@@ -8,6 +8,7 @@ const {
   fetchGameNews,
   fetchUserProfile,
   fetchUserWishlist,
+  searchGames: fetchSearchGames,
 } = require("./steam/apiClient");
 const { registerOrUpdateUser } = require("./steam/userManager");
 
@@ -57,10 +58,15 @@ async function getUserWishlist(steamId) {
   return fetchUserWishlist(steamId);
 }
 
+async function searchGames(query, limit = 5) {
+  return fetchSearchGames(query, limit);
+}
+
 module.exports = {
   getUserGames,
   getGameNews,
   getUserProfile,
   registerOrUpdateUser,
   getUserWishlist,
+  searchGames,
 };

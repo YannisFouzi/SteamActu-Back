@@ -174,4 +174,26 @@ router.get("/wishlist/:steamId", validateSteamId, async (req, res) => {
   }
 });
 
+router.get("/search", async (req, res) => {
+  try {
+    const { q, limit } = req.query;
+
+    if (!q || q.trim().length < 2) {
+      return res.status(400).json({
+        message: "La recherche doit contenir au moins 2 caractères",
+      });
+    }
+
+    const results = await steamService.searchGames(
+      q.trim(),
+      parseInt(limit) || 5
+    );
+
+    res.json(results);
+  } catch (error) {
+    console.error("Erreur dans /search:", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
 module.exports = router;

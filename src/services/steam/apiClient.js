@@ -305,9 +305,42 @@ async function fetchUserWishlist(steamId) {
   }
 }
 
+async function searchGames(query, limit = 5) {
+  try {
+    const response = await axios.get(
+      "https://store.steampowered.com/api/storesearch/",
+      {
+        params: {
+          term: query,
+          l: "french",
+          cc: "fr",
+        },
+        timeout: 5000,
+      }
+    );
+
+    if (!response.data || !response.data.items) {
+      return [];
+    }
+
+    const results = response.data.items.slice(0, limit).map((item) => ({
+      appid: parseInt(item.id),
+      name: item.name,
+      header_image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.id}/header.jpg`,
+      tiny_image: item.tiny_image || null,
+    }));
+
+    return results;
+  } catch (error) {
+    console.error(`Erreur recherche jeux:`, error.message);
+    return [];
+  }
+}
+
 module.exports = {
   fetchUserGames,
   fetchGameNews,
   fetchUserProfile,
   fetchUserWishlist,
+  searchGames,
 };
