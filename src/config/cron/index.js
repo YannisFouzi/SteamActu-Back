@@ -15,10 +15,12 @@ const { SCHEDULES } = require("./schedules");
 function initCronJobs() {
   console.log("🔧 Initialisation des tâches planifiées...");
 
-  // Vérification des actualités toutes les heures (avec rotation intelligente)
-  cron.schedule(SCHEDULES.NEWS_CHECK, () => {
-    executeTask("📰 Vérification actualités (rotation)", checkNews);
-  });
+  // ⚠️ DÉSACTIVÉ : Vérification des actualités de tous les jeux (trop gourmand)
+  // L'app affiche maintenant uniquement les actus des jeux suivis
+  // Pour réactiver : décommenter ci-dessous + frontend NEWS_TAB_ITEMS
+  // cron.schedule(SCHEDULES.NEWS_CHECK, () => {
+  //   executeTask("📰 Vérification actualités (rotation)", checkNews);
+  // });
 
   // Synchronisation par groupe toutes les 30 minutes après l'heure
   cron.schedule(SCHEDULES.USER_GROUP_SYNC, () => {
@@ -41,7 +43,7 @@ function initCronJobs() {
   });
 
   console.log("✅ Tâches planifiées initialisées avec succès :");
-  console.log("  📰 Actualités : toutes les heures");
+  // console.log("  📰 Actualités : toutes les heures"); // ⚠️ DÉSACTIVÉ
   console.log("  👥 Groupe : toutes les 30 min");
   console.log("  🔄 Complète : dimanche 3h");
   console.log("  🎯 Wishlists : 0h, 6h, 12h, 18h");

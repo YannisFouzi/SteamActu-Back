@@ -110,22 +110,25 @@ router.get("/games/:steamId", validateSteamId, async (req, res) => {
         isFollowed: user.followedGames.includes(game.appid.toString()),
       }));
     } else {
-      // Traiter tous les jeux par batches (comme avant)
-      const allProcessedGames = await processAllGames(games, user);
+      // ⚠️ DÉSACTIVÉ : Traitement des news pour chaque jeu (trop lent)
+      // Supprime le tri "Mis à jour récemment" et le badge "Nouveau"
+      // Pour réactiver : décommenter le bloc ci-dessous
+      // const allProcessedGames = await processAllGames(games, user);
+      // formattedGames = games.map((game) => {
+      //   const appId = game.appid.toString();
+      //   const processedGame = allProcessedGames.find(
+      //     (g) => g.appId === appId || g.appid === appId
+      //   );
+      //   if (processedGame) {
+      //     return processedGame;
+      //   }
+      //   const lastUpdateTimestamp = getLastUpdateTimestamp(appId, user);
+      //   return formatGame(game, lastUpdateTimestamp);
+      // });
 
-      // Formater tous les jeux avec fallback sur le cache
+      // Version rapide sans fetch des news
       formattedGames = games.map((game) => {
         const appId = game.appid.toString();
-
-        // Chercher dans les jeux traités
-        const processedGame = allProcessedGames.find(
-          (g) => g.appId === appId || g.appid === appId
-        );
-        if (processedGame) {
-          return processedGame;
-        }
-
-        // Fallback: formater avec timestamp du cache/utilisateur
         const lastUpdateTimestamp = getLastUpdateTimestamp(appId, user);
         return formatGame(game, lastUpdateTimestamp);
       });
