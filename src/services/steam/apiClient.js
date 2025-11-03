@@ -110,6 +110,7 @@ async function fetchUserProfile(steamId) {
 
 /**
  * Récupère les détails d'un jeu depuis Steam Store API
+ * ⚡ OPTIMISÉ : Timeout réduit pour requêtes plus rapides
  * @param {number} appId - ID du jeu
  * @returns {Promise<Object|null>} - Détails du jeu ou null
  */
@@ -119,7 +120,7 @@ async function fetchGameDetails(appId) {
       `https://store.steampowered.com/api/appdetails`,
       {
         params: { appids: appId, l: "french" },
-        timeout: 5000, // 5 secondes max par jeu
+        timeout: 3000, // ⚡ 3 secondes max (réduit de 5s)
       }
     );
 
@@ -141,8 +142,87 @@ async function fetchGameDetails(appId) {
 }
 
 /**
+ * Récupère les détails de plusieurs jeux en une seule requête (BATCH)
+ * ⚡ OPTIMISATION : Teste différents formats pour l'API Steam
+ * @param {Array<number>} appIds - Liste des IDs de jeux
+ * @returns {Promise<Object>} - Map {appId: détails} ou {appId: null} si erreur
+ */
+async function fetchGameDetailsBatch(appIds) {
+  if (!appIds || appIds.length === 0) {
+    return {};
+  }
+
+  try {
+    // 🧪 TEST : Construire l'URL avec appids séparés par des virgules
+    const appIdsString = appIds.join(",");
+
+    console.log(
+      `🧪 TEST Batch API - Tentative avec ${
+        appIds.length
+      } jeux: ${appIdsString.substring(0, 50)}...`
+    );
+
+    const response = await axios.get(
+      `https://store.steampowered.com/api/appdetails`,
+      {
+        params: {
+          appids: appIdsString,
+          l: "french",
+        },
+        timeout: 15000, // 15 secondes pour un batch
+      }
+    );
+
+    console.log(`✅ Réponse reçue, parsing...`);
+
+    const results = {};
+
+    // Parser la réponse pour chaque jeu
+    appIds.forEach((appId) => {
+      const gameData = response.data[appId];
+
+      if (gameData?.success && gameData?.data) {
+        results[appId] = {
+          name: gameData.data.name,
+          header_image: gameData.data.header_image,
+          capsule_image: gameData.data.capsule_image,
+          short_description: gameData.data.short_description,
+          release_date: gameData.data.release_date?.date || "",
+        };
+        console.log(`   ✅ ${appId}: ${gameData.data.name}`);
+      } else {
+        // Jeu non trouvé ou erreur
+        results[appId] = null;
+        console.log(`   ❌ ${appId}: Pas de données`);
+      }
+    });
+
+    return results;
+  } catch (error) {
+    console.error(
+      `❌ Erreur fetchGameDetailsBatch (${appIds.length} jeux):`,
+      error.message
+    );
+    console.error(
+      `   URL tentée: https://store.steampowered.com/api/appdetails?appids=${appIds
+        .join(",")
+        .substring(0, 100)}...`
+    );
+
+    // En cas d'erreur, retourner un objet avec null pour chaque appId
+    const results = {};
+    appIds.forEach((appId) => {
+      results[appId] = null;
+    });
+    return results;
+  }
+}
+
+/**
  * Récupère la wishlist d'un utilisateur via l'API officielle Steam
- * et enrichit avec les noms des jeux
+ * et enrichit avec les noms des jeux (OPTIMISÉ avec appels parallèles)
+ * ⚡ PERFORMANCE : 15 jeux en parallèle → 94 jeux en ~7 batches
+ * ⚠️ Note : L'API Steam ne supporte PAS les batch avec plusieurs appids
  * @param {string} steamId - ID Steam de l'utilisateur
  * @returns {Promise<Array>} - Liste des jeux de la wishlist
  */
@@ -166,13 +246,24 @@ async function fetchUserWishlist(steamId) {
 
     console.log(`✅ Wishlist API récupérée : ${wishlistItems.length} jeux`);
 
-    // Enrichir avec les noms des jeux (par batch de 5 pour éviter de surcharger)
+    if (wishlistItems.length === 0) {
+      return [];
+    }
+
+    // ⚡ OPTIMISATION : 15 jeux en parallèle, 0 délai
+    // L'API Steam ne supporte PAS les appels batch → appels individuels en parallèle
+    const PARALLEL_REQUESTS = 15;
     const enrichedItems = [];
+    const totalBatches = Math.ceil(wishlistItems.length / PARALLEL_REQUESTS);
 
-    for (let i = 0; i < wishlistItems.length; i += 5) {
-      const batch = wishlistItems.slice(i, i + 5);
+    console.log(
+      `⚡ Enrichissement optimisé: ${PARALLEL_REQUESTS} jeux en parallèle...`
+    );
 
-      // Traiter 5 jeux en parallèle
+    for (let i = 0; i < wishlistItems.length; i += PARALLEL_REQUESTS) {
+      const batch = wishlistItems.slice(i, i + PARALLEL_REQUESTS);
+
+      // 🚀 Traiter 15 jeux EN PARALLÈLE (appels individuels simultanés)
       const batchPromises = batch.map(async (item) => {
         const details = await fetchGameDetails(item.appid);
 
@@ -197,14 +288,10 @@ async function fetchUserWishlist(steamId) {
       const batchResults = await Promise.all(batchPromises);
       enrichedItems.push(...batchResults);
 
-      // Petite pause entre les batches (200ms)
-      if (i + 5 < wishlistItems.length) {
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
-
       // Log de progression
+      const batchNumber = Math.floor(i / PARALLEL_REQUESTS) + 1;
       console.log(
-        `   ⏳ Enrichissement: ${enrichedItems.length}/${wishlistItems.length} jeux`
+        `   ⚡ Batch ${batchNumber}/${totalBatches} : ${enrichedItems.length}/${wishlistItems.length} jeux`
       );
     }
 
