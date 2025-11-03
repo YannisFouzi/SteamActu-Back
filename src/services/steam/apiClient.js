@@ -131,7 +131,7 @@ async function fetchGameDetails(appId) {
         header_image: gameData.data.header_image,
         capsule_image: gameData.data.capsule_image,
         short_description: gameData.data.short_description,
-        release_date: gameData.data.release_date?.date || "",
+        // ❌ Date de sortie supprimée
       };
     }
     return null;
@@ -221,7 +221,7 @@ async function fetchGameDetailsBatch(appIds) {
 /**
  * Récupère la wishlist d'un utilisateur via l'API officielle Steam
  * et enrichit avec les noms des jeux (OPTIMISÉ avec appels parallèles)
- * ⚡ PERFORMANCE : 15 jeux en parallèle → 94 jeux en ~7 batches
+ * ⚡ PERFORMANCE : 5 jeux en parallèle → 94 jeux en ~19 batches (3-4 secondes)
  * ⚠️ Note : L'API Steam ne supporte PAS les batch avec plusieurs appids
  * @param {string} steamId - ID Steam de l'utilisateur
  * @returns {Promise<Array>} - Liste des jeux de la wishlist
@@ -250,9 +250,9 @@ async function fetchUserWishlist(steamId) {
       return [];
     }
 
-    // ⚡ OPTIMISATION : 15 jeux en parallèle, 0 délai
+    // ⚡ OPTIMISATION : 5 jeux en parallèle pour éviter rate limit Steam
     // L'API Steam ne supporte PAS les appels batch → appels individuels en parallèle
-    const PARALLEL_REQUESTS = 15;
+    const PARALLEL_REQUESTS = 5;
     const enrichedItems = [];
     const totalBatches = Math.ceil(wishlistItems.length / PARALLEL_REQUESTS);
 
@@ -263,7 +263,7 @@ async function fetchUserWishlist(steamId) {
     for (let i = 0; i < wishlistItems.length; i += PARALLEL_REQUESTS) {
       const batch = wishlistItems.slice(i, i + PARALLEL_REQUESTS);
 
-      // 🚀 Traiter 15 jeux EN PARALLÈLE (appels individuels simultanés)
+      // 🚀 Traiter 5 jeux EN PARALLÈLE (appels individuels simultanés)
       const batchPromises = batch.map(async (item) => {
         const details = await fetchGameDetails(item.appid);
 
@@ -281,7 +281,7 @@ async function fetchUserWishlist(steamId) {
           review_score: 0,
           review_desc: "",
           reviews_percent: 0,
-          release_string: details?.release_date || "",
+          // ❌ Date de sortie supprimée (pas utile pour la wishlist)
         };
       });
 
