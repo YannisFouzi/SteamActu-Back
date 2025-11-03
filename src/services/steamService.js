@@ -7,6 +7,7 @@ const {
   fetchUserGames,
   fetchGameNews,
   fetchUserProfile,
+  fetchUserWishlist,
 } = require("./steam/apiClient");
 const { registerOrUpdateUser } = require("./steam/userManager");
 
@@ -47,9 +48,19 @@ async function getUserProfile(steamId) {
   return fetchUserProfile(steamId);
 }
 
+/**
+ * Récupère la wishlist d'un utilisateur
+ * @param {string} steamId - ID Steam de l'utilisateur
+ * @returns {Promise<Array>} Liste des jeux de la wishlist
+ */
+async function getUserWishlist(steamId) {
+  return fetchUserWishlist(steamId);
+}
+
 module.exports = {
   getUserGames,
   getGameNews,
   getUserProfile,
   registerOrUpdateUser,
+  getUserWishlist,
 };

@@ -20,11 +20,18 @@ const GameSubscriptionSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  lastNewsCheck: {
+    type: Date,
+    default: null, // Date de la dernière vérification des news (pour rotation)
+  },
   updatedAt: {
     type: Date,
     default: Date.now,
   },
 });
+
+// Index pour améliorer les performances de la rotation
+GameSubscriptionSchema.index({ lastNewsCheck: 1 });
 
 // Middleware pour mettre à jour updatedAt
 GameSubscriptionSchema.pre("save", function (next) {

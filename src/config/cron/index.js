@@ -1,30 +1,51 @@
 const cron = require("node-cron");
 const { executeTask } = require("./taskExecutor");
-const { checkNews, syncUserGroup, syncAllUsers } = require("./tasks");
+const {
+  checkNews,
+  syncUserGroup,
+  syncAllUsers,
+  syncWishlists,
+  syncLibraries,
+} = require("./tasks");
 const { SCHEDULES } = require("./schedules");
 
 /**
  * Initialise toutes les tâches planifiées de l'application
  */
 function initCronJobs() {
-  console.log("Initialisation des tâches planifiées...");
+  console.log("🔧 Initialisation des tâches planifiées...");
 
-  // Vérification des actualités toutes les heures
+  // Vérification des actualités toutes les heures (avec rotation intelligente)
   cron.schedule(SCHEDULES.NEWS_CHECK, () => {
-    executeTask("vérification des actualités", checkNews);
+    executeTask("📰 Vérification actualités (rotation)", checkNews);
   });
 
   // Synchronisation par groupe toutes les 30 minutes après l'heure
   cron.schedule(SCHEDULES.USER_GROUP_SYNC, () => {
-    executeTask("synchronisation par groupe", syncUserGroup);
+    executeTask("👥 Synchronisation par groupe", syncUserGroup);
   });
 
   // Synchronisation complète hebdomadaire le dimanche à 3h
   cron.schedule(SCHEDULES.FULL_SYNC, () => {
-    executeTask("synchronisation complète hebdomadaire", syncAllUsers);
+    executeTask("🔄 Synchronisation complète hebdomadaire", syncAllUsers);
   });
 
-  console.log("Tâches planifiées initialisées avec succès");
+  // 🆕 Synchronisation des wishlists toutes les 6h (0h, 6h, 12h, 18h)
+  cron.schedule(SCHEDULES.WISHLIST_SYNC, () => {
+    executeTask("🎯 Synchronisation wishlists", syncWishlists);
+  });
+
+  // 🆕 Synchronisation des bibliothèques toutes les 6h (3h, 9h, 15h, 21h)
+  cron.schedule(SCHEDULES.LIBRARY_SYNC, () => {
+    executeTask("📚 Synchronisation bibliothèques", syncLibraries);
+  });
+
+  console.log("✅ Tâches planifiées initialisées avec succès :");
+  console.log("  📰 Actualités : toutes les heures");
+  console.log("  👥 Groupe : toutes les 30 min");
+  console.log("  🔄 Complète : dimanche 3h");
+  console.log("  🎯 Wishlists : 0h, 6h, 12h, 18h");
+  console.log("  📚 Bibliothèques : 3h, 9h, 15h, 21h");
 }
 
 module.exports = {

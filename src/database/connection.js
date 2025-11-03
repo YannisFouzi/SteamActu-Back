@@ -13,7 +13,14 @@ const { SERVER_CONFIG, SUCCESS_MESSAGES } = require("../config/app");
  */
 async function connectDatabase() {
   try {
-    await mongoose.connect(SERVER_CONFIG.MONGODB_URI);
+    // Options de connexion pour améliorer la stabilité
+    const options = {
+      serverSelectionTimeoutMS: 10000, // Timeout de 10 secondes
+      socketTimeoutMS: 45000, // Timeout de socket de 45 secondes
+      family: 4, // Force l'utilisation d'IPv4 pour éviter les problèmes DNS
+    };
+
+    await mongoose.connect(SERVER_CONFIG.MONGODB_URI, options);
     console.log(SUCCESS_MESSAGES.MONGODB_CONNECTED);
 
     // Initialiser les tâches planifiées après connexion à la base de données
