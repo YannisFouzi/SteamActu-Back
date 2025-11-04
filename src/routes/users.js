@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
+const GameSubscription = require("../models/GameSubscription");
 const steamService = require("../services/steamService");
 const {
   validateUserExists,
@@ -179,5 +180,36 @@ router.delete(
     }
   }
 );
+
+router.get("/:steamId/followed-games-details", async (req, res) => {
+  try {
+    const { steamId } = req.params;
+
+    const user = await User.findOne({ steamId });
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    if (!user.followedGames || user.followedGames.length === 0) {
+      return res.json({ followedGames: [] });
+    }
+
+    const subscriptions = await GameSubscription.find({
+      gameId: { $in: user.followedGames },
+    })
+      .select("gameId name")
+      .lean();
+
+    const followedGamesDetails = subscriptions.map((sub) => ({
+      appId: sub.gameId,
+      name: sub.name,
+    }));
+
+    res.json({ followedGames: followedGamesDetails });
+  } catch (error) {
+    console.error("Erreur dans /followed-games-details:", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
 
 module.exports = router;
