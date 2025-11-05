@@ -1,90 +1,145 @@
 /**
  * Service de synchronisation de la wishlist Steam
- * Détecte les nouveaux jeux ajoutés à la wishlist et auto-follow si activé
+ * VERSION NORMALISÉE (2025-11-04)
+ *
+ * PHILOSOPHIE :
+ * - Même logique que Games : collection Wishlist partagée entre users
+ * - Pas de doublon : un jeu wishlisted = 1 document, N users le référencent
+ * - User.wishlist.gameIds[] contient les références vers Wishlist.appId
+ *
+ * MODIFICATIONS :
+ * - Stockage dans collection Wishlist (métadonnées communes)
+ * - User.wishlist.gameIds[] au lieu de wishlistLastSync
+ * - Détection nouveaux jeux via comparaison gameIds
  */
 
 const User = require("../models/User");
+const Wishlist = require("../models/Wishlist");
 const GameSubscription = require("../models/GameSubscription");
 const steamService = require("./steamService");
 
 /**
- * Synchronise la wishlist d'un utilisateur
+ * Crée/met à jour les documents Wishlist dans la collection
+ * Logique identique à Games : upsert = INSERT si nouveau, UPDATE si existe
+ * @param {Array} wishlistGames - Jeux wishlist bruts de l'API Steam
+ * @returns {Promise<void>}
+ */
+async function upsertWishlistCollection(wishlistGames) {
+  if (!wishlistGames || wishlistGames.length === 0) {
+    return;
+  }
+
+  const startTime = Date.now();
+  console.log(`[WISHLIST] upsertWishlistCollection() - START`);
+  console.log(`  - Jeux à traiter: ${wishlistGames.length}`);
+
+  // ✅ FIX TEMPORAIRE: Accepter tous les jeux, même avec noms "Game XXXXX"
+  // L'enrichissement API Steam échoue souvent, donc on insère quand même
+  const validGames = wishlistGames.filter((steamGame) => {
+    return steamGame.name && steamGame.appid;
+  });
+
+  console.log(`  - Jeux valides: ${validGames.length}/${wishlistGames.length}`);
+
+  if (validGames.length === 0) {
+    console.log(`  ⚠️ Aucun jeu valide, skip bulkWrite`);
+    return;
+  }
+
+  const bulkOps = validGames.map((steamGame) => ({
+    updateOne: {
+      filter: { appId: steamGame.appid.toString() },
+      update: {
+        $set: {
+          name: steamGame.name,
+          img_icon_url: steamGame.capsule || steamGame.header_image || steamGame.img_icon_url || "",
+        },
+        $setOnInsert: {
+          appId: steamGame.appid.toString(),
+        },
+      },
+      upsert: true,
+    },
+  }));
+
+  await Wishlist.bulkWrite(bulkOps);
+
+  const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+  console.log(`[WISHLIST] upsertWishlistCollection() - END`);
+  console.log(`  - BulkWrite operations: ${bulkOps.length}`);
+  console.log(`  - Jeux skipped: ${wishlistGames.length - validGames.length}`);
+  console.log(`  - Durée: ${duration}s`);
+}
+
+/**
+ * Synchronise la wishlist d'un utilisateur - VERSION NORMALISÉE
  * @param {string} steamId - ID Steam de l'utilisateur
+ * @param {Array} wishlistData - Données wishlist déjà récupérées (optionnel)
  * @returns {Promise<Object>} Résultat de la synchronisation
  */
-async function syncUserWishlist(steamId) {
+async function syncUserWishlist(steamId, wishlistData = null) {
   try {
-    console.log(`🔄 Synchronisation wishlist pour ${steamId}`);
+    console.log(`\n[WISHLIST] Synchronisation pour ${steamId}`);
 
-    // Récupérer l'utilisateur
     const user = await User.findOne({ steamId });
     if (!user) {
       console.log(`❌ Utilisateur ${steamId} non trouvé`);
       return { success: false, error: "Utilisateur non trouvé" };
     }
 
-    // Récupérer la wishlist depuis Steam
     let wishlistItems = [];
-    try {
-      wishlistItems = await steamService.getUserWishlist(steamId);
-      console.log(`📋 Wishlist récupérée : ${wishlistItems.length} jeux`);
-    } catch (error) {
-      console.error(
-        `❌ Erreur lors de la récupération de la wishlist pour ${steamId}:`,
-        error.message
-      );
-      return { success: false, error: error.message };
+
+    if (wishlistData && Array.isArray(wishlistData)) {
+      console.log(`📦 Utilisation des données déjà récupérées : ${wishlistData.length} jeux`);
+      wishlistItems = wishlistData;
+    } else {
+      try {
+        wishlistItems = await steamService.getUserWishlist(steamId);
+        console.log(`📋 Wishlist récupérée : ${wishlistItems.length} jeux`);
+      } catch (error) {
+        console.error(`❌ Erreur récupération wishlist:`, error.message);
+        return { success: false, error: error.message };
+      }
     }
 
-    // Si la wishlist est vide, pas de traitement
+    // Si la wishlist est vide
     if (!Array.isArray(wishlistItems) || wishlistItems.length === 0) {
       console.log(`ℹ️ Wishlist vide pour ${steamId}`);
-      user.wishlistLastSync.lastSyncDate = new Date();
+      user.wishlist = { games: [], lastFullSync: new Date() };
       await user.save();
       return { success: true, newGames: 0, autoFollowed: 0 };
     }
 
-    // Trier par date d'ajout décroissante (plus récents d'abord)
-    const sortedWishlist = wishlistItems.sort(
-      (a, b) => (b.date_added || 0) - (a.date_added || 0)
+    // Upsert dans collection Wishlist (pas de doublon entre users)
+    await upsertWishlistCollection(wishlistItems);
+    console.log(`✅ ${wishlistItems.length} jeux créés/mis à jour dans Wishlist`);
+
+    // Récupérer gameIds actuels en BDD
+    const cachedGameIds = new Set(
+      (user.wishlist?.games || []).map((g) => g.gameId)
     );
 
-    // Récupérer le dernier timestamp connu
-    const lastKnownTimestamp = user.wishlistLastSync?.timestamp || 0;
-    console.log(
-      `📅 Dernier timestamp connu : ${lastKnownTimestamp} (${new Date(
-        lastKnownTimestamp * 1000
-      ).toLocaleString()})`
-    );
-
-    // Détecter les nouveaux jeux ajoutés depuis la dernière sync
+    // Détecter nouveaux jeux (dans Steam mais pas en BDD)
     const newGames = [];
-    for (const item of sortedWishlist) {
-      const dateAdded = item.date_added || 0;
-
-      // Si on atteint un jeu plus ancien que le dernier check, on arrête
-      if (dateAdded <= lastKnownTimestamp) {
-        break;
+    for (const game of wishlistItems) {
+      const appId = game.appid.toString();
+      if (!cachedGameIds.has(appId)) {
+        newGames.push({
+          appId,
+          name: game.name,
+        });
       }
-
-      newGames.push({
-        appId: item.appid.toString(),
-        dateAdded: dateAdded,
-        dateAddedReadable: new Date(dateAdded * 1000).toLocaleString(),
-      });
     }
 
-    console.log(
-      `✨ ${newGames.length} nouveau(x) jeu(x) détecté(s) dans la wishlist`
-    );
+    console.log(`✨ ${newGames.length} nouveau(x) jeu(x) détecté(s)`);
 
-    // Auto-follow si activé (OPTIMISÉ avec bulkWrite)
+    // Auto-follow si activé
     let autoFollowedCount = 0;
     if (
       newGames.length > 0 &&
       user.notificationSettings?.autoFollowNewGames === true
     ) {
-      console.log(`🎯 Auto-follow activé, ajout des nouveaux jeux...`);
+      console.log(`🎯 Auto-follow activé...`);
 
       // Filtrer les jeux pas encore suivis
       const gamesToFollow = newGames.filter(
@@ -93,18 +148,18 @@ async function syncUserWishlist(steamId) {
 
       if (gamesToFollow.length > 0) {
         try {
-          // Ajouter tous les appIds en une fois
+          // Ajouter à followedGames
           user.followedGames.push(...gamesToFollow.map((g) => g.appId));
           autoFollowedCount = gamesToFollow.length;
 
-          // Bulk write pour GameSubscriptions (1 seul appel DB)
+          // Bulk write GameSubscriptions
           const bulkOps = gamesToFollow.map((game) => ({
             updateOne: {
               filter: { gameId: game.appId },
               update: {
                 $setOnInsert: {
                   gameId: game.appId,
-                  name: `Game ${game.appId}`,
+                  name: game.name,
                   lastNewsTimestamp: 0,
                 },
                 $addToSet: { subscribers: steamId },
@@ -114,25 +169,26 @@ async function syncUserWishlist(steamId) {
           }));
 
           await GameSubscription.bulkWrite(bulkOps);
-          console.log(`✅ ${autoFollowedCount} jeu(x) auto-suivi(s) en bulk`);
+          console.log(`✅ ${autoFollowedCount} jeu(x) auto-suivi(s)`);
         } catch (error) {
-          console.error(`❌ Erreur auto-follow bulk:`, error.message);
+          console.error(`❌ Erreur auto-follow:`, error.message);
         }
       }
     }
 
-    // Mettre à jour le timestamp avec le jeu le plus récent
-    if (sortedWishlist.length > 0) {
-      const latestTimestamp = sortedWishlist[0].date_added || 0;
-      user.wishlistLastSync.timestamp = latestTimestamp;
-    }
+    // Mettre à jour User.wishlist avec games[] (date_added user-specific)
+    user.wishlist = {
+      games: wishlistItems.map((item) => ({
+        gameId: item.appid.toString(),
+        date_added: item.date_added || 0,
+        priority: item.priority || 0,
+      })),
+      lastFullSync: new Date(),
+    };
 
-    user.wishlistLastSync.lastSyncDate = new Date();
-
-    // Sauvegarder l'utilisateur
     await user.save();
 
-    console.log(`✅ Synchronisation wishlist terminée pour ${steamId}`);
+    console.log(`✅ Wishlist mise à jour: ${wishlistItems.length} jeux\n`);
 
     return {
       success: true,
@@ -142,10 +198,7 @@ async function syncUserWishlist(steamId) {
       newGamesDetails: newGames,
     };
   } catch (error) {
-    console.error(
-      `❌ Erreur lors de la synchronisation wishlist pour ${steamId}:`,
-      error
-    );
+    console.error(`❌ Erreur sync wishlist pour ${steamId}:`, error);
     return { success: false, error: error.message };
   }
 }

@@ -1,39 +1,43 @@
 /**
  * Processeur pour la synchronisation des jeux utilisateur
+ *
+ * ⚠️ MODIFICATIONS ISSUES DE L'AUDIT 2025-11-04
+ * - Mise à jour de gameLibrary.gameIds[] au lieu de games[]
+ * - Création/mise à jour des documents Game en collection séparée
+ * - Intégration de la détection des jeux supprimés (depuis syncLibraryService)
+ * - Auto-follow avec mise à jour GameSubscription en bulk
+ * Voir: AUDIT_REPORT.md et ACTIONS.md
  */
 
 const steamService = require("../steamService");
+const Game = require("../../models/Game");
+const GameSubscription = require("../../models/GameSubscription");
 
-// 6 heures en millisecondes
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
-/**
- * Vérifie si un utilisateur peut être synchronisé
- * @param {Object} user - Utilisateur
- * @returns {boolean} - True si la synchronisation est possible
- */
 function canSyncUser(user) {
   const cooldownTime = new Date(Date.now() - SYNC_COOLDOWN_MS);
   const lastSyncTime = user.lastChecked || new Date(0);
+  const canSync = lastSyncTime <= cooldownTime;
 
-  return lastSyncTime <= cooldownTime;
+  // DEBUG/MIGRATION: Log cooldown status
+  console.log(`[DEBUG/MIGRATION] canSyncUser() - User: ${user.username} (${user.steamId})`);
+  console.log(`  - lastChecked: ${lastSyncTime.toISOString()}`);
+  console.log(`  - Cooldown expires at: ${cooldownTime.toISOString()}`);
+  console.log(`  - Current time: ${new Date().toISOString()}`);
+  console.log(`  - Can sync: ${canSync ? 'true ✅' : 'false ❌'}`);
+
+  return canSync;
 }
 
-/**
- * Migre et normalise la structure followedGames
- * @param {Object} user - Utilisateur
- * @returns {Set} - Set des IDs de jeux suivis
- */
 function normalizeFollowedGames(user) {
   const followedGamesSet = new Set();
 
   if (user.followedGames && Array.isArray(user.followedGames)) {
     user.followedGames.forEach((game) => {
       if (typeof game === "string") {
-        // Nouvelle structure : juste l'appId
         followedGamesSet.add(game);
       } else if (game && game.appId) {
-        // Ancienne structure : objet avec appId
         followedGamesSet.add(game.appId);
       }
     });
@@ -43,33 +47,128 @@ function normalizeFollowedGames(user) {
 }
 
 /**
- * Traite l'auto-follow des nouveaux jeux
- * @param {Object} user - Utilisateur
- * @param {Array} userGames - Jeux Steam de l'utilisateur
- * @param {Set} followedGamesSet - Jeux actuellement suivis
- * @returns {Object} - Résultat du traitement
+ * NOUVEAU: Crée/met à jour les documents Game dans la collection Games
+ * @param {Array} steamGames - Jeux Steam bruts de l'API
+ * @returns {Promise<void>}
  */
-function processAutoFollow(user, userGames, followedGamesSet) {
+async function upsertGamesCollection(steamGames) {
+  if (!steamGames || steamGames.length === 0) {
+    return;
+  }
+
+  // DEBUG/MIGRATION: Log avant upsert
+  const startTime = Date.now();
+  console.log(`[DEBUG/MIGRATION] upsertGamesCollection() - START`);
+  console.log(`  - Jeux à traiter: ${steamGames.length}`);
+
+  const bulkOps = steamGames.map((steamGame) => ({
+    updateOne: {
+      filter: { appId: steamGame.appid.toString() },
+      update: {
+        $set: {
+          name: steamGame.name || "Unknown Game",
+          img_icon_url: steamGame.img_icon_url || "",
+          // Note: playtime/lastPlayed sont user-specific, pas stockés en BDD
+          // Récupérés via Steam API à la demande pour filtres/tris
+        },
+        $setOnInsert: {
+          appId: steamGame.appid.toString(),
+        },
+      },
+      upsert: true,
+    },
+  }));
+
+  await Game.bulkWrite(bulkOps);
+
+  // DEBUG/MIGRATION: Log après upsert
+  const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+  console.log(`[DEBUG/MIGRATION] upsertGamesCollection() - END`);
+  console.log(`  - BulkWrite operations: ${bulkOps.length}`);
+  console.log(`  - Durée: ${duration}s`);
+}
+
+/**
+ * NOUVEAU: Détecte les jeux supprimés de la bibliothèque Steam
+ * (Fonctionnalité intégrée depuis syncLibraryService)
+ * @param {Object} user - Utilisateur
+ * @param {Array} steamGames - Jeux actuels depuis Steam
+ * @returns {Array} - Liste des appIds supprimés
+ */
+function detectRemovedGames(user, steamGames) {
+  const cachedGameIds = new Set(
+    (user.gameLibrary?.games || []).map(g => g.gameId)
+  );
+  const steamAppIds = new Set(steamGames.map((g) => g.appid.toString()));
+
+  const removedGameIds = [];
+  for (const cachedId of cachedGameIds) {
+    if (!steamAppIds.has(cachedId)) {
+      removedGameIds.push(cachedId);
+    }
+  }
+
+  return removedGameIds;
+}
+
+/**
+ * AMÉLIORÉ: Traite l'auto-follow avec mise à jour GameSubscription
+ * @param {Object} user - Utilisateur
+ * @param {Array} userGames - Jeux Steam
+ * @param {Set} followedGamesSet - Jeux suivis
+ * @param {Set} cachedGameIds - Jeux déjà en cache
+ * @returns {Promise<Object>} - Résultat du traitement
+ */
+async function processAutoFollow(user, userGames, followedGamesSet, cachedGameIds) {
   const updatedFollowedGames = Array.from(followedGamesSet);
   const newGames = [];
   let hasNewFollowedGames = false;
 
-  // Vérifier si l'auto-follow est activé
   const autoFollowEnabled = user.notificationSettings?.autoFollowNewGames;
 
   if (autoFollowEnabled) {
+    const gamesToFollow = [];
+
     for (const game of userGames) {
       const appId = game.appid.toString();
 
-      if (!followedGamesSet.has(appId)) {
+      if (!cachedGameIds.has(appId) && !followedGamesSet.has(appId)) {
         updatedFollowedGames.push(appId);
         hasNewFollowedGames = true;
+        gamesToFollow.push(appId);
 
         newGames.push({
           appId,
           name: game.name,
           action: "auto-followed",
         });
+      }
+    }
+
+    if (gamesToFollow.length > 0) {
+      try {
+        const games = await Game.find({ appId: { $in: gamesToFollow } });
+        const bulkOps = games.map((game) => ({
+          updateOne: {
+            filter: { gameId: game.appId },
+            update: {
+              $setOnInsert: {
+                gameId: game.appId,
+                name: game.name,
+                lastNewsTimestamp: 0,
+              },
+              $addToSet: { subscribers: user.steamId },
+            },
+            upsert: true,
+          },
+        }));
+
+        if (bulkOps.length > 0) {
+          await GameSubscription.bulkWrite(bulkOps);
+          console.log(`✅ ${bulkOps.length} GameSubscriptions mises à jour`);
+        }
+      } catch (error) {
+        console.error("❌ Erreur GameSubscription bulk:", error.message);
       }
     }
   }
@@ -81,24 +180,20 @@ function processAutoFollow(user, userGames, followedGamesSet) {
   };
 }
 
-/**
- * Crée l'objet de résultat pour un utilisateur
- * @param {Object} user - Utilisateur
- * @returns {Object} - Objet de résultat
- */
 function createUserResult(user) {
   return {
     userId: user._id,
     steamId: user.steamId,
     username: user.username,
     updatedGames: [],
+    removedGames: [],
     error: null,
     lastSyncTime: new Date(),
   };
 }
 
 /**
- * Synchronise les jeux d'un utilisateur spécifique
+ * AMÉLIORÉ: Synchronise les jeux avec nouvelle structure normalisée
  * @param {Object} user - Utilisateur
  * @returns {Promise<Object>} - Résultat de synchronisation
  */
@@ -106,11 +201,15 @@ async function syncUserGames(user) {
   const result = createUserResult(user);
 
   try {
+    // DEBUG/MIGRATION: Log début sync
+    const startTime = Date.now();
+    console.log(`\n[DEBUG/MIGRATION] syncUserGames() - START`);
+    console.log(`  - User: ${user.username} (${user.steamId})`);
+
     console.log(
       `Synchronisation des jeux pour ${user.username} (${user.steamId})`
     );
 
-    // Vérifier le cooldown
     if (!canSyncUser(user)) {
       const lastSyncTime = user.lastChecked || new Date(0);
       console.log(
@@ -118,6 +217,7 @@ async function syncUserGames(user) {
           user.username
         } synchronisé récemment (${lastSyncTime.toISOString()}), en attente.`
       );
+      console.log(`[DEBUG/MIGRATION] syncUserGames() - SKIPPED (cooldown actif)\n`);
       return {
         ...result,
         skipped: true,
@@ -125,38 +225,85 @@ async function syncUserGames(user) {
       };
     }
 
-    // Récupérer les jeux Steam
+    // DEBUG/MIGRATION: Log appel Steam API
+    console.log(`[DEBUG/MIGRATION] Steam API GetOwnedGames`);
+    console.log(`  - steamId: ${user.steamId}`);
+
     const userGames = await steamService.getUserGames(user.steamId);
 
     if (!userGames || !Array.isArray(userGames)) {
       console.error(`Réponse invalide de l'API Steam pour ${user.username}`);
+      console.log(`[DEBUG/MIGRATION] syncUserGames() - ERROR (Invalid Steam response)\n`);
       result.error = "Réponse invalide de l'API Steam";
       return result;
     }
 
-    // Normaliser les jeux suivis
+    // DEBUG/MIGRATION: Log jeux récupérés
+    console.log(`  - Jeux récupérés: ${userGames.length}`);
+
+    await upsertGamesCollection(userGames);
+    console.log(`✅ ${userGames.length} jeux créés/mis à jour dans Games`);
+
+    const cachedGameIds = new Set(
+      (user.gameLibrary?.games || []).map(g => g.gameId)
+    );
+    const allGameIds = userGames.map((g) => g.appid.toString());
+
+    const removedGameIds = detectRemovedGames(user, userGames);
+    if (removedGameIds.length > 0) {
+      console.log(
+        `🗑️  ${removedGameIds.length} jeu(x) supprimé(s) de la bibliothèque Steam`
+      );
+      result.removedGames = removedGameIds;
+
+      user.followedGames = user.followedGames.filter(
+        (appId) => !removedGameIds.includes(appId)
+      );
+    }
+
     const followedGamesSet = normalizeFollowedGames(user);
 
-    // Traiter l'auto-follow
-    const autoFollowResult = processAutoFollow(
+    const autoFollowResult = await processAutoFollow(
       user,
       userGames,
-      followedGamesSet
+      followedGamesSet,
+      cachedGameIds
     );
 
     result.updatedGames = autoFollowResult.newGames;
 
-    // Mettre à jour l'utilisateur si nécessaire
     if (autoFollowResult.hasNewFollowedGames) {
       user.followedGames = autoFollowResult.updatedFollowedGames;
       console.log(
-        `${result.updatedGames.length} jeux auto-suivis pour ${user.username}`
+        `✅ ${result.updatedGames.length} jeux auto-suivis pour ${user.username}`
       );
     }
 
-    // Mettre à jour la date de dernière vérification
+    user.gameLibrary = {
+      games: userGames.map((g) => ({
+        gameId: g.appid.toString(),
+        playtime_forever: g.playtime_forever || 0,
+        rtime_last_played: g.rtime_last_played || 0,
+        playtime_2weeks: g.playtime_2weeks || 0,
+      })),
+      lastFullSync: new Date(),
+    };
+
     user.lastChecked = new Date();
     await user.save();
+
+    console.log(`✅ Bibliothèque mise à jour: ${user.gameLibrary.games.length} jeux`);
+
+    // DEBUG/MIGRATION: Log résultat final
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`\n[DEBUG/MIGRATION] syncUserGames() - RÉSULTAT`);
+    console.log(`  - User: ${user.username} (${user.steamId})`);
+    console.log(`  - gameLibrary.games: ${user.gameLibrary.games.length} jeux écrits ✅`);
+    console.log(`  - Games collection: ${userGames.length} documents créés/mis à jour ✅`);
+    console.log(`  - Nouveaux jeux détectés: ${result.updatedGames.length}`);
+    console.log(`  - Auto-followed: ${result.updatedGames.length}`);
+    console.log(`  - Jeux supprimés: ${removedGameIds.length}`);
+    console.log(`  - Durée: ${duration}s\n`);
 
     return result;
   } catch (error) {
@@ -174,4 +321,6 @@ module.exports = {
   canSyncUser,
   normalizeFollowedGames,
   processAutoFollow,
+  upsertGamesCollection,
+  detectRemovedGames,
 };

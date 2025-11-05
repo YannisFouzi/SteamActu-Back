@@ -1,14 +1,25 @@
 /**
  * Service de synchronisation de la bibliothèque de jeux Steam
- * Cache complet de la bibliothèque avec détection de nouveaux jeux et auto-follow
+ *
+ * ⚠️ MODIFICATION ISSUE DE L'AUDIT 2025-11-04
+ * - gameLibrary.games[] → gameLibrary.gameIds[] (normalisation)
+ * - Jeux stockés dans collection Games séparée
+ * - Suppression de gamesCount (redondant avec gameIds.length)
+ * - Détection des jeux supprimés déplacée vers gameSync/userProcessor
+ * Voir: AUDIT_REPORT.md section 3.7 et ACTIONS.md section 1.3
+ *
+ * ⚠️ CE SERVICE EST MAINTENANT REDONDANT AVEC gamesSyncService
+ * Son cron a été désactivé (voir src/config/cron/index.js)
+ * Conservé uniquement pour référence historique
  */
 
 const User = require("../models/User");
+const Game = require("../models/Game");
 const GameSubscription = require("../models/GameSubscription");
 const steamService = require("./steamService");
 
 /**
- * Synchronise la bibliothèque d'un utilisateur
+ * Synchronise la bibliothèque d'un utilisateur avec la nouvelle structure normalisée
  * @param {string} steamId - ID Steam de l'utilisateur
  * @returns {Promise<Object>} Résultat de la synchronisation
  */
@@ -16,14 +27,12 @@ async function syncUserLibrary(steamId) {
   try {
     console.log(`🔄 Synchronisation bibliothèque pour ${steamId}`);
 
-    // Récupérer l'utilisateur
     const user = await User.findOne({ steamId });
     if (!user) {
       console.log(`❌ Utilisateur ${steamId} non trouvé`);
       return { success: false, error: "Utilisateur non trouvé" };
     }
 
-    // Récupérer la bibliothèque depuis Steam
     let steamGames = [];
     try {
       steamGames = await steamService.getUserGames(steamId);
@@ -36,52 +45,52 @@ async function syncUserLibrary(steamId) {
       return { success: false, error: error.message };
     }
 
-    // Si la bibliothèque est vide, pas de traitement
     if (!Array.isArray(steamGames) || steamGames.length === 0) {
       console.log(`ℹ️ Bibliothèque vide pour ${steamId}`);
       return { success: true, newGames: 0, autoFollowed: 0 };
     }
 
-    // Créer un Set des appIds existants dans le cache
-    const cachedAppIds = new Set(
-      (user.gameLibrary?.games || []).map((g) => g.appId)
-    );
+    const cachedGameIds = new Set(user.gameLibrary?.gameIds || []);
 
-    // Détecter les nouveaux jeux
     const newGames = [];
-    const updatedGames = [];
+    const gamesToUpsert = [];
 
     for (const steamGame of steamGames) {
       const appId = steamGame.appid.toString();
 
-      if (!cachedAppIds.has(appId)) {
-        // Nouveau jeu détecté
-        newGames.push({
-          appId: appId,
-          name: steamGame.name,
-          playtime_forever: steamGame.playtime_forever || 0,
-          playtime_2weeks: steamGame.playtime_2weeks || 0,
-          rtime_last_played: steamGame.rtime_last_played || 0,
-          img_icon_url: steamGame.img_icon_url || "",
-          firstSeenDate: new Date(), // Date de détection
-        });
-      } else {
-        // Jeu existant, mettre à jour les infos
-        updatedGames.push({
-          appId: appId,
-          name: steamGame.name,
-          playtime_forever: steamGame.playtime_forever || 0,
-          playtime_2weeks: steamGame.playtime_2weeks || 0,
-          rtime_last_played: steamGame.rtime_last_played || 0,
-          img_icon_url: steamGame.img_icon_url || "",
-          // Garder le firstSeenDate existant
-        });
+      if (!cachedGameIds.has(appId)) {
+        newGames.push(appId);
       }
+
+      gamesToUpsert.push({
+        updateOne: {
+          filter: { appId: appId },
+          update: {
+            $set: {
+              name: steamGame.name || "Unknown Game",
+              img_icon_url: steamGame.img_icon_url || "",
+              playtime_forever: steamGame.playtime_forever || 0,
+              playtime_2weeks: steamGame.playtime_2weeks || 0,
+              rtime_last_played: steamGame.rtime_last_played || 0,
+              metadataLastSync: new Date(),
+            },
+            $setOnInsert: {
+              appId: appId,
+              firstSeenDate: new Date(),
+            },
+          },
+          upsert: true,
+        },
+      });
     }
 
     console.log(`✨ ${newGames.length} nouveau(x) jeu(x) détecté(s)`);
 
-    // Auto-follow si activé (OPTIMISÉ avec bulkWrite)
+    if (gamesToUpsert.length > 0) {
+      await Game.bulkWrite(gamesToUpsert);
+      console.log(`✅ ${gamesToUpsert.length} jeux créés/mis à jour en bulk`);
+    }
+
     let autoFollowedCount = 0;
     if (
       newGames.length > 0 &&
@@ -89,19 +98,17 @@ async function syncUserLibrary(steamId) {
     ) {
       console.log(`🎯 Auto-follow activé, ajout des nouveaux jeux...`);
 
-      // Filtrer les jeux pas encore suivis
       const gamesToFollow = newGames.filter(
-        (game) => !user.followedGames.includes(game.appId)
+        (appId) => !user.followedGames.includes(appId)
       );
 
       if (gamesToFollow.length > 0) {
         try {
-          // Ajouter tous les appIds en une fois
-          user.followedGames.push(...gamesToFollow.map((g) => g.appId));
+          user.followedGames.push(...gamesToFollow);
           autoFollowedCount = gamesToFollow.length;
 
-          // Bulk write pour GameSubscriptions (1 seul appel DB)
-          const bulkOps = gamesToFollow.map((game) => ({
+          const games = await Game.find({ appId: { $in: gamesToFollow } });
+          const bulkOps = games.map((game) => ({
             updateOne: {
               filter: { gameId: game.appId },
               update: {
@@ -124,69 +131,23 @@ async function syncUserLibrary(steamId) {
       }
     }
 
-    // Reconstruire la bibliothèque complète (OPTIMISÉ avec Map O(n))
-    const existingGamesMap = new Map(
-      (user.gameLibrary?.games || []).map((g) => [g.appId, g])
-    );
+    const allGameIds = steamGames.map((g) => g.appid.toString());
 
-    const completeLibrary = [
-      ...newGames,
-      ...updatedGames.map((game) => ({
-        ...game,
-        firstSeenDate:
-          existingGamesMap.get(game.appId)?.firstSeenDate || new Date(),
-      })),
-    ];
-
-    // Détecter les jeux supprimés de la bibliothèque Steam
-    const steamAppIds = new Set(steamGames.map((g) => g.appid.toString()));
-    const removedGames = (user.gameLibrary?.games || []).filter(
-      (cachedGame) => !steamAppIds.has(cachedGame.appId)
-    );
-
-    if (removedGames.length > 0) {
-      console.log(
-        `🗑️ ${removedGames.length} jeu(x) supprimé(s) de la bibliothèque Steam`
-      );
-      // Retirer également de followedGames
-      user.followedGames = user.followedGames.filter((appId) =>
-        steamAppIds.has(appId)
-      );
-    }
-
-    // Mettre à jour le cache de l'utilisateur
     user.gameLibrary = {
-      games: completeLibrary,
+      gameIds: allGameIds,
       lastFullSync: new Date(),
-      gamesCount: completeLibrary.length,
     };
 
-    // Monitoring taille du document (avertissement si > 10MB)
-    const docSize = JSON.stringify(user.toObject()).length;
-    const docSizeMB = (docSize / (1024 * 1024)).toFixed(2);
-    console.log(`📏 Taille du document User : ${docSizeMB} MB`);
-
-    if (docSize > 10 * 1024 * 1024) {
-      console.warn(
-        `⚠️ ALERTE : Document User proche de la limite MongoDB (${docSizeMB} MB / 16 MB)`
-      );
-    }
-
-    // Sauvegarder l'utilisateur
     await user.save();
 
     console.log(`✅ Synchronisation bibliothèque terminée pour ${steamId}`);
-    console.log(`📊 Total jeux en cache : ${completeLibrary.length}`);
+    console.log(`📊 Total jeux en cache : ${allGameIds.length}`);
 
     return {
       success: true,
       newGames: newGames.length,
       autoFollowed: autoFollowedCount,
-      totalGames: completeLibrary.length,
-      newGamesDetails: newGames.map((g) => ({
-        appId: g.appId,
-        name: g.name,
-      })),
+      totalGames: allGameIds.length,
     };
   } catch (error) {
     console.error(
@@ -199,17 +160,19 @@ async function syncUserLibrary(steamId) {
 
 /**
  * Synchronise la bibliothèque de tous les utilisateurs
+ * ⚠️ ATTENTION: Cette fonction est redondante avec gamesSyncService
+ * Elle est conservée uniquement pour compatibilité temporaire
  * @returns {Promise<Object>} Statistiques de la synchronisation
  */
 async function syncAllUsersLibraries() {
   try {
     console.log("\n" + "=".repeat(60));
     console.log("🚀 DÉBUT SYNCHRONISATION GLOBALE BIBLIOTHÈQUES");
+    console.log("⚠️  AVERTISSEMENT: Cette fonction est redondante");
     console.log("=".repeat(60));
 
     const startTime = Date.now();
 
-    // Récupérer tous les utilisateurs
     const users = await User.find({});
     console.log(`👥 ${users.length} utilisateur(s) à synchroniser`);
 
@@ -223,7 +186,6 @@ async function syncAllUsersLibraries() {
       errors: [],
     };
 
-    // Synchroniser chaque utilisateur avec pause entre les appels
     for (let i = 0; i < users.length; i++) {
       const user = users[i];
       console.log(
@@ -247,7 +209,6 @@ async function syncAllUsersLibraries() {
         });
       }
 
-      // Pause de 1 seconde entre chaque utilisateur pour respecter les limites API
       if (i < users.length - 1) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }

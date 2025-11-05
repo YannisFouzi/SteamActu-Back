@@ -120,7 +120,7 @@ async function fetchGameDetails(appId) {
       `https://store.steampowered.com/api/appdetails`,
       {
         params: { appids: appId, l: "french" },
-        timeout: 3000, // ⚡ 3 secondes max (réduit de 5s)
+        timeout: 8000, // ⚡ 8 secondes max (augmenté pour éviter timeouts)
       }
     );
 
@@ -250,14 +250,14 @@ async function fetchUserWishlist(steamId) {
       return [];
     }
 
-    // ⚡ OPTIMISATION : 5 jeux en parallèle pour éviter rate limit Steam
+    // ⚡ OPTIMISATION : 20 jeux en parallèle pour éviter rate limit Steam
     // L'API Steam ne supporte PAS les appels batch → appels individuels en parallèle
-    const PARALLEL_REQUESTS = 5;
+    const PARALLEL_REQUESTS = 20;
     const enrichedItems = [];
     const totalBatches = Math.ceil(wishlistItems.length / PARALLEL_REQUESTS);
 
     console.log(
-      `⚡ Enrichissement optimisé: ${PARALLEL_REQUESTS} jeux en parallèle...`
+      `⚡ Enrichissement optimisé: ${PARALLEL_REQUESTS} jeux en parallèle (${totalBatches} batchs)...`
     );
 
     for (let i = 0; i < wishlistItems.length; i += PARALLEL_REQUESTS) {

@@ -1,7 +1,17 @@
+/**
+ * Routes Steam API
+ *
+ * ⚠️ MODIFICATION ISSUE DE L'AUDIT 2025-11-04
+ * - gameLibrary.games[] → gameLibrary.gameIds[]
+ * - Jeux récupérés depuis la collection Games
+ * Voir: AUDIT_REPORT.md et ACTIONS.md
+ */
+
 const express = require("express");
 const router = express.Router();
 const steamService = require("../services/steamService");
 const User = require("../models/User");
+const Game = require("../models/Game");
 const { validateSteamId } = require("../middleware/steamValidators");
 const {
   formatGame,
@@ -9,130 +19,56 @@ const {
 } = require("../services/steam/gameFormatter");
 const { processAllGames } = require("../services/steam/gameProcessor");
 
-// Récupérer les jeux d'un utilisateur Steam
 router.get("/games/:steamId", validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
-    const { followedOnly, forceRefresh } = req.query;
+    const { followedOnly } = req.query;
     console.log(
-      `Requête getUserGames pour steamId: ${steamId}, followedOnly: ${followedOnly}, forceRefresh: ${forceRefresh}`
+      `Requête getUserGames pour steamId: ${steamId}, followedOnly: ${followedOnly}`
     );
 
-    // Récupérer l'utilisateur pour obtenir les informations sur les jeux suivis
-    const user = await User.findOne({ steamId });
+    const user = await User.findOne({ steamId })
+      .select("gameLibrary followedGames recentActiveGames")
+      .lean();
 
     if (!user) {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
-    let games = [];
-    let useCache = false;
+    const userGames = user.gameLibrary?.games || [];
 
-    // Configuration : Age maximum du cache (24 heures)
-    const CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24h en millisecondes
-
-    // 🆕 STRATÉGIE CACHE AMÉLIORÉE : Vérifier fraîcheur + disponibilité
-    const isCacheAvailable =
-      user.gameLibrary &&
-      user.gameLibrary.games &&
-      user.gameLibrary.games.length > 0;
-
-    const isCacheFresh =
-      user.gameLibrary?.lastFullSync &&
-      Date.now() - new Date(user.gameLibrary.lastFullSync).getTime() <
-        CACHE_MAX_AGE;
-
-    if (forceRefresh !== "true" && isCacheAvailable && isCacheFresh) {
-      console.log(
-        `📦 Utilisation du cache (${user.gameLibrary.games.length} jeux, dernière sync: ${user.gameLibrary.lastFullSync})`
-      );
-
-      // Convertir le cache au format attendu par le frontend (avec validation parseInt)
-      games = user.gameLibrary.games
-        .map((game) => {
-          const appid = parseInt(game.appId, 10);
-          if (isNaN(appid)) {
-            console.warn(`⚠️ AppId invalide détecté : ${game.appId}`);
-            return null;
-          }
-          return {
-            appid,
-            name: game.name,
-            playtime_forever: game.playtime_forever || 0,
-            playtime_2weeks: game.playtime_2weeks || 0,
-            rtime_last_played: game.rtime_last_played || 0,
-            img_icon_url: game.img_icon_url || "",
-            // Ajouter les métadonnées du cache
-            firstSeenDate: game.firstSeenDate,
-            lastUpdateTimestamp: game.rtime_last_played || 0,
-          };
-        })
-        .filter(Boolean); // Retirer les null (appIds invalides)
-
-      useCache = true;
-    } else {
-      if (!isCacheAvailable) {
-        console.log(`🔄 Cache indisponible, récupération depuis Steam API`);
-      } else if (!isCacheFresh) {
-        console.log(
-          `🔄 Cache trop ancien (${Math.round(
-            (Date.now() - new Date(user.gameLibrary.lastFullSync).getTime()) /
-              (60 * 60 * 1000)
-          )}h), récupération depuis Steam API`
-        );
-      } else {
-        console.log(`🔄 ForceRefresh demandé, récupération depuis Steam API`);
-      }
-
-      // Récupérer les jeux depuis Steam API
-      games = await steamService.getUserGames(steamId);
+    if (userGames.length === 0) {
+      return res.json([]);
     }
 
-    // Si followedOnly est demandé, filtrer pour ne garder que les jeux suivis
-    if (
-      followedOnly === "true" &&
-      user.followedGames &&
-      user.followedGames.length > 0
-    ) {
-      const followedAppIds = user.followedGames;
-      games = games.filter((game) =>
-        followedAppIds.includes(game.appid.toString())
-      );
+    const gameIds = userGames.map(g => g.gameId);
+    const gamesData = await Game.find({ appId: { $in: gameIds } })
+      .select("appId name img_icon_url")
+      .lean();
+
+    const gamesMap = new Map(gamesData.map(g => [g.appId, g]));
+
+    let games = userGames.map(userGame => {
+      const gameData = gamesMap.get(userGame.gameId);
+      return {
+        appid: userGame.gameId,
+        name: gameData?.name || `Game ${userGame.gameId}`,
+        img_icon_url: gameData?.img_icon_url || "",
+        playtime_forever: userGame.playtime_forever || 0,
+        rtime_last_played: userGame.rtime_last_played || 0,
+        playtime_2weeks: userGame.playtime_2weeks || 0,
+      };
+    });
+
+    if (followedOnly === "true" && user.followedGames?.length > 0) {
+      const followedSet = new Set(user.followedGames);
+      games = games.filter(game => followedSet.has(game.appid));
     }
 
-    let formattedGames = [];
-
-    // Si on utilise le cache, pas besoin de traiter
-    if (useCache) {
-      // Ajouter les infos de suivi
-      formattedGames = games.map((game) => ({
-        ...game,
-        isFollowed: user.followedGames.includes(game.appid.toString()),
-      }));
-    } else {
-      // ⚠️ DÉSACTIVÉ : Traitement des news pour chaque jeu (trop lent)
-      // Supprime le tri "Mis à jour récemment" et le badge "Nouveau"
-      // Pour réactiver : décommenter le bloc ci-dessous
-      // const allProcessedGames = await processAllGames(games, user);
-      // formattedGames = games.map((game) => {
-      //   const appId = game.appid.toString();
-      //   const processedGame = allProcessedGames.find(
-      //     (g) => g.appId === appId || g.appid === appId
-      //   );
-      //   if (processedGame) {
-      //     return processedGame;
-      //   }
-      //   const lastUpdateTimestamp = getLastUpdateTimestamp(appId, user);
-      //   return formatGame(game, lastUpdateTimestamp);
-      // });
-
-      // Version rapide sans fetch des news
-      formattedGames = games.map((game) => {
-        const appId = game.appid.toString();
-        const lastUpdateTimestamp = getLastUpdateTimestamp(appId, user);
-        return formatGame(game, lastUpdateTimestamp);
-      });
-    }
+    const formattedGames = games.map(game => {
+      const lastUpdateTimestamp = getLastUpdateTimestamp(game.appid, user);
+      return formatGame(game, lastUpdateTimestamp);
+    });
 
     res.json(formattedGames);
   } catch (error) {
@@ -159,15 +95,44 @@ router.get("/profile/:steamId", validateSteamId, async (req, res) => {
   }
 });
 
-// Récupérer la wishlist d'un utilisateur Steam
+// Récupérer la wishlist d'un utilisateur Steam (depuis BDD uniquement)
 router.get("/wishlist/:steamId", validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
     console.log(`Requête getUserWishlist pour steamId: ${steamId}`);
 
-    const wishlist = await steamService.getUserWishlist(steamId);
+    const user = await User.findOne({ steamId }).select("wishlist").lean();
 
-    res.json(wishlist);
+    if (!user?.wishlist?.games || user.wishlist.games.length === 0) {
+      console.log(`ℹ️ Wishlist vide pour ${steamId}`);
+      return res.json([]);
+    }
+
+    const gameIds = user.wishlist.games.map((g) => g.gameId);
+    const Wishlist = require("../models/Wishlist");
+    const wishlistGames = await Wishlist.find({
+      appId: { $in: gameIds },
+    }).lean();
+
+    const result = user.wishlist.games
+      .map((userGame) => {
+        const gameData = wishlistGames.find((g) => g.appId === userGame.gameId);
+        if (!gameData) return null;
+
+        return {
+          appid: parseInt(userGame.gameId, 10),
+          name: gameData.name || `Game ${userGame.gameId}`,
+          capsule: gameData.img_icon_url || "",
+          header_image: gameData.img_icon_url || "",
+          date_added: userGame.date_added,
+          priority: userGame.priority,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.date_added - a.date_added);
+
+    console.log(`✅ ${result.length} jeux retournés depuis BDD`);
+    res.json(result);
   } catch (error) {
     console.error("Erreur dans /wishlist/:steamId:", error);
     res.status(500).json({ message: "Erreur serveur", error: error.message });

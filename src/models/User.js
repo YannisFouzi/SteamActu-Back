@@ -15,7 +15,7 @@ const UserSchema = new mongoose.Schema({
   },
   lastChecked: {
     type: Date,
-    default: Date.now,
+    default: null, // null permet sync immédiate pour nouveaux users
   },
   followedGames: [
     {
@@ -50,27 +50,10 @@ const UserSchema = new mongoose.Schema({
     },
   },
 
-  // Synchronisation de la wishlist Steam
-  wishlistLastSync: {
-    timestamp: {
-      type: Number,
-      default: 0, // Timestamp du dernier jeu wishlisté vérifié
-    },
-    lastSyncDate: {
-      type: Date,
-      default: null, // Date de la dernière synchronisation
-    },
-  },
-
-  // Cache de la bibliothèque de jeux Steam
   gameLibrary: {
     games: [
       {
-        appId: {
-          type: String,
-          required: true,
-        },
-        name: {
+        gameId: {
           type: String,
           required: true,
         },
@@ -78,30 +61,47 @@ const UserSchema = new mongoose.Schema({
           type: Number,
           default: 0,
         },
-        playtime_2weeks: {
-          type: Number,
-          default: 0,
-        },
         rtime_last_played: {
           type: Number,
           default: 0,
         },
-        img_icon_url: {
-          type: String,
-        },
-        firstSeenDate: {
-          type: Date,
-          default: Date.now, // Date où nous avons détecté ce jeu
+        playtime_2weeks: {
+          type: Number,
+          default: 0,
         },
       },
     ],
     lastFullSync: {
       type: Date,
-      default: null, // Dernière synchronisation complète
+      default: null,
     },
-    gamesCount: {
-      type: Number,
-      default: 0, // Nombre total de jeux pour détection rapide
+  },
+
+  /**
+   * Wishlist - VERSION FINALE (2025-11-05)
+   * games[] contient références + métadonnées user-specific (date_added)
+   * Collection Wishlist centrale pour métadonnées communes (name, img)
+   */
+  wishlist: {
+    games: [
+      {
+        gameId: {
+          type: String,
+          required: true,
+        },
+        date_added: {
+          type: Number,
+          default: 0,
+        },
+        priority: {
+          type: Number,
+          default: 0,
+        },
+      },
+    ],
+    lastFullSync: {
+      type: Date,
+      default: null,
     },
   },
 });

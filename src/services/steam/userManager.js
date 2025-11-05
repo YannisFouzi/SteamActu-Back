@@ -18,8 +18,13 @@ async function registerOrUpdateUser(steamId) {
 
     if (user) {
       // L'utilisateur existe déjà, le retourner
+      console.log(`✅ User existant: ${user.username} (${steamId})`);
       return user;
     }
+
+    console.log(`\n${"=".repeat(70)}`);
+    console.log(`🆕 NOUVEL UTILISATEUR - Création + Sync immédiate`);
+    console.log(`${"=".repeat(70)}`);
 
     // Récupérer les informations du profil Steam
     const profileData = await fetchUserProfile(steamId);
@@ -36,9 +41,38 @@ async function registerOrUpdateUser(steamId) {
       username: profileData.personaname || `Utilisateur ${steamId.slice(-4)}`,
       avatarUrl: profileData.avatarfull || null,
       followedGames: [],
+      lastChecked: null, // Important : null pour permettre sync immédiate
     });
 
     await user.save();
+    console.log(`✅ User créé: ${user.username} (${steamId})`);
+
+    // ⚡ SYNC IMMÉDIATE des jeux pour nouvel utilisateur
+    // L'utilisateur veut voir ses jeux immédiatement, pas attendre dimanche 3h !
+    console.log(`⚡ Lancement sync immédiate des jeux...`);
+
+    try {
+      const { syncUserGames } = require("../gameSync/userProcessor");
+      const syncResult = await syncUserGames(user);
+
+      if (syncResult.error) {
+        console.error(`⚠️ Erreur sync jeux (non bloquant):`, syncResult.error);
+      } else {
+        console.log(`✅ Sync jeux réussie: ${syncResult.updatedGames?.length || 0} nouveaux jeux`);
+      }
+    } catch (syncError) {
+      console.error(`⚠️ Erreur sync jeux (non bloquant):`, syncError.message);
+      // On ne bloque pas l'inscription si la sync échoue
+    }
+
+    // NOTE: Wishlist sync désactivée à la connexion (trop lent)
+    // La wishlist sera récupérée depuis Steam API à la demande (quand user clique sur Wishlist)
+
+    // Recharger le user pour avoir les données à jour (après sync games)
+    user = await User.findOne({ steamId });
+
+    console.log(`${"=".repeat(70)}\n`);
+
     return user;
   } catch (error) {
     console.error(`Erreur registerOrUpdateUser (${steamId}):`, error.message);

@@ -10,6 +10,10 @@ const GameSubscriptionSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  imageUrl: {
+    type: String,
+    default: "",
+  },
   subscribers: [
     {
       type: String, // steamId des utilisateurs

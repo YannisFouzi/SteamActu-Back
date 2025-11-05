@@ -79,6 +79,18 @@ async function syncUserGroupByIndex(groupIndex, totalGroups) {
       totalGroups
     );
 
+    // DEBUG/MIGRATION: Log groupe details
+    console.log(`[DEBUG/MIGRATION] Utilisateurs à traiter dans le groupe ${groupIndex}:`);
+    console.log(`  - Total users dans BDD: ${allUsers.length}`);
+    console.log(`  - Groupe ${groupIndex} contient: ${groupUsers.length} users (index ${startIndex}-${endIndex - 1})`);
+    if (groupUsers.length > 0) {
+      console.log(`  - Users dans ce groupe:`);
+      groupUsers.forEach((u, i) => {
+        console.log(`    ${i + 1}. ${u.username} (${u.steamId}) - lastChecked: ${u.lastChecked?.toISOString() || 'null'}`);
+      });
+    }
+    console.log('');
+
     console.log(
       `Traitement de ${groupUsers.length} utilisateurs du groupe ${
         groupIndex + 1

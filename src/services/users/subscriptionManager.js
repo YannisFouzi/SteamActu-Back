@@ -9,9 +9,10 @@ const GameSubscription = require("../../models/GameSubscription");
  * @param {string} appId - ID de l'application
  * @param {string} steamId - ID Steam de l'utilisateur
  * @param {string} name - Nom du jeu
+ * @param {string} imageUrl - URL de l'image du jeu
  * @returns {Promise<void>}
  */
-async function addUserToGameSubscription(appId, steamId, name) {
+async function addUserToGameSubscription(appId, steamId, name, imageUrl) {
   let gameSubscription = await GameSubscription.findOne({ gameId: appId });
 
   if (!gameSubscription) {
@@ -20,6 +21,7 @@ async function addUserToGameSubscription(appId, steamId, name) {
     gameSubscription = new GameSubscription({
       gameId: appId,
       name: name || `Jeu ${appId}`,
+      imageUrl: imageUrl || "",
       subscribers: [steamId],
       lastNewsTimestamp: firstFollowTimestamp,
     });
@@ -27,6 +29,10 @@ async function addUserToGameSubscription(appId, steamId, name) {
     // Ajouter l'utilisateur aux subscribers s'il n'y est pas déjà
     if (!gameSubscription.subscribers.includes(steamId)) {
       gameSubscription.subscribers.push(steamId);
+    }
+    // Mettre à jour l'imageUrl si fournie
+    if (imageUrl) {
+      gameSubscription.imageUrl = imageUrl;
     }
   }
 

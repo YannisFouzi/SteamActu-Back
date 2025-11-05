@@ -1,23 +1,34 @@
 /**
  * Configuration des horaires pour les tâches cron
  * Format: "secondes minutes heures jour mois jour_semaine"
+ *
+ * ⚠️ MODIFICATIONS 2025-11-04 (Optimisation API)
+ * - USER_GROUP_SYNC : 30 min → 1×/semaine (dimanche 3h)
+ * - WISHLIST_SYNC : 4×/jour → 1×/semaine (lundi 3h)
+ * - NEWS_CHECK : 6h → 1h (priorité notifications)
+ * - FULL_SYNC : mensuel → filet de sécurité
+ * - LIBRARY_SYNC : DÉSACTIVÉ (redondant avec USER_GROUP_SYNC)
+ *
+ * Philosophie : Prioriser freshness des news, accepter retard sur syncs bibliothèque/wishlist
  */
 
 const SCHEDULES = {
-  // Vérification des actualités toutes les heures (avec rotation intelligente)
+  // Vérification des actualités TOUTES LES 1 HEURE (priorité notifications push)
+  // Rotation intelligente : max 150 jeux/run, système de rotation par lastNewsCheck
   NEWS_CHECK: "0 0 * * * *",
 
-  // Synchronisation par groupe toutes les 30 minutes après l'heure
-  USER_GROUP_SYNC: "0 30 * * * *",
+  // Synchronisation des jeux possédés 1×/SEMAINE (dimanche 3h)
+  // Rotation 12 groupes, cooldown 6h, tous les users seront sync en 1 dimanche
+  USER_GROUP_SYNC: "0 0 3 * * 0",
 
-  // Synchronisation complète le dimanche à 3h du matin
-  FULL_SYNC: "0 0 3 * * 0",
+  // Synchronisation complète MENSUELLE (le 1er à 2h) - Filet de sécurité
+  FULL_SYNC: "0 0 2 1 * *",
 
-  // 🆕 Synchronisation des wishlists toutes les 6 heures (à 0h, 6h, 12h, 18h)
-  WISHLIST_SYNC: "0 0 0,6,12,18 * * *",
+  // Synchronisation des wishlists 1×/SEMAINE (lundi 3h)
+  WISHLIST_SYNC: "0 0 3 * * 1",
 
-  // 🆕 Synchronisation des bibliothèques toutes les 6 heures (à 3h, 9h, 15h, 21h)
-  LIBRARY_SYNC: "0 0 3,9,15,21 * * *",
+  // Synchronisation des bibliothèques (DÉSACTIVÉ - redondant avec USER_GROUP_SYNC)
+  LIBRARY_SYNC: null,
 };
 
 module.exports = {
