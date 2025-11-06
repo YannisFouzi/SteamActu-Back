@@ -109,7 +109,7 @@ router.get("/:steamId", validateUserExists, async (req, res) => {
 // Mettre à jour les paramètres de notification
 router.put("/:steamId/notifications", validateUserExists, async (req, res) => {
   try {
-    const { enabled, pushToken, autoFollowNewGames } = req.body;
+    const { enabled, pushToken, autoFollowNewGames, autoFollowWishlistGames } = req.body;
     const user = req.user;
 
     // Mettre à jour les paramètres de notification
@@ -123,6 +123,10 @@ router.put("/:steamId/notifications", validateUserExists, async (req, res) => {
 
     if (autoFollowNewGames !== undefined) {
       user.notificationSettings.autoFollowNewGames = autoFollowNewGames;
+    }
+
+    if (autoFollowWishlistGames !== undefined) {
+      user.notificationSettings.autoFollowWishlistGames = autoFollowWishlistGames;
     }
 
     await user.save();

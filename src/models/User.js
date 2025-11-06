@@ -48,6 +48,10 @@ const UserSchema = new mongoose.Schema({
       type: Boolean,
       default: false,
     },
+    autoFollowWishlistGames: {
+      type: Boolean,
+      default: false,
+    },
   },
 
   gameLibrary: {

@@ -133,13 +133,13 @@ async function syncUserWishlist(steamId, wishlistData = null) {
 
     console.log(`✨ ${newGames.length} nouveau(x) jeu(x) détecté(s)`);
 
-    // Auto-follow si activé
+    // Auto-follow si activé (paramètre spécifique wishlist)
     let autoFollowedCount = 0;
     if (
       newGames.length > 0 &&
-      user.notificationSettings?.autoFollowNewGames === true
+      user.notificationSettings?.autoFollowWishlistGames === true
     ) {
-      console.log(`🎯 Auto-follow activé...`);
+      console.log(`🎯 Auto-follow wishlist activé...`);
 
       // Filtrer les jeux pas encore suivis
       const gamesToFollow = newGames.filter(
