@@ -257,4 +257,53 @@ router.get("/:steamId/followed-games-details", async (req, res) => {
   }
 });
 
+// Supprimer le compte utilisateur
+router.delete("/:steamId", async (req, res) => {
+  try {
+    const { steamId } = req.params;
+
+    console.log(`🗑️  Demande de suppression du compte: ${steamId}`);
+
+    // Récupérer l'utilisateur
+    const user = await User.findOne({ steamId });
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    // Statistiques de nettoyage
+    const stats = {
+      followedGames: user.followedGames?.length || 0,
+      gameSubscriptionsRemoved: 0,
+    };
+
+    // Unfollow tous les jeux (nettoyage automatique des GameSubscriptions)
+    if (user.followedGames && user.followedGames.length > 0) {
+      console.log(`📋 Nettoyage de ${user.followedGames.length} jeux suivis...`);
+
+      for (const appId of user.followedGames) {
+        const wasDeleted = await removeUserFromGameSubscription(appId, steamId);
+        if (wasDeleted) {
+          stats.gameSubscriptionsRemoved++;
+        }
+      }
+
+      console.log(
+        `✅ ${stats.gameSubscriptionsRemoved} GameSubscription(s) supprimée(s)`
+      );
+    }
+
+    // Supprimer le compte utilisateur
+    await User.deleteOne({ steamId });
+    console.log(`✅ Compte utilisateur ${user.username} (${steamId}) supprimé`);
+
+    res.json({
+      message: "Compte supprimé avec succès",
+      stats: stats,
+    });
+  } catch (error) {
+    console.error("Erreur lors de la suppression du compte:", error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
 module.exports = router;
