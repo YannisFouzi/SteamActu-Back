@@ -15,7 +15,7 @@ const {
 } = require("./newsFeed/newsProcessor");
 
 // Constantes
-const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
 
 /**
  * Build a multi-game news feed combining Steam news for several titles.
@@ -36,7 +36,7 @@ async function getNewsFeed({
 } = {}) {
   // Normaliser les paramètres
   const safeLimit = Math.max(200, Math.min(limit || 200, 200));
-  const safePerGameLimit = Math.max(10, Math.min(perGameLimit || 10, 20));
+  const safePerGameLimit = Math.max(20, Math.min(perGameLimit || 20, 20));
   const now = Date.now();
   const cutoffTimestamp = now - RECENT_WINDOW_MS;
 

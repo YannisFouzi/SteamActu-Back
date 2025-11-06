@@ -65,22 +65,16 @@ async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
 /**
  * Filtre et trie les actualités par date
  * @param {Array} feedItems - Actualités à traiter
- * @param {number} cutoffTimestamp - Timestamp de coupure pour les actualités récentes
+ * @param {number} cutoffTimestamp - Timestamp de coupure (30 jours)
  * @returns {Object} - Actualités triées et filtrées
  */
 function filterAndSortNews(feedItems, cutoffTimestamp) {
-  // Trier par date décroissante
-  feedItems.sort((a, b) => b.news.date - a.news.date);
+  // Filtrer STRICTEMENT les actualités de moins de 30 jours
+  const timeline = feedItems
+    .filter((item) => item.news.date >= cutoffTimestamp)
+    .sort((a, b) => b.news.date - a.news.date);
 
-  // Filtrer les actualités récentes
-  const recentItems = feedItems.filter(
-    (item) => item.news.date >= cutoffTimestamp
-  );
-
-  // Utiliser les actualités récentes si disponibles, sinon toutes
-  const timeline = recentItems.length > 0 ? recentItems : feedItems;
-
-  return { timeline, recentItems };
+  return { timeline, recentItems: timeline };
 }
 
 module.exports = {
