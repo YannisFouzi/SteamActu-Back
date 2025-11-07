@@ -1,36 +1,9 @@
 /**
  * Middleware d'authentification
- * Gère la vérification des API keys
+ * Gère la validation OpenID et l'extraction du SteamID
  */
 
-const { SECURITY_CONFIG, ERROR_MESSAGES } = require("../config/app");
-
-/**
- * Middleware pour vérifier l'API key
- * Permet l'accès libre aux routes d'authentification et à la racine
- */
-const checkApiKey = (req, res, next) => {
-  const apiKey = req.query.key || req.headers["x-api-key"];
-
-  // Routes publiques (sans authentification)
-  const publicPaths = ["/auth/", "/"];
-  const isPublicPath = publicPaths.some(
-    (path) => req.path.startsWith(path) || req.path === "/"
-  );
-
-  if (isPublicPath) {
-    return next();
-  }
-
-  // Vérifier la clé d'authentification API
-  if (apiKey && apiKey === SECURITY_CONFIG.API_AUTH_KEY) {
-    return next();
-  }
-
-  return res.status(401).json({
-    error: ERROR_MESSAGES.INVALID_API_KEY,
-  });
-};
+const { ERROR_MESSAGES } = require("../config/app");
 
 /**
  * Middleware de validation des paramètres OpenID
@@ -38,7 +11,7 @@ const checkApiKey = (req, res, next) => {
 const validateOpenIdResponse = (req, res, next) => {
   if (!req.query["openid.identity"]) {
     return res.status(400).json({
-      error: ERROR_MESSAGES.INVALID_OPENID,
+      message: ERROR_MESSAGES.INVALID_OPENID,
     });
   }
   next();
@@ -55,7 +28,6 @@ const extractSteamId = (identity) => {
 };
 
 module.exports = {
-  checkApiKey,
   validateOpenIdResponse,
   extractSteamId,
 };

@@ -5,16 +5,13 @@ const {
   syncUserGroup,
   syncAllUsers,
   syncWishlists,
-  syncLibraries,
 } = require("./tasks");
 const { SCHEDULES } = require("./schedules");
 
 /**
  * Initialise toutes les tâches planifiées de l'application
  *
- * ⚠️ NOUVELLE STRATÉGIE 2025-11-04 :
  * - Prioriser freshness des news (1h) pour notifications push réactives
- * - Réduire drastiquement fréquence des syncs lourdes (bibliothèque/wishlist → hebdo)
  * - Accepter retard 1-7 jours sur détection nouveaux jeux/wishlist (use case acceptable)
  * - Rotation intelligente NEWS_CHECK : max 150 appels API/run
  */
@@ -62,32 +59,6 @@ function initCronJobs() {
   cron.schedule(SCHEDULES.WISHLIST_SYNC, () => {
     executeTask("🎯 Sync wishlists (hebdo)", syncWishlists);
   });
-
-  /**
-   * LIBRARY_SYNC : DÉSACTIVÉ (redondant avec USER_GROUP_SYNC)
-   * - Même fonctionnalité que USER_GROUP_SYNC
-   * - Détection jeux supprimés intégrée dans gameSync/userProcessor
-   */
-  // cron.schedule(SCHEDULES.LIBRARY_SYNC, () => {
-  //   executeTask("📚 Sync bibliothèques", syncLibraries);
-  // });
-
-  console.log("\n✅ TÂCHES PLANIFIÉES INITIALISÉES AVEC SUCCÈS\n");
-  console.log("┌─────────────────────────────────────────────────────────────────┐");
-  console.log("│ TÂCHE                │ FRÉQUENCE          │ PROCHAINE EXEC     │");
-  console.log("├─────────────────────────────────────────────────────────────────┤");
-  console.log("│ 📰 NEWS_CHECK        │ Toutes les 1h      │ Heure suivante     │");
-  console.log("│ 👥 USER_GROUP_SYNC   │ 1×/semaine         │ Dimanche 3h        │");
-  console.log("│ 🎯 WISHLIST_SYNC     │ 1×/semaine         │ Lundi 3h           │");
-  console.log("│ 🔄 FULL_SYNC         │ 1×/mois            │ 1er du mois 2h     │");
-  console.log("│ 📚 LIBRARY_SYNC      │ DÉSACTIVÉ          │ -                  │");
-  console.log("└─────────────────────────────────────────────────────────────────┘");
-  console.log("\n📊 ESTIMATION APPELS API/JOUR (100 users) :");
-  console.log("  - NEWS_CHECK : ~3,600 appels (24h × 150 jeux/run)");
-  console.log("  - USER_GROUP_SYNC : ~14 appels (1 dimanche/semaine ÷ 7)");
-  console.log("  - WISHLIST_SYNC : ~14 appels (1 lundi/semaine ÷ 7)");
-  console.log("  - TOTAL : ~3,628 appels/jour (3.6% du quota Steam)");
-  console.log("=".repeat(70) + "\n");
 }
 
 module.exports = {

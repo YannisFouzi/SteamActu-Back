@@ -17,24 +17,36 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: null, // null permet sync immédiate pour nouveaux users
   },
-  followedGames: [
-    {
-      type: String, // Juste les appIds (structure ultra-simplifiée)
+  followedGames: {
+    type: [String], // Juste les appIds (structure ultra-simplifiée)
+    validate: {
+      validator: function (v) {
+        return v.length <= 500;
+      },
+      message: "Vous ne pouvez suivre plus de 500 jeux",
     },
-  ],
-  recentActiveGames: [
-    {
-      appId: {
-        type: String,
+  },
+  recentActiveGames: {
+    type: [
+      {
+        appId: {
+          type: String,
+        },
+        name: {
+          type: String,
+        },
+        lastNewsDate: {
+          type: Date,
+        },
       },
-      name: {
-        type: String,
+    ],
+    validate: {
+      validator: function (v) {
+        return v.length <= 200;
       },
-      lastNewsDate: {
-        type: Date,
-      },
+      message: "Maximum 200 jeux actifs récents",
     },
-  ],
+  },
 
   notificationSettings: {
     enabled: {
@@ -82,7 +94,7 @@ const UserSchema = new mongoose.Schema({
   },
 
   /**
-   * Wishlist - VERSION FINALE (2025-11-05)
+   * Wishlist
    * games[] contient références + métadonnées user-specific (date_added)
    * Collection Wishlist centrale pour métadonnées communes (name, img)
    */

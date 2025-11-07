@@ -2,7 +2,6 @@
  * Configuration des horaires pour les tâches cron
  * Format: "secondes minutes heures jour mois jour_semaine"
  *
- * ⚠️ MODIFICATIONS 2025-11-04 (Optimisation API)
  * - USER_GROUP_SYNC : 30 min → 1×/semaine (dimanche 3h)
  * - WISHLIST_SYNC : 4×/jour → 1×/semaine (lundi 3h)
  * - NEWS_CHECK : 6h → 1h (priorité notifications)
@@ -26,9 +25,6 @@ const SCHEDULES = {
 
   // Synchronisation des wishlists 1×/SEMAINE (lundi 3h)
   WISHLIST_SYNC: "0 0 3 * * 1",
-
-  // Synchronisation des bibliothèques (DÉSACTIVÉ - redondant avec USER_GROUP_SYNC)
-  LIBRARY_SYNC: null,
 };
 
 module.exports = {

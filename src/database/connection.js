@@ -1,56 +1,50 @@
 /**
- * Gestionnaire de connexion à la base de données
+ * Gestionnaire de connexion a la base de donnees
  * Centralise la configuration MongoDB et l'initialisation
  */
 
 const mongoose = require("mongoose");
-const cronJobs = require("../config/cron");
-const { SERVER_CONFIG, SUCCESS_MESSAGES } = require("../config/app");
+const { DATABASE_CONFIG, SUCCESS_MESSAGES } = require("../config/app");
 
 /**
- * Initialise la connexion à MongoDB
- * Lance les tâches planifiées après connexion réussie
+ * Initialise la connexion a MongoDB
  */
 async function connectDatabase() {
   try {
-    // Options de connexion pour améliorer la stabilité
-    const options = {
-      serverSelectionTimeoutMS: 10000, // Timeout de 10 secondes
-      socketTimeoutMS: 45000, // Timeout de socket de 45 secondes
-      family: 4, // Force l'utilisation d'IPv4 pour éviter les problèmes DNS
-    };
-
-    await mongoose.connect(SERVER_CONFIG.MONGODB_URI, options);
+    await mongoose.connect(
+      DATABASE_CONFIG.uri,
+      DATABASE_CONFIG.options
+    );
     console.log(SUCCESS_MESSAGES.MONGODB_CONNECTED);
-
-    // Initialiser les tâches planifiées après connexion à la base de données
-    cronJobs.initCronJobs();
-
     return true;
   } catch (error) {
-    console.error("Erreur de connexion à MongoDB:", error);
+    const safeMessage =
+      error && error.message ? error.message : "MongoDB connection failed";
+    console.error("Erreur connexion MongoDB:", safeMessage);
     throw error;
   }
 }
 
 /**
- * Ferme proprement la connexion à la base de données
+ * Ferme proprement la connexion MongoDB
  */
 async function disconnectDatabase() {
   try {
     await mongoose.disconnect();
-    console.log("Connexion MongoDB fermée");
+    console.log("Connexion MongoDB fermee");
   } catch (error) {
-    console.error("Erreur lors de la fermeture de MongoDB:", error);
+    const safeMessage =
+      error && error.message ? error.message : "MongoDB disconnect failed";
+    console.error("Erreur fermeture MongoDB:", safeMessage);
   }
 }
 
 /**
- * Gère l'arrêt propre de l'application
+ * Gere l'arret propre de l'application
  */
 function setupGracefulShutdown() {
   const gracefulShutdown = async (signal) => {
-    console.log(`Signal ${signal} reçu, arrêt en cours...`);
+    console.log(`Signal ${signal} recu, arret en cours...`);
     await disconnectDatabase();
     process.exit(0);
   };

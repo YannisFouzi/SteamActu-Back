@@ -12,12 +12,12 @@ const router = express.Router();
 const steamService = require("../services/steamService");
 const User = require("../models/User");
 const Game = require("../models/Game");
+const Wishlist = require("../models/Wishlist");
 const { validateSteamId } = require("../middleware/steamValidators");
 const {
   formatGame,
   getLastUpdateTimestamp,
 } = require("../services/steam/gameFormatter");
-const { processAllGames } = require("../services/steam/gameProcessor");
 
 router.get("/games/:steamId", validateSteamId, async (req, res) => {
   try {
@@ -109,7 +109,6 @@ router.get("/wishlist/:steamId", validateSteamId, async (req, res) => {
     }
 
     const gameIds = user.wishlist.games.map((g) => g.gameId);
-    const Wishlist = require("../models/Wishlist");
     const wishlistGames = await Wishlist.find({
       appId: { $in: gameIds },
     }).lean();

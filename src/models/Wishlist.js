@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 /**
- * Schéma pour les jeux wishlistés - VERSION MINIMALISTE
+ * Schéma pour les jeux wishlistés
  *
  * PHILOSOPHIE :
  * - Même logique que Games : table de référence MINIMALE
@@ -14,7 +14,6 @@ const mongoose = require("mongoose");
  * - Léger et rapide
  * - Cohérent avec Games
  *
- * Date : 2025-11-04
  */
 
 const WishlistSchema = new mongoose.Schema({

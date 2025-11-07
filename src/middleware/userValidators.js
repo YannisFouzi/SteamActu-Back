@@ -2,6 +2,9 @@
  * Validateurs pour les routes utilisateurs
  */
 
+const User = require("../models/User");
+const { migrateGameLibrary } = require("../services/users/gameProcessor");
+
 /**
  * Middleware pour vérifier qu'un utilisateur existe
  * @param {Object} req - Requête Express
@@ -12,8 +15,6 @@ async function validateUserExists(req, res, next) {
   try {
     const { steamId } = req.params;
     console.log("Validation utilisateur pour steamId:", steamId);
-    const User = require("../models/User");
-    const { migrateGameLibrary } = require("../services/users/gameProcessor");
 
     const user = await User.findOne({ steamId });
     console.log("Utilisateur trouvé:", user ? "OUI" : "NON");
@@ -22,14 +23,26 @@ async function validateUserExists(req, res, next) {
       return res.status(404).json({ message: "Utilisateur non trouvé" });
     }
 
-    migrateGameLibrary(user);
-
     req.user = user;
     next();
   } catch (error) {
     console.error("Erreur dans validateUserExists:", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
+}
+
+/**
+ * Middleware pour migrer les données utilisateur
+ * Effectue la migration de la bibliothèque de jeux
+ * @param {Object} req - Requête Express
+ * @param {Object} res - Réponse Express
+ * @param {Function} next - Fonction next
+ */
+function migrateUserData(req, res, next) {
+  if (req.user) {
+    migrateGameLibrary(req.user);
+  }
+  next();
 }
 
 /**
@@ -43,5 +56,6 @@ function validateActiveGamesFormat(games) {
 
 module.exports = {
   validateUserExists,
+  migrateUserData,
   validateActiveGamesFormat,
 };

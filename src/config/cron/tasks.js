@@ -1,8 +1,6 @@
 const gamesSyncService = require("../../services/gamesSyncService");
-const newsChecker = require("../../utils/newsChecker");
 const newsRotationService = require("../../services/newsRotationService");
 const syncWishlistService = require("../../services/syncWishlistService");
-const syncLibraryService = require("../../services/syncLibraryService");
 
 /**
  * Définitions des tâches planifiées
@@ -16,13 +14,6 @@ async function checkNews() {
   return `${stats.gamesChecked} jeux vérifiés, ${stats.notificationsSent} notifications envoyées`;
 }
 
-/**
- * Vérification des actualités (ancienne méthode, conservée pour compatibilité)
- */
-async function checkNewsOld() {
-  const notificationsSent = await newsChecker.checkNewsForAllUsers();
-  return `${notificationsSent} notifications envoyées`;
-}
 
 /**
  * Synchronisation par groupe d'utilisateurs
@@ -76,19 +67,10 @@ async function syncWishlists() {
   return `${stats.successCount} utilisateurs synchronisés, ${stats.totalNewGames} nouveaux jeux, ${stats.totalAutoFollowed} auto-suivis`;
 }
 
-/**
- * Synchronisation des bibliothèques de tous les utilisateurs (NOUVEAU)
- */
-async function syncLibraries() {
-  const stats = await syncLibraryService.syncAllUsersLibraries();
-  return `${stats.successCount} utilisateurs synchronisés, ${stats.totalNewGames} nouveaux jeux, ${stats.totalAutoFollowed} auto-suivis`;
-}
 
 module.exports = {
   checkNews,
-  checkNewsOld,
   syncUserGroup,
   syncAllUsers,
   syncWishlists,
-  syncLibraries,
 };

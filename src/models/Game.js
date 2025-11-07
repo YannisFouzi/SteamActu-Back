@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 /**
- * Schéma pour les jeux Steam - VERSION MINIMALISTE
+ * Schéma pour les jeux Steam
  *
  * PHILOSOPHIE :
  * - Cette collection sert UNIQUEMENT de table de référence pour les crons
@@ -13,7 +13,6 @@ const mongoose = require("mongoose");
  * - Évite doublons (un jeu = un document, partagé par tous les users)
  * - Léger et rapide
  *
- * Issue de l'audit 2025-11-04
  */
 
 const GameSchema = new mongoose.Schema({

@@ -3,8 +3,11 @@ const router = express.Router();
 const User = require("../models/User");
 const GameSubscription = require("../models/GameSubscription");
 const steamService = require("../services/steamService");
+const { syncUserGames } = require("../services/gameSync/userProcessor");
+const { syncUserWishlist } = require("../services/syncWishlistService");
 const {
   validateUserExists,
+  migrateUserData,
   validateActiveGamesFormat,
 } = require("../middleware/userValidators");
 const {
@@ -21,60 +24,10 @@ router.post("/register", async (req, res) => {
   try {
     const { steamId } = req.body;
 
-    // Vérifier si l'utilisateur existe déjà
-    let user = await User.findOne({ steamId });
+    // Déléguer la logique métier au service
+    const user = await steamService.registerOrUpdateUser(steamId);
 
-    if (user) {
-      console.log(`✅ User existant: ${user.username} (${steamId})`);
-      return res.status(200).json(user);
-    }
-
-    console.log(`\n${"=".repeat(70)}`);
-    console.log(`🆕 NOUVEL UTILISATEUR - Création + Sync immédiate`);
-    console.log(`${"=".repeat(70)}`);
-
-    // Récupérer les infos du profil Steam
-    const profileData = await steamService.getUserProfile(steamId);
-
-    if (!profileData) {
-      return res.status(404).json({ message: "Profil Steam non trouvé" });
-    }
-
-    // Créer un nouvel utilisateur
-    user = new User({
-      steamId,
-      username: profileData.personaname,
-      avatarUrl: profileData.avatarfull,
-      lastChecked: null, // Important : null pour permettre sync immédiate
-    });
-
-    await user.save();
-    console.log(`✅ User créé: ${user.username} (${steamId})`);
-
-    // ⚡ SYNC IMMÉDIATE des jeux pour nouvel utilisateur
-    // On ne peut pas attendre dimanche 3h, l'utilisateur veut voir ses jeux maintenant !
-    console.log(`⚡ Lancement sync immédiate des jeux...`);
-
-    try {
-      const { syncUserGames } = require("../services/gameSync/userProcessor");
-      const syncResult = await syncUserGames(user);
-
-      if (syncResult.error) {
-        console.error(`⚠️ Erreur sync jeux (non bloquant):`, syncResult.error);
-      } else {
-        console.log(`✅ Sync réussie: ${syncResult.updatedGames?.length || 0} jeux ajoutés`);
-      }
-    } catch (syncError) {
-      console.error(`⚠️ Erreur sync jeux (non bloquant):`, syncError.message);
-      // On ne bloque pas l'inscription si la sync échoue
-    }
-
-    // Recharger le user pour avoir les données à jour (après sync)
-    user = await User.findOne({ steamId });
-
-    console.log(`${"=".repeat(70)}\n`);
-
-    res.status(201).json(user);
+    res.status(200).json(user);
   } catch (error) {
     console.error("Erreur lors de l'enregistrement de l'utilisateur:", error);
     res.status(500).json({ message: "Erreur serveur" });
@@ -82,7 +35,7 @@ router.post("/register", async (req, res) => {
 });
 
 // Récupérer les informations d'un utilisateur
-router.get("/:steamId", validateUserExists, async (req, res) => {
+router.get("/:steamId", validateUserExists, migrateUserData, async (req, res) => {
   try {
     const { steamId } = req.params;
     console.log("Récupération utilisateur:", steamId);
@@ -93,7 +46,6 @@ router.get("/:steamId", validateUserExists, async (req, res) => {
       !req.user?.wishlist || !req.user.wishlist?.lastFullSync;
 
     if (shouldSyncWishlist) {
-      const { syncUserWishlist } = require("../services/syncWishlistService");
       syncUserWishlist(steamId).catch((err) => {
         console.error(`Background wishlist preload failed for ${steamId}:`, err.message);
       });
@@ -107,7 +59,11 @@ router.get("/:steamId", validateUserExists, async (req, res) => {
 });
 
 // Mettre à jour les paramètres de notification
-router.put("/:steamId/notifications", validateUserExists, async (req, res) => {
+router.put(
+  "/:steamId/notifications",
+  validateUserExists,
+  migrateUserData,
+  async (req, res) => {
   try {
     const { enabled, pushToken, autoFollowNewGames, autoFollowWishlistGames } = req.body;
     const user = req.user;
@@ -142,7 +98,11 @@ router.put("/:steamId/notifications", validateUserExists, async (req, res) => {
 });
 
 // Mettre à jour la liste des jeux récemment actifs
-router.put("/:steamId/active-games", validateUserExists, async (req, res) => {
+router.put(
+  "/:steamId/active-games",
+  validateUserExists,
+  migrateUserData,
+  async (req, res) => {
   try {
     const { games } = req.body || {};
     const user = req.user;
@@ -166,7 +126,7 @@ router.put("/:steamId/active-games", validateUserExists, async (req, res) => {
 });
 
 // Suivre un jeu
-router.post("/:steamId/follow", validateUserExists, async (req, res) => {
+router.post("/:steamId/follow", validateUserExists, migrateUserData, async (req, res) => {
   try {
     const { steamId } = req.params;
     const { appId, name, logoUrl } = req.body;
@@ -199,6 +159,7 @@ router.post("/:steamId/follow", validateUserExists, async (req, res) => {
 router.delete(
   "/:steamId/follow/:appId",
   validateUserExists,
+  migrateUserData,
   async (req, res) => {
     try {
       const { steamId, appId } = req.params;

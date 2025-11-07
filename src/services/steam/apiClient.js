@@ -4,10 +4,10 @@
  */
 
 const axios = require("axios");
-require("dotenv").config();
+const { STEAM_CONFIG } = require("../../config/app");
 
-const STEAM_API_KEY = process.env.STEAM_API_KEY;
-const STEAM_BASE_URL = "http://api.steampowered.com";
+const STEAM_API_KEY = STEAM_CONFIG.apiKey;
+const STEAM_BASE_URL = STEAM_CONFIG.baseUrl;
 
 // URLs des endpoints Steam
 const ENDPOINTS = {

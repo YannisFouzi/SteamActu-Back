@@ -1,6 +1,5 @@
 /**
  * Service de synchronisation de la wishlist Steam
- * VERSION NORMALISÉE (2025-11-04)
  *
  * PHILOSOPHIE :
  * - Même logique que Games : collection Wishlist partagée entre users
@@ -52,7 +51,11 @@ async function upsertWishlistCollection(wishlistGames) {
       update: {
         $set: {
           name: steamGame.name,
-          img_icon_url: steamGame.capsule || steamGame.header_image || steamGame.img_icon_url || "",
+          img_icon_url:
+            steamGame.capsule ||
+            steamGame.header_image ||
+            steamGame.img_icon_url ||
+            "",
         },
         $setOnInsert: {
           appId: steamGame.appid.toString(),
@@ -90,7 +93,9 @@ async function syncUserWishlist(steamId, wishlistData = null) {
     let wishlistItems = [];
 
     if (wishlistData && Array.isArray(wishlistData)) {
-      console.log(`📦 Utilisation des données déjà récupérées : ${wishlistData.length} jeux`);
+      console.log(
+        `📦 Utilisation des données déjà récupérées : ${wishlistData.length} jeux`
+      );
       wishlistItems = wishlistData;
     } else {
       try {
@@ -112,7 +117,9 @@ async function syncUserWishlist(steamId, wishlistData = null) {
 
     // Upsert dans collection Wishlist (pas de doublon entre users)
     await upsertWishlistCollection(wishlistItems);
-    console.log(`✅ ${wishlistItems.length} jeux créés/mis à jour dans Wishlist`);
+    console.log(
+      `✅ ${wishlistItems.length} jeux créés/mis à jour dans Wishlist`
+    );
 
     // Récupérer gameIds actuels en BDD
     const cachedGameIds = new Set(
