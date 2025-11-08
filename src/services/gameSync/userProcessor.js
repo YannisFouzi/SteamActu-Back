@@ -9,7 +9,7 @@
 
 const steamService = require('../steamService');
 const Game = require('../../models/Game');
-const GameSubscription = require('../../models/GameSubscription');
+const { addUserToGameSubscription } = require('../users/subscriptionManager');
 
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
@@ -152,27 +152,23 @@ async function processAutoFollow(
     if (gamesToFollow.length > 0) {
       try {
         const games = await Game.find({ appId: { $in: gamesToFollow } });
-        const bulkOps = games.map((game) => ({
-          updateOne: {
-            filter: { gameId: game.appId },
-            update: {
-              $setOnInsert: {
-                gameId: game.appId,
-                name: game.name,
-                lastNewsTimestamp: 0,
-              },
-              $addToSet: { subscribers: user.steamId },
-            },
-            upsert: true,
-          },
-        }));
+        const gamesMap = new Map(games.map((g) => [g.appId, g]));
 
-        if (bulkOps.length > 0) {
-          await GameSubscription.bulkWrite(bulkOps);
-          console.log(`✅ ${bulkOps.length} GameSubscriptions mises à jour`);
+        for (const appId of gamesToFollow) {
+          const gameDoc = gamesMap.get(appId);
+          const gameName = gameDoc?.name || `Jeu ${appId}`;
+          const imageUrl = gameDoc?.img_icon_url
+            ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`
+            : '';
+
+          await addUserToGameSubscription(appId, user.steamId, gameName, imageUrl);
         }
+
+        console.log(
+          `✅ ${gamesToFollow.length} GameSubscriptions mises à jour via auto-follow`
+        );
       } catch (error) {
-        console.error('❌ Erreur GameSubscription bulk:', error.message);
+        console.error('❌ Erreur auto-follow GameSubscription:', error.message);
       }
     }
   }
