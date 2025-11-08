@@ -3,9 +3,9 @@
  * Évite la surcharge API Steam en limitant les appels et en effectuant une rotation équitable
  */
 
-const GameSubscription = require("../models/GameSubscription");
-const steamService = require("./steamService");
-const notificationService = require("./notificationService");
+const GameSubscription = require('../models/GameSubscription');
+const steamService = require('./steamService');
+const notificationService = require('./notificationService');
 
 // Configuration
 const CONFIG = {
@@ -35,7 +35,7 @@ function sleep(ms) {
 async function checkNewsRotation() {
   // Vérifier le lock (éviter double exécution)
   if (isRotationRunning) {
-    console.log("⚠️ Rotation déjà en cours, skip...");
+    console.log('⚠️ Rotation déjà en cours, skip...');
     return {
       gamesChecked: 0,
       apiCalls: 0,
@@ -48,9 +48,9 @@ async function checkNewsRotation() {
   isRotationRunning = true;
 
   try {
-    console.log("\n" + "=".repeat(60));
-    console.log("📰 DÉBUT VÉRIFICATION ACTUALITÉS (ROTATION)");
-    console.log("=".repeat(60));
+    console.log('\n' + '='.repeat(60));
+    console.log('📰 DÉBUT VÉRIFICATION ACTUALITÉS (ROTATION)');
+    console.log('='.repeat(60));
 
     const startTime = Date.now();
 
@@ -63,7 +63,7 @@ async function checkNewsRotation() {
     console.log(`🎮 ${games.length} jeu(x) à vérifier`);
 
     if (games.length === 0) {
-      console.log("ℹ️ Aucun jeu à vérifier");
+      console.log('ℹ️ Aucun jeu à vérifier');
       return {
         gamesChecked: 0,
         apiCalls: 0,
@@ -150,7 +150,7 @@ async function checkNewsRotation() {
 
               // Compter les succès
               results.forEach((result) => {
-                if (result.status === "fulfilled") {
+                if (result.status === 'fulfilled') {
                   stats.notificationsSent++;
                 } else {
                   console.error(
@@ -234,9 +234,9 @@ async function checkNewsRotation() {
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    console.log("\n" + "=".repeat(60));
-    console.log("📊 RÉSUMÉ VÉRIFICATION ACTUALITÉS");
-    console.log("=".repeat(60));
+    console.log('\n' + '='.repeat(60));
+    console.log('📊 RÉSUMÉ VÉRIFICATION ACTUALITÉS');
+    console.log('='.repeat(60));
     console.log(`⏱️  Durée : ${duration}s`);
     console.log(`🎮 Jeux vérifiés : ${stats.gamesChecked}`);
     console.log(`🔌 Appels API Steam : ${stats.apiCalls}`);
@@ -245,18 +245,18 @@ async function checkNewsRotation() {
     console.log(`❌ Erreurs : ${stats.errors.length}`);
 
     if (stats.errors.length > 0) {
-      console.log("\n❌ Erreurs détaillées :");
+      console.log('\n❌ Erreurs détaillées :');
       stats.errors.forEach((err) => {
         console.log(`  - ${err.gameName} (${err.gameId}): ${err.error}`);
       });
     }
 
-    console.log("=".repeat(60) + "\n");
+    console.log('='.repeat(60) + '\n');
 
     return stats;
   } catch (error) {
     console.error(
-      "❌ Erreur globale lors de la vérification des actualités:",
+      '❌ Erreur globale lors de la vérification des actualités:',
       error
     );
     throw error;
@@ -296,7 +296,7 @@ async function getRotationStats() {
     };
   } catch (error) {
     console.error(
-      "Erreur lors de la récupération des stats de rotation:",
+      'Erreur lors de la récupération des stats de rotation:',
       error
     );
     throw error;

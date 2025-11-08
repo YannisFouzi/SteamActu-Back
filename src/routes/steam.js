@@ -7,19 +7,19 @@
  * Voir: AUDIT_REPORT.md et ACTIONS.md
  */
 
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const steamService = require("../services/steamService");
-const User = require("../models/User");
-const Game = require("../models/Game");
-const Wishlist = require("../models/Wishlist");
-const { validateSteamId } = require("../middleware/steamValidators");
+const steamService = require('../services/steamService');
+const User = require('../models/User');
+const Game = require('../models/Game');
+const Wishlist = require('../models/Wishlist');
+const { validateSteamId } = require('../middleware/steamValidators');
 const {
   formatGame,
   getLastUpdateTimestamp,
-} = require("../services/steam/gameFormatter");
+} = require('../services/steam/gameFormatter');
 
-router.get("/games/:steamId", validateSteamId, async (req, res) => {
+router.get('/games/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
     const { followedOnly } = req.query;
@@ -28,11 +28,11 @@ router.get("/games/:steamId", validateSteamId, async (req, res) => {
     );
 
     const user = await User.findOne({ steamId })
-      .select("gameLibrary followedGames recentActiveGames")
+      .select('gameLibrary followedGames recentActiveGames')
       .lean();
 
     if (!user) {
-      return res.status(404).json({ message: "Utilisateur non trouvé" });
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
 
     const userGames = user.gameLibrary?.games || [];
@@ -41,44 +41,44 @@ router.get("/games/:steamId", validateSteamId, async (req, res) => {
       return res.json([]);
     }
 
-    const gameIds = userGames.map(g => g.gameId);
+    const gameIds = userGames.map((g) => g.gameId);
     const gamesData = await Game.find({ appId: { $in: gameIds } })
-      .select("appId name img_icon_url")
+      .select('appId name img_icon_url')
       .lean();
 
-    const gamesMap = new Map(gamesData.map(g => [g.appId, g]));
+    const gamesMap = new Map(gamesData.map((g) => [g.appId, g]));
 
-    let games = userGames.map(userGame => {
+    let games = userGames.map((userGame) => {
       const gameData = gamesMap.get(userGame.gameId);
       return {
         appid: userGame.gameId,
         name: gameData?.name || `Game ${userGame.gameId}`,
-        img_icon_url: gameData?.img_icon_url || "",
+        img_icon_url: gameData?.img_icon_url || '',
         playtime_forever: userGame.playtime_forever || 0,
         rtime_last_played: userGame.rtime_last_played || 0,
         playtime_2weeks: userGame.playtime_2weeks || 0,
       };
     });
 
-    if (followedOnly === "true" && user.followedGames?.length > 0) {
+    if (followedOnly === 'true' && user.followedGames?.length > 0) {
       const followedSet = new Set(user.followedGames);
-      games = games.filter(game => followedSet.has(game.appid));
+      games = games.filter((game) => followedSet.has(game.appid));
     }
 
-    const formattedGames = games.map(game => {
+    const formattedGames = games.map((game) => {
       const lastUpdateTimestamp = getLastUpdateTimestamp(game.appid, user);
       return formatGame(game, lastUpdateTimestamp);
     });
 
     res.json(formattedGames);
   } catch (error) {
-    console.error("Erreur dans /games/:steamId:", error);
-    res.status(500).json({ message: "Erreur serveur" });
+    console.error('Erreur dans /games/:steamId:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
 // Récupérer le profil d'un utilisateur Steam
-router.get("/profile/:steamId", validateSteamId, async (req, res) => {
+router.get('/profile/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -86,22 +86,22 @@ router.get("/profile/:steamId", validateSteamId, async (req, res) => {
     const profile = await steamService.getUserProfile(steamId);
 
     if (!profile) {
-      return res.status(404).json({ message: "Profil Steam non trouvé" });
+      return res.status(404).json({ message: 'Profil Steam non trouvé' });
     }
 
     res.json(profile);
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur" });
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
 // Récupérer la wishlist d'un utilisateur Steam (depuis BDD uniquement)
-router.get("/wishlist/:steamId", validateSteamId, async (req, res) => {
+router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
     console.log(`Requête getUserWishlist pour steamId: ${steamId}`);
 
-    const user = await User.findOne({ steamId }).select("wishlist").lean();
+    const user = await User.findOne({ steamId }).select('wishlist').lean();
 
     if (!user?.wishlist?.games || user.wishlist.games.length === 0) {
       console.log(`ℹ️ Wishlist vide pour ${steamId}`);
@@ -121,8 +121,8 @@ router.get("/wishlist/:steamId", validateSteamId, async (req, res) => {
         return {
           appid: parseInt(userGame.gameId, 10),
           name: gameData.name || `Game ${userGame.gameId}`,
-          capsule: gameData.img_icon_url || "",
-          header_image: gameData.img_icon_url || "",
+          capsule: gameData.img_icon_url || '',
+          header_image: gameData.img_icon_url || '',
           date_added: userGame.date_added,
           priority: userGame.priority,
         };
@@ -133,18 +133,18 @@ router.get("/wishlist/:steamId", validateSteamId, async (req, res) => {
     console.log(`✅ ${result.length} jeux retournés depuis BDD`);
     res.json(result);
   } catch (error) {
-    console.error("Erreur dans /wishlist/:steamId:", error);
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
+    console.error('Erreur dans /wishlist/:steamId:', error);
+    res.status(500).json({ message: 'Erreur serveur', error: error.message });
   }
 });
 
-router.get("/search", async (req, res) => {
+router.get('/search', async (req, res) => {
   try {
     const { q, limit } = req.query;
 
     if (!q || q.trim().length < 2) {
       return res.status(400).json({
-        message: "La recherche doit contenir au moins 2 caractères",
+        message: 'La recherche doit contenir au moins 2 caractères',
       });
     }
 
@@ -155,8 +155,8 @@ router.get("/search", async (req, res) => {
 
     res.json(results);
   } catch (error) {
-    console.error("Erreur dans /search:", error);
-    res.status(500).json({ message: "Erreur serveur" });
+    console.error('Erreur dans /search:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 

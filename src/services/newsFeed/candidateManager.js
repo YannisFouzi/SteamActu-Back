@@ -2,8 +2,8 @@
  * Gestionnaire des candidats pour le fil d'actualités
  */
 
-const GameSubscription = require("../../models/GameSubscription");
-const steamService = require("../steamService");
+const GameSubscription = require('../../models/GameSubscription');
+const steamService = require('../steamService');
 
 /**
  * Crée un gestionnaire de candidats
@@ -50,7 +50,7 @@ function addRecentGamesCandidates(user, pushCandidate, cutoffTimestamp) {
     );
 
   recentStored.forEach((item) =>
-    pushCandidate(item.appId, item.name, "recent-cache")
+    pushCandidate(item.appId, item.name, 'recent-cache')
   );
 }
 
@@ -81,7 +81,7 @@ async function addSubscriptionCandidates(
 
   subscriptions.forEach((sub) => {
     if (sub?.gameId) {
-      pushCandidate(sub.gameId, sub.name, "subscription");
+      pushCandidate(sub.gameId, sub.name, 'subscription');
     }
   });
 
@@ -118,11 +118,11 @@ async function addLibraryCandidates(steamId, pushCandidate, candidateMap) {
       });
 
     libraryCandidates.forEach((game) => {
-      pushCandidate(game.appId, game.name, "library");
+      pushCandidate(game.appId, game.name, 'library');
     });
   } catch (error) {
     console.error(
-      "Failed to extend news feed from user library:",
+      'Failed to extend news feed from user library:',
       error.message
     );
   }

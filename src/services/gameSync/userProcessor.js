@@ -7,9 +7,9 @@
  * - Auto-follow avec mise à jour GameSubscription en bulk
  */
 
-const steamService = require("../steamService");
-const Game = require("../../models/Game");
-const GameSubscription = require("../../models/GameSubscription");
+const steamService = require('../steamService');
+const Game = require('../../models/Game');
+const GameSubscription = require('../../models/GameSubscription');
 
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
@@ -25,7 +25,7 @@ function canSyncUser(user) {
   console.log(`  - lastChecked: ${lastSyncTime.toISOString()}`);
   console.log(`  - Cooldown expires at: ${cooldownTime.toISOString()}`);
   console.log(`  - Current time: ${new Date().toISOString()}`);
-  console.log(`  - Can sync: ${canSync ? "true ✅" : "false ❌"}`);
+  console.log(`  - Can sync: ${canSync ? 'true ✅' : 'false ❌'}`);
 
   return canSync;
 }
@@ -35,7 +35,7 @@ function normalizeFollowedGames(user) {
 
   if (user.followedGames && Array.isArray(user.followedGames)) {
     user.followedGames.forEach((game) => {
-      if (typeof game === "string") {
+      if (typeof game === 'string') {
         followedGamesSet.add(game);
       } else if (game && game.appId) {
         followedGamesSet.add(game.appId);
@@ -66,8 +66,8 @@ async function upsertGamesCollection(steamGames) {
       filter: { appId: steamGame.appid.toString() },
       update: {
         $set: {
-          name: steamGame.name || "Unknown Game",
-          img_icon_url: steamGame.img_icon_url || "",
+          name: steamGame.name || 'Unknown Game',
+          img_icon_url: steamGame.img_icon_url || '',
           // Note: playtime/lastPlayed sont user-specific, pas stockés en BDD
           // Récupérés via Steam API à la demande pour filtres/tris
         },
@@ -144,7 +144,7 @@ async function processAutoFollow(
         newGames.push({
           appId,
           name: game.name,
-          action: "auto-followed",
+          action: 'auto-followed',
         });
       }
     }
@@ -172,7 +172,7 @@ async function processAutoFollow(
           console.log(`✅ ${bulkOps.length} GameSubscriptions mises à jour`);
         }
       } catch (error) {
-        console.error("❌ Erreur GameSubscription bulk:", error.message);
+        console.error('❌ Erreur GameSubscription bulk:', error.message);
       }
     }
   }
@@ -227,7 +227,7 @@ async function syncUserGames(user) {
       return {
         ...result,
         skipped: true,
-        message: "Synchronisation récente, ignorée",
+        message: 'Synchronisation récente, ignorée',
       };
     }
 
@@ -255,7 +255,6 @@ async function syncUserGames(user) {
     const cachedGameIds = new Set(
       (user.gameLibrary?.games || []).map((g) => g.gameId)
     );
-    const allGameIds = userGames.map((g) => g.appid.toString());
 
     const removedGameIds = detectRemovedGames(user, userGames);
     if (removedGameIds.length > 0) {

@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const GameSubscriptionSchema = new mongoose.Schema({
   gameId: {
@@ -12,7 +12,7 @@ const GameSubscriptionSchema = new mongoose.Schema({
   },
   imageUrl: {
     type: String,
-    default: "",
+    default: '',
   },
   subscribers: [
     {
@@ -38,9 +38,9 @@ const GameSubscriptionSchema = new mongoose.Schema({
 GameSubscriptionSchema.index({ lastNewsCheck: 1 });
 
 // Middleware pour mettre à jour updatedAt
-GameSubscriptionSchema.pre("save", function (next) {
+GameSubscriptionSchema.pre('save', function (next) {
   this.updatedAt = Date.now();
   next();
 });
 
-module.exports = mongoose.model("GameSubscription", GameSubscriptionSchema);
+module.exports = mongoose.model('GameSubscription', GameSubscriptionSchema);

@@ -3,7 +3,7 @@
  * Architecture prete pour les implementations futures
  */
 
-const { NOTIFICATION_CONFIG } = require("../../config/app");
+const { NOTIFICATION_CONFIG } = require('../../config/app');
 
 /**
  * Provider de simulation pour le developpement
@@ -20,7 +20,7 @@ async function simulationProvider(token, notification) {
 
     return true;
   } catch (error) {
-    console.error("Erreur simulation notification:", error);
+    console.error('Erreur simulation notification:', error);
     return false;
   }
 }
@@ -72,14 +72,16 @@ async function firebaseProvider(token, notification) {
  * @returns {Function} - Provider de notifications
  */
 function getActiveProvider() {
-  const providerName = (NOTIFICATION_CONFIG.provider || "simulation").toLowerCase();
+  const providerName = (
+    NOTIFICATION_CONFIG.provider || 'simulation'
+  ).toLowerCase();
 
   switch (providerName) {
-    case "onesignal":
+    case 'onesignal':
       return oneSignalProvider;
-    case "firebase":
+    case 'firebase':
       return firebaseProvider;
-    case "simulation":
+    case 'simulation':
     default:
       return simulationProvider;
   }

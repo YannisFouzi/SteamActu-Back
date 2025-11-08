@@ -3,28 +3,28 @@
  * Gère le processus d'authentification OpenID Steam
  */
 
-const express = require("express");
+const express = require('express');
 const router = express.Router();
 
-const steamService = require("../services/steamService");
+const steamService = require('../services/steamService');
 const {
   validateOpenIdResponse,
   extractSteamId,
-} = require("../middleware/auth");
+} = require('../middleware/auth');
 const {
   SECURITY_CONFIG,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
-} = require("../config/app");
+} = require('../config/app');
 
 /**
  * Route de callback d'authentification Steam
  * Traite la réponse OpenID et redirige vers l'application mobile
  */
-router.get("/steam/return", validateOpenIdResponse, async (req, res) => {
+router.get('/steam/return', validateOpenIdResponse, async (req, res) => {
   try {
     // Extraire le SteamID de la réponse OpenID
-    const identity = req.query["openid.identity"];
+    const identity = req.query['openid.identity'];
     const steamId = extractSteamId(identity);
 
     if (!steamId) {

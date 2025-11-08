@@ -6,17 +6,17 @@
  * Exécute une tâche avec gestion d'erreurs et logs standardisés
  * @param {string} taskName - Nom de la tâche pour les logs
  * @param {Function} taskFunction - Fonction à exécuter
- * @param {Object} context - Contexte optionnel pour les logs
+ * @param {Object} _context - Contexte optionnel pour les logs
  */
-async function executeTask(taskName, taskFunction, context = {}) {
+async function executeTask(taskName, taskFunction, _context = {}) {
   console.log(`Exécution de la tâche planifiée: ${taskName}`);
 
   try {
     const result = await taskFunction();
 
-    if (result && typeof result === "object") {
+    if (result && typeof result === 'object') {
       console.log(`Tâche ${taskName} terminée:`, result);
-    } else if (typeof result === "number") {
+    } else if (typeof result === 'number') {
       console.log(`Tâche ${taskName} terminée: ${result} éléments traités`);
     } else {
       console.log(`Tâche ${taskName} terminée avec succès`);

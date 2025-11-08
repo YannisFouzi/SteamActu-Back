@@ -2,7 +2,7 @@
  * Gestionnaire des données utilisateur pour le fil d'actualités
  */
 
-const User = require("../../models/User");
+const User = require('../../models/User');
 
 /**
  * Récupère et normalise les jeux suivis par un utilisateur
@@ -18,7 +18,7 @@ async function getUserAndFollowedGames(steamId) {
 
     if (user && Array.isArray(user.followedGames)) {
       user.followedGames.forEach((appId) => {
-        if (typeof appId === "string") {
+        if (typeof appId === 'string') {
           // Nouvelle structure : juste l'appId
           followedSet.add(appId);
         } else if (appId && appId.appId) {
@@ -108,7 +108,7 @@ async function updateUserActiveGames(
   try {
     await User.updateOne({ steamId }, { recentActiveGames: limitedActive });
   } catch (error) {
-    console.error("Failed to store recentActiveGames for user", steamId, error);
+    console.error('Failed to store recentActiveGames for user', steamId, error);
   }
 }
 

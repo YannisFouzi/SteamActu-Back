@@ -2,8 +2,8 @@
  * Validateurs pour les routes utilisateurs
  */
 
-const User = require("../models/User");
-const { migrateGameLibrary } = require("../services/users/gameProcessor");
+const User = require('../models/User');
+const { migrateGameLibrary } = require('../services/users/gameProcessor');
 
 /**
  * Middleware pour vérifier qu'un utilisateur existe
@@ -14,20 +14,20 @@ const { migrateGameLibrary } = require("../services/users/gameProcessor");
 async function validateUserExists(req, res, next) {
   try {
     const { steamId } = req.params;
-    console.log("Validation utilisateur pour steamId:", steamId);
+    console.log('Validation utilisateur pour steamId:', steamId);
 
     const user = await User.findOne({ steamId });
-    console.log("Utilisateur trouvé:", user ? "OUI" : "NON");
+    console.log('Utilisateur trouvé:', user ? 'OUI' : 'NON');
 
     if (!user) {
-      return res.status(404).json({ message: "Utilisateur non trouvé" });
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
 
     req.user = user;
     next();
   } catch (error) {
-    console.error("Erreur dans validateUserExists:", error);
-    res.status(500).json({ message: "Erreur serveur" });
+    console.error('Erreur dans validateUserExists:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 }
 

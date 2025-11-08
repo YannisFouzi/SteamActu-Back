@@ -2,7 +2,7 @@
  * Gestionnaire des GameSubscriptions
  */
 
-const GameSubscription = require("../../models/GameSubscription");
+const GameSubscription = require('../../models/GameSubscription');
 
 /**
  * Ajoute un utilisateur à la subscription d'un jeu
@@ -21,7 +21,7 @@ async function addUserToGameSubscription(appId, steamId, name, imageUrl) {
     gameSubscription = new GameSubscription({
       gameId: appId,
       name: name || `Jeu ${appId}`,
-      imageUrl: imageUrl || "",
+      imageUrl: imageUrl || '',
       subscribers: [steamId],
       lastNewsTimestamp: firstFollowTimestamp,
     });

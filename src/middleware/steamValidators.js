@@ -21,7 +21,7 @@ function validateSteamId(req, res, next) {
   const { steamId } = req.params;
 
   if (!isValidSteamId(steamId)) {
-    return res.status(400).json({ message: "SteamID invalide" });
+    return res.status(400).json({ message: 'SteamID invalide' });
   }
 
   next();

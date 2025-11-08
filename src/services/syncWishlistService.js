@@ -12,10 +12,10 @@
  * - Détection nouveaux jeux via comparaison gameIds
  */
 
-const User = require("../models/User");
-const Wishlist = require("../models/Wishlist");
-const GameSubscription = require("../models/GameSubscription");
-const steamService = require("./steamService");
+const User = require('../models/User');
+const Wishlist = require('../models/Wishlist');
+const GameSubscription = require('../models/GameSubscription');
+const steamService = require('./steamService');
 
 /**
  * Crée/met à jour les documents Wishlist dans la collection
@@ -55,7 +55,7 @@ async function upsertWishlistCollection(wishlistGames) {
             steamGame.capsule ||
             steamGame.header_image ||
             steamGame.img_icon_url ||
-            "",
+            '',
         },
         $setOnInsert: {
           appId: steamGame.appid.toString(),
@@ -87,7 +87,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
     const user = await User.findOne({ steamId });
     if (!user) {
       console.log(`❌ Utilisateur ${steamId} non trouvé`);
-      return { success: false, error: "Utilisateur non trouvé" };
+      return { success: false, error: 'Utilisateur non trouvé' };
     }
 
     let wishlistItems = [];
@@ -216,9 +216,9 @@ async function syncUserWishlist(steamId, wishlistData = null) {
  */
 async function syncAllUsersWishlists() {
   try {
-    console.log("\n" + "=".repeat(60));
-    console.log("🚀 DÉBUT SYNCHRONISATION GLOBALE WISHLISTS");
-    console.log("=".repeat(60));
+    console.log('\n' + '='.repeat(60));
+    console.log('🚀 DÉBUT SYNCHRONISATION GLOBALE WISHLISTS');
+    console.log('='.repeat(60));
 
     const startTime = Date.now();
 
@@ -266,9 +266,9 @@ async function syncAllUsersWishlists() {
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    console.log("\n" + "=".repeat(60));
-    console.log("📊 RÉSUMÉ SYNCHRONISATION WISHLISTS");
-    console.log("=".repeat(60));
+    console.log('\n' + '='.repeat(60));
+    console.log('📊 RÉSUMÉ SYNCHRONISATION WISHLISTS');
+    console.log('='.repeat(60));
     console.log(`⏱️  Durée : ${duration}s`);
     console.log(`✅ Succès : ${stats.successCount}`);
     console.log(`❌ Erreurs : ${stats.errorCount}`);
@@ -276,18 +276,18 @@ async function syncAllUsersWishlists() {
     console.log(`🎯 Jeux auto-suivis : ${stats.totalAutoFollowed}`);
 
     if (stats.errors.length > 0) {
-      console.log("\n❌ Erreurs détaillées :");
+      console.log('\n❌ Erreurs détaillées :');
       stats.errors.forEach((err) => {
         console.log(`  - ${err.steamId}: ${err.error}`);
       });
     }
 
-    console.log("=".repeat(60) + "\n");
+    console.log('='.repeat(60) + '\n');
 
     return stats;
   } catch (error) {
     console.error(
-      "❌ Erreur globale lors de la synchronisation des wishlists:",
+      '❌ Erreur globale lors de la synchronisation des wishlists:',
       error
     );
     throw error;

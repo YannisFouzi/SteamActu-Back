@@ -2,17 +2,17 @@
   getUserAndFollowedGames,
   optimizeCandidates,
   updateUserActiveGames,
-} = require("./newsFeed/userManager");
+} = require('./newsFeed/userManager');
 const {
   createCandidateManager,
   addRecentGamesCandidates,
   addSubscriptionCandidates,
   addLibraryCandidates,
-} = require("./newsFeed/candidateManager");
+} = require('./newsFeed/candidateManager');
 const {
   processNewsForGames,
   filterAndSortNews,
-} = require("./newsFeed/newsProcessor");
+} = require('./newsFeed/newsProcessor');
 
 // Constantes
 const RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
@@ -32,7 +32,7 @@ async function getNewsFeed({
   followedOnly = false,
   limit = 20,
   perGameLimit = 3,
-  language = "fr",
+  language = 'fr',
 } = {}) {
   // Normaliser les paramètres
   const safeLimit = Math.max(200, Math.min(limit || 200, 200));
@@ -65,7 +65,7 @@ async function getNewsFeed({
       metadata: {
         totalGamesQueried: 0,
         totalNewsRetrieved: 0,
-        source: "followed",
+        source: 'followed',
       },
     };
   }
@@ -91,7 +91,7 @@ async function getNewsFeed({
       metadata: {
         totalGamesQueried: 0,
         totalNewsRetrieved: 0,
-        source: followedOnly ? "followed" : "all",
+        source: followedOnly ? 'followed' : 'all',
       },
     };
   }
@@ -126,7 +126,7 @@ async function getNewsFeed({
       totalNewsRetrieved: feedItems.length,
       returnedCount: timeline.length,
       recentCount: recentItems.length,
-      source: followedOnly ? "followed" : "all",
+      source: followedOnly ? 'followed' : 'all',
       steamId: steamId || null,
     },
   };

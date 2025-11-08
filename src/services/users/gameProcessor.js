@@ -14,7 +14,7 @@ function migrateFollowedGames(user) {
     user.followedGames = [];
   } else if (
     user.followedGames.length > 0 &&
-    typeof user.followedGames[0] === "object"
+    typeof user.followedGames[0] === 'object'
   ) {
     // Migration à la volée : convertir l'ancienne structure en nouvelle
     user.followedGames = user.followedGames.map((game) => game.appId);
@@ -37,9 +37,9 @@ function sanitizeActiveGames(games) {
 
       if (game?.lastNewsDate instanceof Date) {
         timestamp = game.lastNewsDate.getTime();
-      } else if (typeof game?.lastNewsDate === "number") {
+      } else if (typeof game?.lastNewsDate === 'number') {
         timestamp = game.lastNewsDate;
-      } else if (typeof game?.lastNewsDate === "string") {
+      } else if (typeof game?.lastNewsDate === 'string') {
         const parsed = Date.parse(game.lastNewsDate);
         timestamp = Number.isNaN(parsed) ? null : parsed;
       }
@@ -65,14 +65,16 @@ function sanitizeActiveGames(games) {
 
 function migrateGameLibrary(user) {
   if (user.gameLibrary?.gameIds && Array.isArray(user.gameLibrary.gameIds)) {
-    user.gameLibrary.games = user.gameLibrary.gameIds.map(gameId => ({
+    user.gameLibrary.games = user.gameLibrary.gameIds.map((gameId) => ({
       gameId,
       playtime_forever: 0,
       rtime_last_played: 0,
       playtime_2weeks: 0,
     }));
     delete user.gameLibrary.gameIds;
-    console.log(`🔄 Migration gameLibrary: ${user.gameLibrary.games.length} jeux`);
+    console.log(
+      `🔄 Migration gameLibrary: ${user.gameLibrary.games.length} jeux`
+    );
   }
 }
 

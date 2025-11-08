@@ -14,10 +14,10 @@ function createNewsNotification(appId, newsItem, gameName = null) {
   return {
     title: gameName
       ? `${gameName} - Nouvelle actualité`
-      : "Nouvelle actualité jeu",
+      : 'Nouvelle actualité jeu',
     body: newsItem.title,
     data: {
-      type: "news",
+      type: 'news',
       url: newsItem.url,
       appId,
       newsId: newsItem.gid,
@@ -33,10 +33,10 @@ function createNewsNotification(appId, newsItem, gameName = null) {
  */
 function createAutoFollowNotification(appId, gameName) {
   return {
-    title: "Nouveau jeu suivi automatiquement",
+    title: 'Nouveau jeu suivi automatiquement',
     body: `${gameName} a été ajouté à vos jeux suivis`,
     data: {
-      type: "auto_follow",
+      type: 'auto_follow',
       appId,
     },
   };
@@ -54,7 +54,7 @@ function createGeneralNotification(title, body, data = {}) {
     title,
     body,
     data: {
-      type: "general",
+      type: 'general',
       ...data,
     },
   };

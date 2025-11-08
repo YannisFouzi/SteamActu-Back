@@ -3,24 +3,21 @@
  * Centralise la configuration MongoDB et l'initialisation
  */
 
-const mongoose = require("mongoose");
-const { DATABASE_CONFIG, SUCCESS_MESSAGES } = require("../config/app");
+const mongoose = require('mongoose');
+const { DATABASE_CONFIG, SUCCESS_MESSAGES } = require('../config/app');
 
 /**
  * Initialise la connexion a MongoDB
  */
 async function connectDatabase() {
   try {
-    await mongoose.connect(
-      DATABASE_CONFIG.uri,
-      DATABASE_CONFIG.options
-    );
+    await mongoose.connect(DATABASE_CONFIG.uri, DATABASE_CONFIG.options);
     console.log(SUCCESS_MESSAGES.MONGODB_CONNECTED);
     return true;
   } catch (error) {
     const safeMessage =
-      error && error.message ? error.message : "MongoDB connection failed";
-    console.error("Erreur connexion MongoDB:", safeMessage);
+      error && error.message ? error.message : 'MongoDB connection failed';
+    console.error('Erreur connexion MongoDB:', safeMessage);
     throw error;
   }
 }
@@ -31,11 +28,11 @@ async function connectDatabase() {
 async function disconnectDatabase() {
   try {
     await mongoose.disconnect();
-    console.log("Connexion MongoDB fermee");
+    console.log('Connexion MongoDB fermee');
   } catch (error) {
     const safeMessage =
-      error && error.message ? error.message : "MongoDB disconnect failed";
-    console.error("Erreur fermeture MongoDB:", safeMessage);
+      error && error.message ? error.message : 'MongoDB disconnect failed';
+    console.error('Erreur fermeture MongoDB:', safeMessage);
   }
 }
 
@@ -49,8 +46,8 @@ function setupGracefulShutdown() {
     process.exit(0);
   };
 
-  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 module.exports = {

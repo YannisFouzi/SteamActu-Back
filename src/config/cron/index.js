@@ -1,12 +1,12 @@
-const cron = require("node-cron");
-const { executeTask } = require("./taskExecutor");
+const cron = require('node-cron');
+const { executeTask } = require('./taskExecutor');
 const {
   checkNews,
   syncUserGroup,
   syncAllUsers,
   syncWishlists,
-} = require("./tasks");
-const { SCHEDULES } = require("./schedules");
+} = require('./tasks');
+const { SCHEDULES } = require('./schedules');
 
 /**
  * Initialise toutes les tâches planifiées de l'application
@@ -16,9 +16,9 @@ const { SCHEDULES } = require("./schedules");
  * - Rotation intelligente NEWS_CHECK : max 150 appels API/run
  */
 function initCronJobs() {
-  console.log("\n" + "=".repeat(70));
-  console.log("🔧 INITIALISATION DES TÂCHES PLANIFIÉES");
-  console.log("=".repeat(70));
+  console.log('\n' + '='.repeat(70));
+  console.log('🔧 INITIALISATION DES TÂCHES PLANIFIÉES');
+  console.log('='.repeat(70));
 
   /**
    * USER_GROUP_SYNC : Synchronisation des jeux possédés - 1×/SEMAINE (dimanche 3h)
@@ -28,7 +28,7 @@ function initCronJobs() {
    * - Acceptable : nouveaux jeux détectés dans la semaine
    */
   cron.schedule(SCHEDULES.USER_GROUP_SYNC, () => {
-    executeTask("👥 Sync jeux possédés (hebdo)", syncUserGroup);
+    executeTask('👥 Sync jeux possédés (hebdo)', syncUserGroup);
   });
 
   /**
@@ -37,7 +37,7 @@ function initCronJobs() {
    * - Impact négligeable sur quota API
    */
   cron.schedule(SCHEDULES.FULL_SYNC, () => {
-    executeTask("🔄 Sync complète (mensuelle)", syncAllUsers);
+    executeTask('🔄 Sync complète (mensuelle)', syncAllUsers);
   });
 
   /**
@@ -48,7 +48,7 @@ function initCronJobs() {
    * - 24 runs/jour × 150 appels = 3,600 appels/jour (3.6% quota Steam)
    */
   cron.schedule(SCHEDULES.NEWS_CHECK, () => {
-    executeTask("📰 Vérif news + notifs (1h)", checkNews);
+    executeTask('📰 Vérif news + notifs (1h)', checkNews);
   });
 
   /**
@@ -57,7 +57,7 @@ function initCronJobs() {
    * - Auto-follow si activé
    */
   cron.schedule(SCHEDULES.WISHLIST_SYNC, () => {
-    executeTask("🎯 Sync wishlists (hebdo)", syncWishlists);
+    executeTask('🎯 Sync wishlists (hebdo)', syncWishlists);
   });
 }
 

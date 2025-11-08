@@ -2,7 +2,7 @@
  * Processeur des actualités pour le fil d'actualités
  */
 
-const steamService = require("../steamService");
+const steamService = require('../steamService');
 
 /**
  * Traite les actualités pour une liste de jeux
@@ -12,7 +12,7 @@ const steamService = require("../steamService");
  * @returns {Object} - Résultat du traitement
  */
 async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
-  const { perGameLimit = 3, language = "fr" } = options;
+  const { perGameLimit = 3, language = 'fr' } = options;
 
   const feedItems = [];
   const latestNewsByGame = new Map();

@@ -9,8 +9,8 @@ const {
   fetchUserProfile,
   fetchUserWishlist,
   searchGames: fetchSearchGames,
-} = require("./steam/apiClient");
-const { registerOrUpdateUser } = require("./steam/userManager");
+} = require('./steam/apiClient');
+const { registerOrUpdateUser } = require('./steam/userManager');
 
 /**
  * Récupère la liste des jeux possédés par un utilisateur
@@ -34,7 +34,7 @@ async function getGameNews(
   appId,
   count = 5,
   maxLength = 300,
-  language = "fr",
+  language = 'fr',
   steamOnly = true
 ) {
   return fetchGameNews(appId, { count, maxLength, language, steamOnly });

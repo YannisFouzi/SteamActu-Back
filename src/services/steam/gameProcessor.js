@@ -1,5 +1,5 @@
-const steamService = require("../steamService");
-const { formatGame, updateGameCache } = require("./gameFormatter");
+const steamService = require('../steamService');
+const { formatGame, updateGameCache } = require('./gameFormatter');
 
 /**
  * Processeur pour traiter les jeux Steam par batch

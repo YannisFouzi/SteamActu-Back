@@ -3,13 +3,13 @@
  * Gère la validation OpenID et l'extraction du SteamID
  */
 
-const { ERROR_MESSAGES } = require("../config/app");
+const { ERROR_MESSAGES } = require('../config/app');
 
 /**
  * Middleware de validation des paramètres OpenID
  */
 const validateOpenIdResponse = (req, res, next) => {
-  if (!req.query["openid.identity"]) {
+  if (!req.query['openid.identity']) {
     return res.status(400).json({
       message: ERROR_MESSAGES.INVALID_OPENID,
     });

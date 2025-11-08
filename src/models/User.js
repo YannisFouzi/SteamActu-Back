@@ -1,4 +1,4 @@
-﻿const mongoose = require("mongoose");
+﻿const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
   steamId: {
@@ -23,7 +23,7 @@ const UserSchema = new mongoose.Schema({
       validator: function (v) {
         return v.length <= 500;
       },
-      message: "Vous ne pouvez suivre plus de 500 jeux",
+      message: 'Vous ne pouvez suivre plus de 500 jeux',
     },
   },
   recentActiveGames: {
@@ -44,7 +44,7 @@ const UserSchema = new mongoose.Schema({
       validator: function (v) {
         return v.length <= 200;
       },
-      message: "Maximum 200 jeux actifs récents",
+      message: 'Maximum 200 jeux actifs récents',
     },
   },
 
@@ -124,4 +124,4 @@ const UserSchema = new mongoose.Schema({
 
 // Note: Index sur steamId déjà créé automatiquement par l'option "unique: true"
 
-module.exports = mongoose.model("User", UserSchema);
+module.exports = mongoose.model('User', UserSchema);

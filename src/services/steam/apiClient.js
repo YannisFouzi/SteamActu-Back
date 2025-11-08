@@ -3,8 +3,8 @@
  * Centralise les appels à l'API Steam avec gestion d'erreurs
  */
 
-const axios = require("axios");
-const { STEAM_CONFIG } = require("../../config/app");
+const axios = require('axios');
+const { STEAM_CONFIG } = require('../../config/app');
 
 const STEAM_API_KEY = STEAM_CONFIG.apiKey;
 const STEAM_BASE_URL = STEAM_CONFIG.baseUrl;
@@ -43,7 +43,7 @@ async function fetchUserGames(steamId) {
   const params = {
     key: STEAM_API_KEY,
     steamid: steamId,
-    format: "json",
+    format: 'json',
     include_appinfo: true,
     include_played_free_games: true,
   };
@@ -62,7 +62,7 @@ async function fetchGameNews(appId, options = {}) {
   const {
     count = 5,
     maxLength = 300,
-    language = "fr",
+    language = 'fr',
     steamOnly = true,
   } = options;
 
@@ -70,13 +70,13 @@ async function fetchGameNews(appId, options = {}) {
     appid: appId,
     count,
     maxlength: maxLength,
-    format: "json",
+    format: 'json',
     language,
   };
 
   // Ajouter le filtre feeds si steamOnly est activé
   if (steamOnly) {
-    params.feeds = "steam_community_announcements,steam_updates";
+    params.feeds = 'steam_community_announcements,steam_updates';
   }
 
   const data = await makeApiCall(
@@ -96,7 +96,7 @@ async function fetchUserProfile(steamId) {
   const params = {
     key: STEAM_API_KEY,
     steamids: steamId,
-    format: "json",
+    format: 'json',
   };
 
   const data = await makeApiCall(
@@ -119,7 +119,7 @@ async function fetchGameDetails(appId) {
     const response = await axios.get(
       `https://store.steampowered.com/api/appdetails`,
       {
-        params: { appids: appId, l: "french" },
+        params: { appids: appId, l: 'french' },
         timeout: 8000, // ⚡ 8 secondes max (augmenté pour éviter timeouts)
       }
     );
@@ -138,83 +138,6 @@ async function fetchGameDetails(appId) {
   } catch (error) {
     // En cas d'erreur, retourner null sans bloquer
     return null;
-  }
-}
-
-/**
- * Récupère les détails de plusieurs jeux en une seule requête (BATCH)
- * ⚡ OPTIMISATION : Teste différents formats pour l'API Steam
- * @param {Array<number>} appIds - Liste des IDs de jeux
- * @returns {Promise<Object>} - Map {appId: détails} ou {appId: null} si erreur
- */
-async function fetchGameDetailsBatch(appIds) {
-  if (!appIds || appIds.length === 0) {
-    return {};
-  }
-
-  try {
-    // 🧪 TEST : Construire l'URL avec appids séparés par des virgules
-    const appIdsString = appIds.join(",");
-
-    console.log(
-      `🧪 TEST Batch API - Tentative avec ${
-        appIds.length
-      } jeux: ${appIdsString.substring(0, 50)}...`
-    );
-
-    const response = await axios.get(
-      `https://store.steampowered.com/api/appdetails`,
-      {
-        params: {
-          appids: appIdsString,
-          l: "french",
-        },
-        timeout: 15000, // 15 secondes pour un batch
-      }
-    );
-
-    console.log(`✅ Réponse reçue, parsing...`);
-
-    const results = {};
-
-    // Parser la réponse pour chaque jeu
-    appIds.forEach((appId) => {
-      const gameData = response.data[appId];
-
-      if (gameData?.success && gameData?.data) {
-        results[appId] = {
-          name: gameData.data.name,
-          header_image: gameData.data.header_image,
-          capsule_image: gameData.data.capsule_image,
-          short_description: gameData.data.short_description,
-          release_date: gameData.data.release_date?.date || "",
-        };
-        console.log(`   ✅ ${appId}: ${gameData.data.name}`);
-      } else {
-        // Jeu non trouvé ou erreur
-        results[appId] = null;
-        console.log(`   ❌ ${appId}: Pas de données`);
-      }
-    });
-
-    return results;
-  } catch (error) {
-    console.error(
-      `❌ Erreur fetchGameDetailsBatch (${appIds.length} jeux):`,
-      error.message
-    );
-    console.error(
-      `   URL tentée: https://store.steampowered.com/api/appdetails?appids=${appIds
-        .join(",")
-        .substring(0, 100)}...`
-    );
-
-    // En cas d'erreur, retourner un objet avec null pour chaque appId
-    const results = {};
-    appIds.forEach((appId) => {
-      results[appId] = null;
-    });
-    return results;
   }
 }
 
@@ -279,7 +202,7 @@ async function fetchUserWishlist(steamId) {
             details?.header_image ||
             `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appid}/header.jpg`,
           review_score: 0,
-          review_desc: "",
+          review_desc: '',
           reviews_percent: 0,
           // ❌ Date de sortie supprimée (pas utile pour la wishlist)
         };
@@ -308,12 +231,12 @@ async function fetchUserWishlist(steamId) {
 async function searchGames(query, limit = 5) {
   try {
     const response = await axios.get(
-      "https://store.steampowered.com/api/storesearch/",
+      'https://store.steampowered.com/api/storesearch/',
       {
         params: {
           term: query,
-          l: "french",
-          cc: "fr",
+          l: 'french',
+          cc: 'fr',
         },
         timeout: 5000,
       }

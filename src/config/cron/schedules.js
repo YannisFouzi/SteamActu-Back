@@ -14,17 +14,17 @@
 const SCHEDULES = {
   // Vérification des actualités TOUTES LES 1 HEURE (priorité notifications push)
   // Rotation intelligente : max 150 jeux/run, système de rotation par lastNewsCheck
-  NEWS_CHECK: "0 0 * * * *",
+  NEWS_CHECK: '0 0 * * * *',
 
   // Synchronisation des jeux possédés 1×/SEMAINE (dimanche 3h)
   // Rotation 12 groupes, cooldown 6h, tous les users seront sync en 1 dimanche
-  USER_GROUP_SYNC: "0 0 3 * * 0",
+  USER_GROUP_SYNC: '0 0 3 * * 0',
 
   // Synchronisation complète MENSUELLE (le 1er à 2h) - Filet de sécurité
-  FULL_SYNC: "0 0 2 1 * *",
+  FULL_SYNC: '0 0 2 1 * *',
 
   // Synchronisation des wishlists 1×/SEMAINE (lundi 3h)
-  WISHLIST_SYNC: "0 0 3 * * 1",
+  WISHLIST_SYNC: '0 0 3 * * 1',
 };
 
 module.exports = {

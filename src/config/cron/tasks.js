@@ -1,6 +1,6 @@
-const gamesSyncService = require("../../services/gamesSyncService");
-const newsRotationService = require("../../services/newsRotationService");
-const syncWishlistService = require("../../services/syncWishlistService");
+const gamesSyncService = require('../../services/gamesSyncService');
+const newsRotationService = require('../../services/newsRotationService');
+const syncWishlistService = require('../../services/syncWishlistService');
 
 /**
  * Définitions des tâches planifiées
@@ -14,14 +14,13 @@ async function checkNews() {
   return `${stats.gamesChecked} jeux vérifiés, ${stats.notificationsSent} notifications envoyées`;
 }
 
-
 /**
  * Synchronisation par groupe d'utilisateurs
  */
 async function syncUserGroup() {
   // DEBUG/MIGRATION: Log début cron
-  console.log("\n" + "=".repeat(70));
-  console.log("[DEBUG/MIGRATION] CRON USER_GROUP_SYNC - START");
+  console.log('\n' + '='.repeat(70));
+  console.log('[DEBUG/MIGRATION] CRON USER_GROUP_SYNC - START');
   const startTime = Date.now();
 
   const currentHour = new Date().getHours();
@@ -30,7 +29,7 @@ async function syncUserGroup() {
 
   console.log(`Heure actuelle: ${new Date().toLocaleTimeString()}`);
   console.log(`Groupe index: ${groupIndex} / ${totalGroups}`);
-  console.log("=".repeat(70) + "\n");
+  console.log('='.repeat(70) + '\n');
 
   const stats = await gamesSyncService.syncUserGroupByIndex(
     groupIndex,
@@ -39,11 +38,11 @@ async function syncUserGroup() {
 
   // DEBUG/MIGRATION: Log fin cron
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-  console.log("\n" + "=".repeat(70));
-  console.log("[DEBUG/MIGRATION] CRON USER_GROUP_SYNC - END");
+  console.log('\n' + '='.repeat(70));
+  console.log('[DEBUG/MIGRATION] CRON USER_GROUP_SYNC - END');
   console.log(`Durée: ${duration}s`);
   console.log(`Stats: ${JSON.stringify(stats)}`);
-  console.log("=".repeat(70) + "\n");
+  console.log('='.repeat(70) + '\n');
 
   return {
     ...stats,
@@ -66,7 +65,6 @@ async function syncWishlists() {
   const stats = await syncWishlistService.syncAllUsersWishlists();
   return `${stats.successCount} utilisateurs synchronisés, ${stats.totalNewGames} nouveaux jeux, ${stats.totalAutoFollowed} auto-suivis`;
 }
-
 
 module.exports = {
   checkNews,

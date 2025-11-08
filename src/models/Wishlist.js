@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 /**
  * Schéma pour les jeux wishlistés
@@ -29,8 +29,8 @@ const WishlistSchema = new mongoose.Schema({
   },
   img_icon_url: {
     type: String,
-    default: "",
+    default: '',
   },
 });
 
-module.exports = mongoose.model("Wishlist", WishlistSchema);
+module.exports = mongoose.model('Wishlist', WishlistSchema);

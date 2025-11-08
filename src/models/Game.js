@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 /**
  * Schéma pour les jeux Steam
@@ -28,8 +28,8 @@ const GameSchema = new mongoose.Schema({
   },
   img_icon_url: {
     type: String,
-    default: "",
+    default: '',
   },
 });
 
-module.exports = mongoose.model("Game", GameSchema);
+module.exports = mongoose.model('Game', GameSchema);

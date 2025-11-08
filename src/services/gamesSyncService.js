@@ -1,10 +1,10 @@
-const User = require("../models/User");
-const { syncUserGames } = require("./gameSync/userProcessor");
+const User = require('../models/User');
+const { syncUserGames } = require('./gameSync/userProcessor');
 const {
   createStats,
   updateStats,
   createUserGroup,
-} = require("./gameSync/statsManager");
+} = require('./gameSync/statsManager');
 
 /**
  * Synchronise les jeux de tous les utilisateurs enregistrés
@@ -12,7 +12,7 @@ const {
  */
 async function syncAllUsersGames() {
   console.log(
-    "Démarrage de la synchronisation automatique des bibliothèques..."
+    'Démarrage de la synchronisation automatique des bibliothèques...'
   );
   const stats = createStats();
 
@@ -36,11 +36,11 @@ async function syncAllUsersGames() {
       }
     }
 
-    console.log("Synchronisation automatique terminée:", stats);
+    console.log('Synchronisation automatique terminée:', stats);
     return stats;
   } catch (error) {
     console.error(
-      "Erreur lors de la synchronisation automatique des jeux:",
+      'Erreur lors de la synchronisation automatique des jeux:',
       error
     );
     throw error;
@@ -68,7 +68,7 @@ async function syncUserGroupByIndex(groupIndex, totalGroups) {
 
     // Si aucun utilisateur, retourner immédiatement
     if (allUsers.length === 0) {
-      console.log("Aucun utilisateur trouvé, rien à synchroniser.");
+      console.log('Aucun utilisateur trouvé, rien à synchroniser.');
       return stats;
     }
 
@@ -80,13 +80,23 @@ async function syncUserGroupByIndex(groupIndex, totalGroups) {
     );
 
     // DEBUG/MIGRATION: Log groupe details
-    console.log(`[DEBUG/MIGRATION] Utilisateurs à traiter dans le groupe ${groupIndex}:`);
+    console.log(
+      `[DEBUG/MIGRATION] Utilisateurs à traiter dans le groupe ${groupIndex}:`
+    );
     console.log(`  - Total users dans BDD: ${allUsers.length}`);
-    console.log(`  - Groupe ${groupIndex} contient: ${groupUsers.length} users (index ${startIndex}-${endIndex - 1})`);
+    console.log(
+      `  - Groupe ${groupIndex} contient: ${
+        groupUsers.length
+      } users (index ${startIndex}-${endIndex - 1})`
+    );
     if (groupUsers.length > 0) {
       console.log(`  - Users dans ce groupe:`);
       groupUsers.forEach((u, i) => {
-        console.log(`    ${i + 1}. ${u.username} (${u.steamId}) - lastChecked: ${u.lastChecked?.toISOString() || 'null'}`);
+        console.log(
+          `    ${i + 1}. ${u.username} (${u.steamId}) - lastChecked: ${
+            u.lastChecked?.toISOString() || 'null'
+          }`
+        );
       });
     }
     console.log('');

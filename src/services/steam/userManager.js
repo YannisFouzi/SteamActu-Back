@@ -3,8 +3,8 @@
  * Gère la création et mise à jour des utilisateurs dans la base de données
  */
 
-const User = require("../../models/User");
-const { fetchUserProfile } = require("./apiClient");
+const User = require('../../models/User');
+const { fetchUserProfile } = require('./apiClient');
 
 /**
  * Enregistre ou met à jour un utilisateur dans la base de données
@@ -22,16 +22,16 @@ async function registerOrUpdateUser(steamId) {
       return user;
     }
 
-    console.log(`\n${"=".repeat(70)}`);
+    console.log(`\n${'='.repeat(70)}`);
     console.log(`🆕 NOUVEL UTILISATEUR - Création + Sync immédiate`);
-    console.log(`${"=".repeat(70)}`);
+    console.log(`${'='.repeat(70)}`);
 
     // Récupérer les informations du profil Steam
     const profileData = await fetchUserProfile(steamId);
 
     if (!profileData) {
       throw new Error(
-        "Impossible de récupérer les informations du profil Steam"
+        'Impossible de récupérer les informations du profil Steam'
       );
     }
 
@@ -52,13 +52,17 @@ async function registerOrUpdateUser(steamId) {
     console.log(`⚡ Lancement sync immédiate des jeux...`);
 
     try {
-      const { syncUserGames } = require("../gameSync/userProcessor");
+      const { syncUserGames } = require('../gameSync/userProcessor');
       const syncResult = await syncUserGames(user);
 
       if (syncResult.error) {
         console.error(`⚠️ Erreur sync jeux (non bloquant):`, syncResult.error);
       } else {
-        console.log(`✅ Sync jeux réussie: ${syncResult.updatedGames?.length || 0} nouveaux jeux`);
+        console.log(
+          `✅ Sync jeux réussie: ${
+            syncResult.updatedGames?.length || 0
+          } nouveaux jeux`
+        );
       }
     } catch (syncError) {
       console.error(`⚠️ Erreur sync jeux (non bloquant):`, syncError.message);
@@ -71,7 +75,7 @@ async function registerOrUpdateUser(steamId) {
     // Recharger le user pour avoir les données à jour (après sync games)
     user = await User.findOne({ steamId });
 
-    console.log(`${"=".repeat(70)}\n`);
+    console.log(`${'='.repeat(70)}\n`);
 
     return user;
   } catch (error) {
