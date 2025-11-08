@@ -1,69 +1,108 @@
-const gamesSyncService = require('../../services/gamesSyncService');
-const newsRotationService = require('../../services/newsRotationService');
+// Services réels côté jeux (confirmés par ton fichier)
+const gamesSyncService = require('../../services/gamesSyncService'); // expose: syncAllUsersGames, syncUserGroupByIndex, syncUserGames
+// Wishlist: on gère la compatibilité côté code (groupée si dispo, sinon full)
 const syncWishlistService = require('../../services/syncWishlistService');
 
-/**
- * Définitions des tâches planifiées
- */
-
-/**
- * Vérification des actualités avec rotation intelligente (NOUVEAU)
- */
 async function checkNews() {
-  const stats = await newsRotationService.checkNewsRotation();
-  return `${stats.gamesChecked} jeux vérifiés, ${stats.notificationsSent} notifications envoyées`;
-}
-
-/**
- * Synchronisation par groupe d'utilisateurs
- */
-async function syncUserGroup() {
-  // DEBUG/MIGRATION: Log début cron
-  console.log('\n' + '='.repeat(70));
-  console.log('[DEBUG/MIGRATION] CRON USER_GROUP_SYNC - START');
-  const startTime = Date.now();
-
-  const currentHour = new Date().getHours();
-  const groupIndex = currentHour % 12;
-  const totalGroups = 12;
-
-  console.log(`Heure actuelle: ${new Date().toLocaleTimeString()}`);
-  console.log(`Groupe index: ${groupIndex} / ${totalGroups}`);
-  console.log('='.repeat(70) + '\n');
-
-  const stats = await gamesSyncService.syncUserGroupByIndex(
-    groupIndex,
-    totalGroups
-  );
-
-  // DEBUG/MIGRATION: Log fin cron
-  const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-  console.log('\n' + '='.repeat(70));
-  console.log('[DEBUG/MIGRATION] CRON USER_GROUP_SYNC - END');
-  console.log(`Durée: ${duration}s`);
-  console.log(`Stats: ${JSON.stringify(stats)}`);
-  console.log('='.repeat(70) + '\n');
-
+  const stats = await require('../../services/newsRotationService').checkNewsRotation();
   return {
+    message: `${stats.gamesChecked} jeux vérifiés, ${stats.notificationsSent} notifications envoyées`,
     ...stats,
-    group: `${groupIndex + 1}/${totalGroups}`,
   };
 }
 
 /**
- * Synchronisation complète hebdomadaire
+ * Sync bibliothèques par groupe.
+ * -> utilise gamesSyncService.syncUserGroupByIndex(groupIndex, groupsTotal)
  */
-async function syncAllUsers() {
+async function syncUserGroup(opts = {}) {
+  const { groupIndex = 0, groupsTotal = 1 } = opts;
+
+  // Appelle la méthode groupée EXISTANTE
+  if (typeof gamesSyncService.syncUserGroupByIndex === 'function') {
+    const stats = await gamesSyncService.syncUserGroupByIndex(groupIndex, groupsTotal);
+    return {
+      message: `Groupe ${groupIndex + 1}/${groupsTotal} → ${stats.usersProcessed ?? 0} users`,
+      groupIndex,
+      groupsTotal,
+      ...stats,
+    };
+  }
+
+  // Fallback ultime (devrait ne jamais arriver vu tes services)
   const stats = await gamesSyncService.syncAllUsersGames();
-  return stats;
+  return {
+    message: `Fallback FULL (service groupé jeux absent) → ${stats.usersProcessed ?? 0} users`,
+    groupIndex,
+    groupsTotal,
+    ...stats,
+  };
 }
 
 /**
- * Synchronisation des wishlists de tous les utilisateurs (NOUVEAU)
+ * FULL sync (manuel) — alignée sur ta vraie API: syncAllUsersGames()
  */
-async function syncWishlists() {
-  const stats = await syncWishlistService.syncAllUsersWishlists();
-  return `${stats.successCount} utilisateurs synchronisés, ${stats.totalNewGames} nouveaux jeux, ${stats.totalAutoFollowed} auto-suivis`;
+async function syncAllUsers() {
+  const stats = await gamesSyncService.syncAllUsersGames();
+  return {
+    message: `${stats.usersProcessed ?? 0} utilisateurs synchronisés (FULL)`,
+    ...stats,
+  };
+}
+
+/**
+ * Sync wishlists par groupe si le service le supporte.
+ * Sinon: seul groupIndex=0 exécute un FULL (les autres groupes no-op pour éviter 12x la charge).
+ */
+async function syncWishlists(opts = {}) {
+  const { groupIndex = 0, groupsTotal = 1 } = opts;
+
+  // Méthode groupée disponible ?
+  if (syncWishlistService && typeof syncWishlistService.syncWishlistsByGroup === 'function') {
+    const stats = await syncWishlistService.syncWishlistsByGroup(groupIndex, groupsTotal);
+    return {
+      message:
+        `Groupe ${groupIndex + 1}/${groupsTotal} → `
+        + `${stats.usersProcessed ?? 0} users, `
+        + `${stats.newGames ?? 0} nouveaux jeux, `
+        + `${stats.totalAutoFollowed ?? 0} auto-suivis`,
+      groupIndex,
+      groupsTotal,
+      ...stats,
+    };
+  }
+
+  // Pas de méthode groupée → exécuter un seul "full" par jour (groupe 0), no-op sinon.
+  if (syncWishlistService && typeof syncWishlistService.syncAllUsersWishlists === 'function') {
+    if (groupIndex === 0) {
+      const stats = await syncWishlistService.syncAllUsersWishlists();
+      return {
+        message:
+          `FULL wishlist (fallback, groupe 1/${groupsTotal}) → `
+          + `${stats.successCount ?? stats.usersProcessed ?? 0} users, `
+          + `${stats.newGames ?? 0} nouveaux jeux, `
+          + `${stats.totalAutoFollowed ?? 0} auto-suivis`,
+        groupIndex,
+        groupsTotal,
+        ...stats,
+      };
+    }
+    // Groupes 1..11 : no-op pour éviter 12x le FULL
+    return {
+      message: `No-op wishlist (pas de méthode groupée) pour groupe ${groupIndex + 1}/${groupsTotal}`,
+      groupIndex,
+      groupsTotal,
+      skipped: true,
+    };
+  }
+
+  // Service wishlist absent
+  return {
+    message: 'Wishlist service indisponible: aucune action exécutée',
+    groupIndex,
+    groupsTotal,
+    skipped: true,
+  };
 }
 
 module.exports = {

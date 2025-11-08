@@ -1,34 +1,35 @@
 /**
- * Utilitaire pour exécuter les tâches cron avec gestion d'erreurs standardisée
+ * Exécuteur standardisé pour les tâches cron (logs + timing + catch)
  */
-
-/**
- * Exécute une tâche avec gestion d'erreurs et logs standardisés
- * @param {string} taskName - Nom de la tâche pour les logs
- * @param {Function} taskFunction - Fonction à exécuter
- * @param {Object} _context - Contexte optionnel pour les logs
- */
-async function executeTask(taskName, taskFunction, _context = {}) {
-  console.log(`Exécution de la tâche planifiée: ${taskName}`);
+async function executeTask(taskName, taskFunction) {
+  const started = Date.now();
+  console.log(`[CRON][START] ${taskName}`);
 
   try {
     const result = await taskFunction();
 
+    const ms = Date.now() - started;
+    const sec = Math.round(ms / 1000);
+
     if (result && typeof result === 'object') {
-      console.log(`Tâche ${taskName} terminée:`, result);
-    } else if (typeof result === 'number') {
-      console.log(`Tâche ${taskName} terminée: ${result} éléments traités`);
+      const msg = result.message ? ` → ${result.message}` : '';
+      console.log(`[CRON][DONE] ${taskName} in ${sec}s${msg}`);
+      console.log(JSON.stringify({
+        level: 'info',
+        tag: 'cron_done',
+        task: taskName,
+        durationMs: ms,
+        ...result,
+      }));
     } else {
-      console.log(`Tâche ${taskName} terminée avec succès`);
+      console.log(`[CRON][DONE] ${taskName} in ${sec}s`);
     }
 
     return result;
   } catch (error) {
-    console.error(`Erreur lors de ${taskName}:`, error);
+    console.error(`[CRON][ERROR] ${taskName}:`, error?.stack || error);
     return null;
   }
 }
 
-module.exports = {
-  executeTask,
-};
+module.exports = { executeTask };

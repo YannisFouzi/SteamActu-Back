@@ -1,32 +1,20 @@
 /**
- * Configuration des horaires pour les tâches cron
- * Format: "secondes minutes heures jour mois jour_semaine"
- *
- * - USER_GROUP_SYNC : 30 min → 1×/semaine (dimanche 3h)
- * - WISHLIST_SYNC : 4×/jour → 1×/semaine (lundi 3h)
- * - NEWS_CHECK : 6h → 1h (priorité notifications)
- * - FULL_SYNC : mensuel → filet de sécurité
- * - LIBRARY_SYNC : DÉSACTIVÉ (redondant avec USER_GROUP_SYNC)
- *
- * Philosophie : Prioriser freshness des news, accepter retard sur syncs bibliothèque/wishlist
+ * Format node-cron : "second minute hour day month dayOfWeek"
+ * Europe/Paris gérée dans index.js via { timezone }
  */
-
 const SCHEDULES = {
-  // Vérification des actualités TOUTES LES 1 HEURE (priorité notifications push)
-  // Rotation intelligente : max 150 jeux/run, système de rotation par lastNewsCheck
+  // Vérification des news toutes les heures à HH:00:00
   NEWS_CHECK: '0 0 * * * *',
 
-  // Synchronisation des jeux possédés 1×/SEMAINE (dimanche 3h)
-  // Rotation 12 groupes, cooldown 6h, tous les users seront sync en 1 dimanche
-  USER_GROUP_SYNC: '0 0 3 * * 0',
+  // USER_GROUP_SYNC : tous les jours de 03:00 à 14:00 (12 exécutions = 12 groupes)
+  USER_GROUP_SYNC_WINDOW: '0 0 3-14 * * *',
 
-  // Synchronisation complète MENSUELLE (le 1er à 2h) - Filet de sécurité
-  FULL_SYNC: '0 0 2 1 * *',
+  // WISHLIST_SYNC : tous les jours de 03:30 à 14:30 (12 exécutions = 12 groupes, décalé de 30 min)
+  // Si pas de méthode groupée côté service, seul le groupe 0 fera un "full" (voir tasks.js)
+  WISHLIST_SYNC_WINDOW: '0 30 3-14 * * *',
 
-  // Synchronisation des wishlists 1×/SEMAINE (lundi 3h)
-  WISHLIST_SYNC: '0 0 3 * * 1',
+  // FULL_SYNC : non planifié (manuel si besoin)
+  // FULL_SYNC: '0 0 2 1 * *',
 };
 
-module.exports = {
-  SCHEDULES,
-};
+module.exports = { SCHEDULES };
