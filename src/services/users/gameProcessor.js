@@ -6,22 +6,6 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_ACTIVE_GAMES = 200;
 
 /**
- * Migre l'ancienne structure de followedGames vers la nouvelle
- * @param {Object} user - Utilisateur
- */
-function migrateFollowedGames(user) {
-  if (!user.followedGames) {
-    user.followedGames = [];
-  } else if (
-    user.followedGames.length > 0 &&
-    typeof user.followedGames[0] === 'object'
-  ) {
-    // Migration à la volée : convertir l'ancienne structure en nouvelle
-    user.followedGames = user.followedGames.map((game) => game.appId);
-  }
-}
-
-/**
  * Sanitise et filtre la liste des jeux actifs
  * @param {Array} games - Liste des jeux bruts
  * @returns {Array} - Jeux sanitisés et triés
@@ -63,23 +47,6 @@ function sanitizeActiveGames(games) {
     .slice(0, MAX_ACTIVE_GAMES);
 }
 
-function migrateGameLibrary(user) {
-  if (user.gameLibrary?.gameIds && Array.isArray(user.gameLibrary.gameIds)) {
-    user.gameLibrary.games = user.gameLibrary.gameIds.map((gameId) => ({
-      gameId,
-      playtime_forever: 0,
-      rtime_last_played: 0,
-      playtime_2weeks: 0,
-    }));
-    delete user.gameLibrary.gameIds;
-    console.log(
-      `🔄 Migration gameLibrary: ${user.gameLibrary.games.length} jeux`
-    );
-  }
-}
-
 module.exports = {
-  migrateFollowedGames,
   sanitizeActiveGames,
-  migrateGameLibrary,
 };

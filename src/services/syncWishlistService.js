@@ -19,7 +19,6 @@ const { fetchGameDetails } = require('./steam/apiClient');
 const { isInBucket } = require('../utils/userBucket');
 const { CRON_CONFIG } = require('../config/app');
 const { addUserToGameSubscription } = require('./users/subscriptionManager');
-const { migrateFollowedGames } = require('./users/gameProcessor');
 
 /**
  * Sleep utilitaire (ms)
@@ -257,7 +256,6 @@ async function syncUserWishlist(steamId, wishlistData = null) {
     );
 
     // Récupérer gameIds actuels en BDD
-    migrateFollowedGames(user);
     if (!Array.isArray(user.followedGames)) {
       user.followedGames = [];
     }

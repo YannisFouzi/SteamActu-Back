@@ -1,10 +1,9 @@
 /**
  * Processeur pour la synchronisation des jeux utilisateur
  *
- * - Mise à jour de gameLibrary.gameIds[] au lieu de games[]
+ * - Mise à jour de gameLibrary.games[] avec la structure normalisée
  * - Création/mise à jour des documents Game en collection séparée
- * - Intégration de la détection des jeux supprimés (depuis syncLibraryService)
- * - Auto-follow avec mise à jour GameSubscription en bulk
+ * - Détection des jeux supprimés et gestion de l'auto-follow
  */
 
 const steamService = require('../steamService');
@@ -18,9 +17,8 @@ function canSyncUser(user) {
   const lastSyncTime = user.lastChecked || new Date(0);
   const canSync = lastSyncTime <= cooldownTime;
 
-  // DEBUG/MIGRATION: Log cooldown status
   console.log(
-    `[DEBUG/MIGRATION] canSyncUser() - User: ${user.username} (${user.steamId})`
+    `[SYNC] canSyncUser() - User: ${user.username} (${user.steamId})`
   );
   console.log(`  - lastChecked: ${lastSyncTime.toISOString()}`);
   console.log(`  - Cooldown expires at: ${cooldownTime.toISOString()}`);
@@ -31,19 +29,15 @@ function canSyncUser(user) {
 }
 
 function normalizeFollowedGames(user) {
-  const followedGamesSet = new Set();
-
-  if (user.followedGames && Array.isArray(user.followedGames)) {
-    user.followedGames.forEach((game) => {
-      if (typeof game === 'string') {
-        followedGamesSet.add(game);
-      } else if (game && game.appId) {
-        followedGamesSet.add(game.appId);
-      }
-    });
+  if (!Array.isArray(user.followedGames)) {
+    return new Set();
   }
 
-  return followedGamesSet;
+  return new Set(
+    user.followedGames
+      .filter((game) => typeof game === 'string')
+      .map((appId) => appId)
+  );
 }
 
 /**
@@ -56,9 +50,8 @@ async function upsertGamesCollection(steamGames) {
     return;
   }
 
-  // DEBUG/MIGRATION: Log avant upsert
   const startTime = Date.now();
-  console.log(`[DEBUG/MIGRATION] upsertGamesCollection() - START`);
+  console.log(`[SYNC] upsertGamesCollection() - START`);
   console.log(`  - Jeux à traiter: ${steamGames.length}`);
 
   const appIds = steamGames.map((steamGame) => steamGame.appid.toString());
@@ -77,7 +70,7 @@ async function upsertGamesCollection(steamGames) {
 
   if (newGames.length === 0) {
     console.log(
-      `[DEBUG/MIGRATION] upsertGamesCollection() - Aucun nouvel appId à insérer ✅`
+      `[SYNC] upsertGamesCollection() - Aucun nouvel appId à insérer ✅`
     );
     return;
   }
@@ -98,9 +91,8 @@ async function upsertGamesCollection(steamGames) {
 
   await Game.bulkWrite(bulkOps, { ordered: false });
 
-  // DEBUG/MIGRATION: Log après upsert
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-  console.log(`[DEBUG/MIGRATION] upsertGamesCollection() - END`);
+  console.log(`[SYNC] upsertGamesCollection() - END`);
   console.log(`  - Inserts réalisés: ${bulkOps.length}`);
   console.log(`  - Durée: ${duration}s`);
 }
@@ -218,9 +210,8 @@ async function syncUserGames(user) {
   const result = createUserResult(user);
 
   try {
-    // DEBUG/MIGRATION: Log début sync
     const startTime = Date.now();
-    console.log(`\n[DEBUG/MIGRATION] syncUserGames() - START`);
+    console.log(`\n[SYNC] syncUserGames() - START`);
     console.log(`  - User: ${user.username} (${user.steamId})`);
 
     console.log(
@@ -234,9 +225,7 @@ async function syncUserGames(user) {
           user.username
         } synchronisé récemment (${lastSyncTime.toISOString()}), en attente.`
       );
-      console.log(
-        `[DEBUG/MIGRATION] syncUserGames() - SKIPPED (cooldown actif)\n`
-      );
+      console.log(`[SYNC] syncUserGames() - SKIPPED (cooldown actif)\n`);
       return {
         ...result,
         skipped: true,
@@ -244,22 +233,18 @@ async function syncUserGames(user) {
       };
     }
 
-    // DEBUG/MIGRATION: Log appel Steam API
-    console.log(`[DEBUG/MIGRATION] Steam API GetOwnedGames`);
+    console.log(`[SYNC] Steam API GetOwnedGames`);
     console.log(`  - steamId: ${user.steamId}`);
 
     const userGames = await steamService.getUserGames(user.steamId);
 
     if (!userGames || !Array.isArray(userGames)) {
       console.error(`Réponse invalide de l'API Steam pour ${user.username}`);
-      console.log(
-        `[DEBUG/MIGRATION] syncUserGames() - ERROR (Invalid Steam response)\n`
-      );
+      console.log(`[SYNC] syncUserGames() - ERROR (Invalid Steam response)\n`);
       result.error = "Réponse invalide de l'API Steam";
       return result;
     }
 
-    // DEBUG/MIGRATION: Log jeux récupérés
     console.log(`  - Jeux récupérés: ${userGames.length}`);
 
     await upsertGamesCollection(userGames);
@@ -320,9 +305,8 @@ async function syncUserGames(user) {
       `✅ Bibliothèque mise à jour: ${user.gameLibrary.games.length} jeux`
     );
 
-    // DEBUG/MIGRATION: Log résultat final
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`\n[DEBUG/MIGRATION] syncUserGames() - RÉSULTAT`);
+    console.log(`\n[SYNC] syncUserGames() - RÉSULTAT`);
     console.log(`  - User: ${user.username} (${user.steamId})`);
     console.log(
       `  - gameLibrary.games: ${user.gameLibrary.games.length} jeux écrits ✅`

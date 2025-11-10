@@ -3,7 +3,6 @@
  */
 
 const User = require('../models/User');
-const { migrateGameLibrary } = require('../services/users/gameProcessor');
 
 /**
  * Middleware pour vérifier qu'un utilisateur existe
@@ -32,20 +31,6 @@ async function validateUserExists(req, res, next) {
 }
 
 /**
- * Middleware pour migrer les données utilisateur
- * Effectue la migration de la bibliothèque de jeux
- * @param {Object} req - Requête Express
- * @param {Object} res - Réponse Express
- * @param {Function} next - Fonction next
- */
-function migrateUserData(req, res, next) {
-  if (req.user) {
-    migrateGameLibrary(req.user);
-  }
-  next();
-}
-
-/**
  * Valide le format des jeux actifs
  * @param {Array} games - Liste des jeux
  * @returns {boolean} - True si valide
@@ -56,6 +41,5 @@ function validateActiveGamesFormat(games) {
 
 module.exports = {
   validateUserExists,
-  migrateUserData,
   validateActiveGamesFormat,
 };

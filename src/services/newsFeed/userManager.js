@@ -19,11 +19,7 @@ async function getUserAndFollowedGames(steamId) {
     if (user && Array.isArray(user.followedGames)) {
       user.followedGames.forEach((appId) => {
         if (typeof appId === 'string') {
-          // Nouvelle structure : juste l'appId
           followedSet.add(appId);
-        } else if (appId && appId.appId) {
-          // Ancienne structure : objet avec appId
-          followedSet.add(appId.appId);
         }
       });
     }

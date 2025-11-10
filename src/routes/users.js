@@ -3,17 +3,13 @@ const router = express.Router();
 const User = require('../models/User');
 const GameSubscription = require('../models/GameSubscription');
 const steamService = require('../services/steamService');
-const { syncUserGames } = require('../services/gameSync/userProcessor');
+require('../services/gameSync/userProcessor');
 const { syncUserWishlist } = require('../services/syncWishlistService');
 const {
   validateUserExists,
-  migrateUserData,
   validateActiveGamesFormat,
 } = require('../middleware/userValidators');
-const {
-  migrateFollowedGames,
-  sanitizeActiveGames,
-} = require('../services/users/gameProcessor');
+const { sanitizeActiveGames } = require('../services/users/gameProcessor');
 const {
   addUserToGameSubscription,
   removeUserFromGameSubscription,
@@ -35,11 +31,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Récupérer les informations d'un utilisateur
-router.get(
-  '/:steamId',
-  validateUserExists,
-  migrateUserData,
-  async (req, res) => {
+router.get('/:steamId', validateUserExists, async (req, res) => {
     try {
       const { steamId } = req.params;
       console.log('Récupération utilisateur:', steamId);
@@ -72,7 +64,6 @@ router.get(
 router.put(
   '/:steamId/notifications',
   validateUserExists,
-  migrateUserData,
   async (req, res) => {
     try {
       const {
@@ -118,7 +109,6 @@ router.put(
 router.put(
   '/:steamId/active-games',
   validateUserExists,
-  migrateUserData,
   async (req, res) => {
     try {
       const { games } = req.body || {};
@@ -144,18 +134,15 @@ router.put(
 );
 
 // Suivre un jeu
-router.post(
-  '/:steamId/follow',
-  validateUserExists,
-  migrateUserData,
-  async (req, res) => {
+router.post('/:steamId/follow', validateUserExists, async (req, res) => {
     try {
       const { steamId } = req.params;
       const { appId, name, logoUrl } = req.body;
       const user = req.user;
 
-      // Migrer l'ancienne structure si nécessaire
-      migrateFollowedGames(user);
+      if (!Array.isArray(user.followedGames)) {
+        user.followedGames = [];
+      }
 
       // Vérifier si le jeu est déjà suivi
       const isAlreadyFollowed = user.followedGames.includes(appId);
@@ -186,14 +173,14 @@ router.post(
 router.delete(
   '/:steamId/follow/:appId',
   validateUserExists,
-  migrateUserData,
   async (req, res) => {
     try {
       const { steamId, appId } = req.params;
       const user = req.user;
 
-      // Migrer l'ancienne structure si nécessaire
-      migrateFollowedGames(user);
+      if (!Array.isArray(user.followedGames)) {
+        user.followedGames = [];
+      }
 
       // Vérifier si l'utilisateur suit ce jeu
       if (!user.followedGames.includes(appId)) {
