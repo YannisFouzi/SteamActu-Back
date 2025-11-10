@@ -19,6 +19,36 @@ const {
   getLastUpdateTimestamp,
 } = require('../services/steam/gameFormatter');
 
+/**
+ * Endpoint léger pour vérifier les versions de données
+ * Permet au frontend de savoir si les données ont changé sans télécharger tout
+ */
+router.get('/status/:steamId', validateSteamId, async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    console.log(`Requête status pour steamId: ${steamId}`);
+
+    const user = await User.findOne({ steamId })
+      .select('gamesVersion wishlistVersion')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    // Renvoyer les versions en ISO string (ou null si pas encore défini)
+    res.json({
+      gamesVersion: user.gamesVersion ? user.gamesVersion.toISOString() : null,
+      wishlistVersion: user.wishlistVersion
+        ? user.wishlistVersion.toISOString()
+        : null,
+    });
+  } catch (error) {
+    console.error('Erreur dans /status/:steamId:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
 router.get('/games/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;

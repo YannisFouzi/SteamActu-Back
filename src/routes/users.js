@@ -165,6 +165,10 @@ router.post(
 
       // 1. Ajouter à user.followedGames
       user.followedGames.push(appId);
+
+      // ✨ Bump version pour invalidation cache frontend
+      user.gamesVersion = new Date();
+
       await user.save();
 
       // 2. Mettre à jour GameSubscription avec imageUrl
@@ -200,6 +204,10 @@ router.delete(
       user.followedGames = user.followedGames.filter(
         (gameId) => gameId !== appId
       );
+
+      // ✨ Bump version pour invalidation cache frontend
+      user.gamesVersion = new Date();
+
       await user.save();
 
       // 2. Mettre à jour GameSubscription

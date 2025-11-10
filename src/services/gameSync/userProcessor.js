@@ -310,6 +310,10 @@ async function syncUserGames(user) {
     };
 
     user.lastChecked = new Date();
+
+    // ✨ Bump version pour invalidation cache frontend
+    user.gamesVersion = new Date();
+
     await user.save();
 
     console.log(

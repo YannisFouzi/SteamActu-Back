@@ -237,6 +237,10 @@ async function syncUserWishlist(steamId, wishlistData = null) {
     if (!Array.isArray(wishlistItems) || wishlistItems.length === 0) {
       console.log(`ℹ️ Wishlist vide pour ${steamId}`);
       user.wishlist = { games: [], lastFullSync: new Date() };
+
+      // ✨ Bump version pour invalidation cache frontend
+      user.wishlistVersion = new Date();
+
       await user.save();
       return { success: true, newGames: 0, autoFollowed: 0 };
     }
@@ -325,6 +329,9 @@ async function syncUserWishlist(steamId, wishlistData = null) {
       })),
       lastFullSync: new Date(),
     };
+
+    // ✨ Bump version pour invalidation cache frontend
+    user.wishlistVersion = new Date();
 
     await user.save();
 

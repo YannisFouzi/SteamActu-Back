@@ -120,6 +120,21 @@ const UserSchema = new mongoose.Schema({
       default: null,
     },
   },
+
+  /**
+   * Versioning pour invalidation cache frontend
+   * - gamesVersion : mise à jour à chaque sync de la bibliothèque ou follow/unfollow
+   * - wishlistVersion : mise à jour à chaque sync de la wishlist
+   * Permet au frontend de détecter les changements sans télécharger toutes les données
+   */
+  gamesVersion: {
+    type: Date,
+    default: null,
+  },
+  wishlistVersion: {
+    type: Date,
+    default: null,
+  },
 });
 
 // Note: Index sur steamId déjà créé automatiquement par l'option "unique: true"
