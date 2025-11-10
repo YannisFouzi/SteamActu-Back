@@ -3,13 +3,13 @@ const router = express.Router();
 const User = require('../models/User');
 const GameSubscription = require('../models/GameSubscription');
 const steamService = require('../services/steamService');
-require('../services/gameSync/userProcessor');
+require('../services/gamesSync/userProcessor');
 const { syncUserWishlist } = require('../services/syncWishlistService');
 const {
   validateUserExists,
   validateActiveGamesFormat,
 } = require('../middleware/userValidators');
-const { sanitizeActiveGames } = require('../services/users/gameProcessor');
+const { sanitizeActiveGames } = require('../services/users/userGameProcessor');
 const {
   addUserToGameSubscription,
   removeUserFromGameSubscription,

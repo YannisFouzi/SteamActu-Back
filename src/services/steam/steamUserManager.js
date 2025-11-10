@@ -52,7 +52,7 @@ async function registerOrUpdateUser(steamId) {
     console.log(`⚡ Lancement sync immédiate des jeux...`);
 
     try {
-      const { syncUserGames } = require('../gameSync/userProcessor');
+      const { syncUserGames } = require('../gamesSync/userProcessor');
       const syncResult = await syncUserGames(user);
 
       if (syncResult.error) {

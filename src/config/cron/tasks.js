@@ -1,5 +1,5 @@
 // Services réels côté jeux (confirmés par ton fichier)
-const gamesSyncService = require('../../services/gamesSyncService'); // expose: syncAllUsersGames, syncUserGroupByIndex, syncUserGames
+const gamesSyncService = require('../../services/gamesSync'); // expose: syncAllUsersGames, syncUserGroupByIndex, syncUserGames
 // Wishlist: on gère la compatibilité côté code (groupée si dispo, sinon full)
 const syncWishlistService = require('../../services/syncWishlistService');
 const { acquireLock } = require('../../services/cron/jobLockService');

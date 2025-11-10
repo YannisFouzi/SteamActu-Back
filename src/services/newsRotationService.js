@@ -5,7 +5,7 @@
 
 const GameSubscription = require('../models/GameSubscription');
 const steamService = require('./steamService');
-const notificationService = require('./notificationService');
+const notificationService = require('./notifications/notificationService');
 
 // Configuration
 const CONFIG = {

@@ -1,4 +1,4 @@
-﻿const { getUserAndFollowedGames, optimizeCandidates } = require('./newsFeed/userManager');
+﻿const { getUserAndFollowedGames, optimizeCandidates } = require('./newsFeed/newsFeedUserManager');
 const {
   createCandidateManager,
   addSubscriptionCandidates,

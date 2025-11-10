@@ -3,8 +3,8 @@
  * Architecture modulaire prête pour l'évolution future
  */
 
-const { getActiveProvider } = require('./notifications/providers');
-require('./notifications/templates');
+const { getActiveProvider } = require('./providers');
+require('./templates');
 
 /**
  * Envoie une notification à un utilisateur

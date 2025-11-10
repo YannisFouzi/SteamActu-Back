@@ -10,7 +10,7 @@ const {
   fetchUserWishlist,
   searchGames: fetchSearchGames,
 } = require('./steam/apiClient');
-const { registerOrUpdateUser } = require('./steam/userManager');
+const { registerOrUpdateUser } = require('./steam/steamUserManager');
 
 /**
  * Récupère la liste des jeux possédés par un utilisateur

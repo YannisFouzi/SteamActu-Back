@@ -1,8 +1,8 @@
-const User = require('../models/User');
-const { CRON_CONFIG } = require('../config/app');
-const { isInBucket } = require('../utils/userBucket');
-const { syncUserGames } = require('./gameSync/userProcessor');
-const { createStats, updateStats } = require('./gameSync/statsManager');
+const User = require('../../models/User');
+const { CRON_CONFIG } = require('../../config/app');
+const { isInBucket } = require('../../utils/userBucket');
+const { syncUserGames } = require('./userProcessor');
+const { createStats, updateStats } = require('./statsManager');
 
 /**
  * Synchronise les jeux de tous les utilisateurs enregistrés
