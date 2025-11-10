@@ -13,10 +13,19 @@ const User = require('../models/User');
 async function validateUserExists(req, res, next) {
   try {
     const { steamId } = req.params;
-    console.log('Validation utilisateur pour steamId:', steamId);
+    console.log(
+      '[validateUserExists]',
+      req.method,
+      req.originalUrl,
+      'steamId:',
+      steamId
+    );
 
     const user = await User.findOne({ steamId });
-    console.log('Utilisateur trouvé:', user ? 'OUI' : 'NON');
+    console.log(
+      '[validateUserExists] résultat:',
+      user ? 'Utilisateur trouvé' : 'Utilisateur absent'
+    );
 
     if (!user) {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
