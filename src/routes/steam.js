@@ -22,10 +22,7 @@ const {
 router.get('/games/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
-    const { followedOnly } = req.query;
-    console.log(
-      `Requête getUserGames pour steamId: ${steamId}, followedOnly: ${followedOnly}`
-    );
+    console.log(`Requête getUserGames pour steamId: ${steamId}`);
 
     const user = await User.findOne({ steamId })
       .select('gameLibrary followedGames recentActiveGames')
@@ -48,7 +45,7 @@ router.get('/games/:steamId', validateSteamId, async (req, res) => {
 
     const gamesMap = new Map(gamesData.map((g) => [g.appId, g]));
 
-    let games = userGames.map((userGame) => {
+    const games = userGames.map((userGame) => {
       const gameData = gamesMap.get(userGame.gameId);
       return {
         appid: userGame.gameId,
@@ -59,11 +56,6 @@ router.get('/games/:steamId', validateSteamId, async (req, res) => {
         playtime_2weeks: userGame.playtime_2weeks || 0,
       };
     });
-
-    if (followedOnly === 'true' && user.followedGames?.length > 0) {
-      const followedSet = new Set(user.followedGames);
-      games = games.filter((game) => followedSet.has(game.appid));
-    }
 
     const formattedGames = games.map((game) => {
       const lastUpdateTimestamp = getLastUpdateTimestamp(game.appid, user);

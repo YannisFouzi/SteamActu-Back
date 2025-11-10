@@ -306,7 +306,7 @@ DELETE /api/users/{steamId}/follow/{appId}
 #### Récupérer les jeux d'un utilisateur
 
 ```http
-GET /api/steam/games/{steamId}?followedOnly=false
+GET /api/steam/games/{steamId}
 ```
 
 #### Récupérer un profil Steam
