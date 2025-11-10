@@ -61,30 +61,47 @@ async function upsertGamesCollection(steamGames) {
   console.log(`[DEBUG/MIGRATION] upsertGamesCollection() - START`);
   console.log(`  - Jeux à traiter: ${steamGames.length}`);
 
-  const bulkOps = steamGames.map((steamGame) => ({
+  const appIds = steamGames.map((steamGame) => steamGame.appid.toString());
+  const existingGames = await Game.find({ appId: { $in: appIds } })
+    .select('appId')
+    .lean();
+  const existingSet = new Set(existingGames.map((game) => game.appId));
+
+  const newGames = steamGames.filter(
+    (steamGame) => !existingSet.has(steamGame.appid.toString())
+  );
+
+  console.log(
+    `  - Déjà présents: ${steamGames.length - newGames.length} | Nouveaux: ${newGames.length}`
+  );
+
+  if (newGames.length === 0) {
+    console.log(
+      `[DEBUG/MIGRATION] upsertGamesCollection() - Aucun nouvel appId à insérer ✅`
+    );
+    return;
+  }
+
+  const bulkOps = newGames.map((steamGame) => ({
     updateOne: {
       filter: { appId: steamGame.appid.toString() },
       update: {
-        $set: {
-          name: steamGame.name || 'Unknown Game',
-          img_icon_url: steamGame.img_icon_url || '',
-          // Note: playtime/lastPlayed sont user-specific, pas stockés en BDD
-          // Récupérés via Steam API à la demande pour filtres/tris
-        },
         $setOnInsert: {
           appId: steamGame.appid.toString(),
+          name: steamGame.name || 'Unknown Game',
+          img_icon_url: steamGame.img_icon_url || '',
         },
       },
       upsert: true,
     },
   }));
 
-  await Game.bulkWrite(bulkOps);
+  await Game.bulkWrite(bulkOps, { ordered: false });
 
   // DEBUG/MIGRATION: Log après upsert
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log(`[DEBUG/MIGRATION] upsertGamesCollection() - END`);
-  console.log(`  - BulkWrite operations: ${bulkOps.length}`);
+  console.log(`  - Inserts réalisés: ${bulkOps.length}`);
   console.log(`  - Durée: ${duration}s`);
 }
 

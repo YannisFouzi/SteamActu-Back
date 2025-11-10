@@ -142,15 +142,14 @@ async function fetchGameDetails(appId) {
 }
 
 /**
- * Récupère la wishlist d'un utilisateur via l'API officielle Steam
- * et enrichit avec les noms des jeux (OPTIMISÉ avec appels parallèles)
- * ⚡ PERFORMANCE : 5 jeux en parallèle → 94 jeux en ~19 batches (3-4 secondes)
- * ⚠️ Note : L'API Steam ne supporte PAS les batch avec plusieurs appids
+ * Récupère la wishlist d'un utilisateur via l'API officielle Steam.
+ * Cette méthode renvoie les données brutes de l'API (appid, date_added, priority).
+ * L'enrichissement (noms, images) est géré côté service pour tirer parti du cache BDD.
  * @param {string} steamId - ID Steam de l'utilisateur
- * @returns {Promise<Array>} - Liste des jeux de la wishlist
+ * @returns {Promise<Array>} - Liste brute des jeux de la wishlist
  */
 async function fetchUserWishlist(steamId) {
-  console.log(`📋 Récupération wishlist via API officielle Steam...`);
+  console.log(`📋 Récupération wishlist brute via API officielle Steam...`);
 
   try {
     const params = {
@@ -164,64 +163,14 @@ async function fetchUserWishlist(steamId) {
       `getUserWishlist`
     );
 
-    // Les données sont dans response.items
     const wishlistItems = data.response?.items || [];
 
-    console.log(`✅ Wishlist API récupérée : ${wishlistItems.length} jeux`);
-
-    if (wishlistItems.length === 0) {
-      return [];
-    }
-
-    // ⚡ OPTIMISATION : 20 jeux en parallèle pour éviter rate limit Steam
-    // L'API Steam ne supporte PAS les appels batch → appels individuels en parallèle
-    const PARALLEL_REQUESTS = 20;
-    const enrichedItems = [];
-    const totalBatches = Math.ceil(wishlistItems.length / PARALLEL_REQUESTS);
-
-    console.log(
-      `⚡ Enrichissement optimisé: ${PARALLEL_REQUESTS} jeux en parallèle (${totalBatches} batchs)...`
-    );
-
-    for (let i = 0; i < wishlistItems.length; i += PARALLEL_REQUESTS) {
-      const batch = wishlistItems.slice(i, i + PARALLEL_REQUESTS);
-
-      // 🚀 Traiter 5 jeux EN PARALLÈLE (appels individuels simultanés)
-      const batchPromises = batch.map(async (item) => {
-        const details = await fetchGameDetails(item.appid);
-
-        return {
-          appid: item.appid,
-          name: details?.name || `Game ${item.appid}`,
-          date_added: item.date_added,
-          priority: item.priority,
-          capsule:
-            details?.capsule_image ||
-            `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appid}/capsule_231x87.jpg`,
-          header_image:
-            details?.header_image ||
-            `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appid}/header.jpg`,
-          review_score: 0,
-          review_desc: '',
-          reviews_percent: 0,
-          // ❌ Date de sortie supprimée (pas utile pour la wishlist)
-        };
-      });
-
-      const batchResults = await Promise.all(batchPromises);
-      enrichedItems.push(...batchResults);
-
-      // Log de progression
-      const batchNumber = Math.floor(i / PARALLEL_REQUESTS) + 1;
-      console.log(
-        `   ⚡ Batch ${batchNumber}/${totalBatches} : ${enrichedItems.length}/${wishlistItems.length} jeux`
-      );
-    }
-
-    console.log(
-      `✅ Wishlist enrichie : ${enrichedItems.length} jeux avec noms réels`
-    );
-    return enrichedItems;
+    console.log(`✅ Wishlist API récupérée : ${wishlistItems.length} jeux (brut)`);
+    return wishlistItems.map((item) => ({
+      appid: item.appid,
+      date_added: item.date_added,
+      priority: item.priority,
+    }));
   } catch (error) {
     console.error(`❌ Erreur récupération wishlist:`, error.message);
     return [];
@@ -265,5 +214,6 @@ module.exports = {
   fetchGameNews,
   fetchUserProfile,
   fetchUserWishlist,
+  fetchGameDetails,
   searchGames,
 };

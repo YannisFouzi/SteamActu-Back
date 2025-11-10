@@ -15,6 +15,7 @@
 const User = require('../models/User');
 const Wishlist = require('../models/Wishlist');
 const steamService = require('./steamService');
+const { fetchGameDetails } = require('./steam/apiClient');
 const { isInBucket } = require('../utils/userBucket');
 const { CRON_CONFIG } = require('../config/app');
 const { addUserToGameSubscription } = require('./users/subscriptionManager');
@@ -27,29 +28,145 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function buildSteamImageUrls(appId) {
+  return {
+    capsule: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_231x87.jpg`,
+    header: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+  };
+}
+
+/**
+ * Enrichit les items wishlist avec le cache BDD et ne déclenche l'appel Steam que pour les jeux manquants.
+ * @param {Array} wishlistItems - Items bruts renvoyés par Steam API
+ * @returns {Promise<{ enrichedItems: Array, newWishlistDocs: Array }>}
+ */
+async function enrichWishlistItems(wishlistItems) {
+  if (!Array.isArray(wishlistItems) || wishlistItems.length === 0) {
+    return { enrichedItems: [], newWishlistDocs: [] };
+  }
+
+  const appIds = wishlistItems.map((item) => item.appid.toString());
+  const existingDocs = await Wishlist.find({ appId: { $in: appIds } })
+    .select('appId name img_icon_url')
+    .lean();
+  const existingMap = new Map(existingDocs.map((doc) => [doc.appId, doc]));
+
+  const enrichedItems = new Array(wishlistItems.length);
+  const missingEntries = [];
+
+  wishlistItems.forEach((item, index) => {
+    const appIdStr = item.appid.toString();
+    const cachedDoc = existingMap.get(appIdStr);
+    const { capsule: defaultCapsule, header: defaultHeader } = buildSteamImageUrls(
+      item.appid
+    );
+
+    if (cachedDoc) {
+      const capsule = cachedDoc.img_icon_url || defaultCapsule;
+      const header = cachedDoc.img_icon_url || defaultHeader;
+      enrichedItems[index] = {
+        appid: item.appid,
+        name: cachedDoc.name,
+        capsule,
+        header_image: header,
+        date_added: item.date_added,
+        priority: item.priority,
+      };
+    } else {
+      missingEntries.push({
+        item,
+        index,
+        defaults: { capsule: defaultCapsule, header: defaultHeader },
+      });
+    }
+  });
+
+  const cacheHits = wishlistItems.length - missingEntries.length;
+  console.log(
+    `[WISHLIST] Cache hits: ${cacheHits}/${wishlistItems.length} jeux en base`
+  );
+
+  if (missingEntries.length === 0) {
+    console.log(`[WISHLIST] Aucun appel Steam supplémentaire nécessaire ✅`);
+    return { enrichedItems, newWishlistDocs: [] };
+  }
+
+  console.log(
+    `[WISHLIST] ${missingEntries.length} jeu(x) manquant(s) → fetch Steam Store`
+  );
+
+  const PARALLEL_REQUESTS = 20;
+  const newWishlistDocs = [];
+
+  for (let i = 0; i < missingEntries.length; i += PARALLEL_REQUESTS) {
+    const batch = missingEntries.slice(i, i + PARALLEL_REQUESTS);
+    const batchNumber = Math.floor(i / PARALLEL_REQUESTS) + 1;
+    const totalBatches = Math.ceil(missingEntries.length / PARALLEL_REQUESTS);
+
+    const batchResults = await Promise.all(
+      batch.map(async ({ item, index, defaults }) => {
+        const details = await fetchGameDetails(item.appid);
+
+        const name = details?.name || `Game ${item.appid}`;
+        const capsule =
+          details?.capsule_image || defaults.capsule;
+        const header =
+          details?.header_image || defaults.header;
+
+        const enriched = {
+          appid: item.appid,
+          name,
+          capsule,
+          header_image: header,
+          date_added: item.date_added,
+          priority: item.priority,
+        };
+
+        const doc = {
+          appid: item.appid,
+          name,
+          capsule,
+          header_image: header,
+        };
+
+        enrichedItems[index] = enriched;
+        return doc;
+      })
+    );
+
+    newWishlistDocs.push(...batchResults);
+    console.log(
+      `   ⚡ Batch ${batchNumber}/${totalBatches} → ${newWishlistDocs.length}/${missingEntries.length} jeux enrichis`
+    );
+  }
+
+  console.log(
+    `[WISHLIST] Steam Store fetch terminé : ${newWishlistDocs.length} nouvel(le)s fiche(s)`
+  );
+
+  return { enrichedItems, newWishlistDocs };
+}
+
 /* =========================
    Upsert collection Wishlist
    ========================= */
 
 async function upsertWishlistCollection(wishlistGames) {
   if (!wishlistGames || wishlistGames.length === 0) {
+    console.log(`[WISHLIST] upsertWishlistCollection() - Aucun nouveau jeu à insérer`);
     return;
   }
 
   const startTime = Date.now();
   console.log(`[WISHLIST] upsertWishlistCollection() - START`);
-  console.log(`  - Jeux à traiter: ${wishlistGames.length}`);
+  console.log(`  - Nouveaux jeux à insérer: ${wishlistGames.length}`);
 
-  // ✅ FIX TEMPORAIRE: Accepter tous les jeux, même avec noms "Game XXXXX"
-  // L'enrichissement API Steam échoue souvent, donc on insère quand même
   const validGames = wishlistGames.filter((steamGame) => {
     return steamGame.name && steamGame.appid;
   });
 
-  console.log(`  - Jeux valides: ${validGames.length}/${wishlistGames.length}`);
-
   if (validGames.length === 0) {
-    console.log(`  ⚠️ Aucun jeu valide, skip bulkWrite`);
+    console.log(`  ⚠️ Aucun jeu valide après filtrage, skip bulkWrite`);
     return;
   }
 
@@ -57,7 +174,8 @@ async function upsertWishlistCollection(wishlistGames) {
     updateOne: {
       filter: { appId: steamGame.appid.toString() },
       update: {
-        $set: {
+        $setOnInsert: {
+          appId: steamGame.appid.toString(),
           name: steamGame.name,
           img_icon_url:
             steamGame.capsule ||
@@ -65,20 +183,16 @@ async function upsertWishlistCollection(wishlistGames) {
             steamGame.img_icon_url ||
             '',
         },
-        $setOnInsert: {
-          appId: steamGame.appid.toString(),
-        },
       },
       upsert: true,
     },
   }));
 
-  await Wishlist.bulkWrite(bulkOps);
+  await Wishlist.bulkWrite(bulkOps, { ordered: false });
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log(`[WISHLIST] upsertWishlistCollection() - END`);
-  console.log(`  - BulkWrite operations: ${bulkOps.length}`);
-  console.log(`  - Jeux skipped: ${wishlistGames.length - validGames.length}`);
+  console.log(`  - Inserts/Upserts réalisés: ${bulkOps.length}`);
   console.log(`  - Durée: ${duration}s`);
 }
 
@@ -112,7 +226,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
     } else {
       try {
         wishlistItems = await steamService.getUserWishlist(steamId);
-        console.log(`📋 Wishlist récupérée : ${wishlistItems.length} jeux`);
+        console.log(`📋 Wishlist brute récupérée : ${wishlistItems.length} jeux`);
       } catch (error) {
         console.error(`❌ Erreur récupération wishlist:`, error.message);
         return { success: false, error: error.message };
@@ -127,10 +241,15 @@ async function syncUserWishlist(steamId, wishlistData = null) {
       return { success: true, newGames: 0, autoFollowed: 0 };
     }
 
-    // Upsert dans collection Wishlist (pas de doublon entre users)
-    await upsertWishlistCollection(wishlistItems);
+    const { enrichedItems, newWishlistDocs } = await enrichWishlistItems(
+      wishlistItems
+    );
+
+    // Insert uniquement les nouveaux jeux dans la collection Wishlist
+    await upsertWishlistCollection(newWishlistDocs);
+
     console.log(
-      `✅ ${wishlistItems.length} jeux créés/mis à jour dans Wishlist`
+      `✅ Wishlist enrichie : ${enrichedItems.length} jeux (nouveaux: ${newWishlistDocs.length})`
     );
 
     // Récupérer gameIds actuels en BDD
@@ -145,7 +264,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
 
     // Détecter nouveaux jeux (dans Steam mais pas en BDD)
     const newGames = [];
-    for (const game of wishlistItems) {
+    for (const game of enrichedItems) {
       const appId = game.appid.toString();
       if (!cachedGameIds.has(appId)) {
         newGames.push({
@@ -199,7 +318,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
 
     // Mettre à jour User.wishlist avec games[] (date_added user-specific)
     user.wishlist = {
-      games: wishlistItems.map((item) => ({
+      games: enrichedItems.map((item) => ({
         gameId: item.appid.toString(),
         date_added: item.date_added || 0,
         priority: item.priority || 0,
