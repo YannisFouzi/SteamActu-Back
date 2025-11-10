@@ -326,7 +326,7 @@ GET /api/news/game/{appId}?count=5&maxLength=300&language=fr
 #### Fil d'actualités global
 
 ```http
-GET /api/news/feed?steamId={steamId}&followedOnly=true&perGameLimit=10
+GET /api/news/feed?steamId={steamId}&perGameLimit=10
 ```
 
 ## 🔄 Services et Logique Métier

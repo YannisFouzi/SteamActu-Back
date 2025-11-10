@@ -1,13 +1,7 @@
-﻿const {
-  getUserAndFollowedGames,
-  optimizeCandidates,
-  updateUserActiveGames,
-} = require('./newsFeed/userManager');
+﻿const { getUserAndFollowedGames, optimizeCandidates } = require('./newsFeed/userManager');
 const {
   createCandidateManager,
-  addRecentGamesCandidates,
   addSubscriptionCandidates,
-  addLibraryCandidates,
 } = require('./newsFeed/candidateManager');
 const {
   processNewsForGames,
@@ -21,7 +15,6 @@ const RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
  * Build a multi-game news feed combining Steam news for several titles.
  * @param {Object} options
  * @param {string} [options.steamId] - Current user's steamId to resolve follow state.
- * @param {boolean} [options.followedOnly=false] - Restrict to games followed by the user.
  * @param {number} [options.limit=20] - Maximum number of news items returned.
  * @param {number} [options.perGameLimit=3] - Max number of news pulled per game.
  * @param {string} [options.language='fr'] - Steam language param.
@@ -29,7 +22,6 @@ const RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
  */
 async function getNewsFeed({
   steamId,
-  followedOnly = false,
   limit = 20,
   perGameLimit = 3,
   language = 'fr',
@@ -46,19 +38,13 @@ async function getNewsFeed({
   // Créer le gestionnaire de candidats
   const { candidateMap, pushCandidate } = createCandidateManager();
 
-  // Ajouter les candidats des jeux récents (si pas en mode followedOnly)
-  if (!followedOnly) {
-    addRecentGamesCandidates(user, pushCandidate, cutoffTimestamp);
-  }
-
   // Ajouter les candidats des GameSubscriptions
   const canContinue = await addSubscriptionCandidates(
     pushCandidate,
-    followedOnly,
     followedSet
   );
 
-  // Si followedOnly et pas de jeux suivis, retourner vide
+  // Aucun jeu suivi → rien à retourner
   if (!canContinue) {
     return {
       items: [],
@@ -70,16 +56,10 @@ async function getNewsFeed({
     };
   }
 
-  // Ajouter les candidats de la bibliothèque Steam (fallback)
-  if (!followedOnly) {
-    await addLibraryCandidates(steamId, pushCandidate, candidateMap);
-  }
-
   // Optimiser la liste des candidats
   let gamesToProcess = optimizeCandidates(
     candidateMap.values(),
     user,
-    followedOnly,
     safeLimit,
     safePerGameLimit
   );
@@ -91,13 +71,13 @@ async function getNewsFeed({
       metadata: {
         totalGamesQueried: 0,
         totalNewsRetrieved: 0,
-        source: followedOnly ? 'followed' : 'all',
+        source: 'followed',
       },
     };
   }
 
   // Traiter les actualités pour tous les jeux
-  const { feedItems, latestNewsByGame } = await processNewsForGames(
+  const { feedItems } = await processNewsForGames(
     gamesToProcess,
     followedSet,
     { perGameLimit: safePerGameLimit, language }
@@ -110,15 +90,6 @@ async function getNewsFeed({
   );
 
   // Mettre à jour les jeux actifs de l'utilisateur
-  if (!followedOnly && user) {
-    await updateUserActiveGames(
-      steamId,
-      latestNewsByGame,
-      candidateMap,
-      cutoffTimestamp
-    );
-  }
-
   return {
     items: timeline,
     metadata: {
@@ -126,7 +97,7 @@ async function getNewsFeed({
       totalNewsRetrieved: feedItems.length,
       returnedCount: timeline.length,
       recentCount: recentItems.length,
-      source: followedOnly ? 'followed' : 'all',
+      source: 'followed',
       steamId: steamId || null,
     },
   };
