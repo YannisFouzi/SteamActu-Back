@@ -534,5 +534,5 @@ async function syncWishlistsByGroup(
 module.exports = {
   syncUserWishlist,
   syncAllUsersWishlists,
-  syncWishlistsByGroup, // <-- export de la nouvelle méthode groupée
+  syncWishlistsByGroup,
 };

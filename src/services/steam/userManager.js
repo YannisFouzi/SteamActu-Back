@@ -70,7 +70,6 @@ async function registerOrUpdateUser(steamId) {
     }
 
     // NOTE: Wishlist sync désactivée à la connexion (trop lent)
-    // La wishlist sera récupérée depuis Steam API à la demande (quand user clique sur Wishlist)
 
     // Recharger le user pour avoir les données à jour (après sync games)
     user = await User.findOne({ steamId });
