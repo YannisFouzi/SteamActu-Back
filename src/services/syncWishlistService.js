@@ -14,27 +14,11 @@
 
 const User = require('../models/User');
 const Wishlist = require('../models/Wishlist');
-const GameSubscription = require('../models/GameSubscription');
 const steamService = require('./steamService');
-
-/* =========================
-   Utils
-   ========================= */
-
-/**
- * Hash déterministe (djb2 xor) pour bucketer les utilisateurs
- * Retourne un entier non signé stable pour une même entrée.
- */
-function stableHash(input) {
-  const str = String(input ?? '');
-  let h = 5381;
-  for (let i = 0; i < str.length; i++) {
-    // h * 33 XOR char
-    h = ((h << 5) + h) ^ str.charCodeAt(i);
-  }
-  // force entier non signé
-  return h >>> 0;
-}
+const { isInBucket } = require('../utils/userBucket');
+const { CRON_CONFIG } = require('../config/app');
+const { addUserToGameSubscription } = require('./users/subscriptionManager');
+const { migrateFollowedGames } = require('./users/gameProcessor');
 
 /**
  * Sleep utilitaire (ms)
@@ -150,6 +134,11 @@ async function syncUserWishlist(steamId, wishlistData = null) {
     );
 
     // Récupérer gameIds actuels en BDD
+    migrateFollowedGames(user);
+    if (!Array.isArray(user.followedGames)) {
+      user.followedGames = [];
+    }
+
     const cachedGameIds = new Set(
       (user.wishlist?.games || []).map((g) => g.gameId)
     );
@@ -162,6 +151,8 @@ async function syncUserWishlist(steamId, wishlistData = null) {
         newGames.push({
           appId,
           name: game.name,
+          imageUrl:
+            game.capsule || game.header_image || game.img_icon_url || '',
         });
       }
     }
@@ -177,39 +168,34 @@ async function syncUserWishlist(steamId, wishlistData = null) {
       console.log(`🎯 Auto-follow wishlist activé...`);
 
       // Filtrer les jeux pas encore suivis
+      const existingFollowed = new Set(user.followedGames);
       const gamesToFollow = newGames.filter(
-        (game) => !user.followedGames.includes(game.appId)
+        (game) => !existingFollowed.has(game.appId)
       );
 
       if (gamesToFollow.length > 0) {
         try {
-          // Ajouter à followedGames
-          user.followedGames.push(...gamesToFollow.map((g) => g.appId));
+          for (const game of gamesToFollow) {
+            await addUserToGameSubscription(
+              game.appId,
+              user.steamId,
+              game.name,
+              game.imageUrl
+            );
+            existingFollowed.add(game.appId);
+          }
+
+          user.followedGames = Array.from(existingFollowed);
           autoFollowedCount = gamesToFollow.length;
-
-          // Bulk write GameSubscriptions
-          const bulkOps = gamesToFollow.map((game) => ({
-            updateOne: {
-              filter: { gameId: game.appId },
-              update: {
-                $setOnInsert: {
-                  gameId: game.appId,
-                  name: game.name,
-                  lastNewsTimestamp: 0,
-                },
-                $addToSet: { subscribers: user.steamId },
-              },
-              upsert: true,
-            },
-          }));
-
-          await GameSubscription.bulkWrite(bulkOps);
           console.log(`✅ ${autoFollowedCount} jeu(x) auto-suivi(s)`);
         } catch (error) {
           console.error(`❌ Erreur auto-follow:`, error.message);
         }
       }
     }
+
+    // Toujours s'assurer qu'aucun doublon ne subsiste
+    user.followedGames = Array.from(new Set(user.followedGames));
 
     // Mettre à jour User.wishlist avec games[] (date_added user-specific)
     user.wishlist = {
@@ -336,9 +322,13 @@ async function syncAllUsersWishlists() {
  * @param {number} groupsTotal - nombre total de groupes (>=1)
  * @returns {Promise<Object>} Statistiques pour ce groupe
  */
-async function syncWishlistsByGroup(groupIndex, groupsTotal) {
+async function syncWishlistsByGroup(
+  groupIndex,
+  groupsTotal = CRON_CONFIG.GROUPS_TOTAL
+) {
   const gi = Number(groupIndex);
-  const gt = Number(groupsTotal);
+  const gt =
+    Number(groupsTotal) > 0 ? Number(groupsTotal) : CRON_CONFIG.GROUPS_TOTAL;
 
   if (!Number.isInteger(gi) || !Number.isInteger(gt) || gi < 0 || gt <= 0 || gi >= gt) {
     throw new Error(
@@ -357,10 +347,7 @@ async function syncWishlistsByGroup(groupIndex, groupsTotal) {
   console.log(`👥 ${users.length} utilisateur(s) totaux`);
 
   // Bucket stable par hash (user._id si dispo, sinon steamId)
-  const bucketUsers = users.filter((u) => {
-    const key = (u._id?.toString?.() ?? u.steamId ?? '');
-    return (stableHash(key) % gt) === gi;
-  });
+  const bucketUsers = users.filter((u) => isInBucket(u, gi, gt));
 
   console.log(`🪣 Groupe ${gi + 1}/${gt} → ${bucketUsers.length} utilisateur(s) à traiter`);
 

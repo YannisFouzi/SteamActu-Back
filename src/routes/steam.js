@@ -101,7 +101,9 @@ router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
     const { steamId } = req.params;
     console.log(`Requête getUserWishlist pour steamId: ${steamId}`);
 
-    const user = await User.findOne({ steamId }).select('wishlist').lean();
+    const user = await User.findOne({ steamId })
+      .select('wishlist followedGames')
+      .lean();
 
     if (!user?.wishlist?.games || user.wishlist.games.length === 0) {
       console.log(`ℹ️ Wishlist vide pour ${steamId}`);
@@ -112,6 +114,8 @@ router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
     const wishlistGames = await Wishlist.find({
       appId: { $in: gameIds },
     }).lean();
+
+    const followedSet = new Set(user.followedGames || []);
 
     const result = user.wishlist.games
       .map((userGame) => {
@@ -125,6 +129,7 @@ router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
           header_image: gameData.img_icon_url || '',
           date_added: userGame.date_added,
           priority: userGame.priority,
+          isFollowed: followedSet.has(userGame.gameId),
         };
       })
       .filter(Boolean)

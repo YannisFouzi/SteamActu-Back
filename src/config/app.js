@@ -71,6 +71,28 @@ const NOTIFICATION_CONFIG = {
   oneSignalApiKey: process.env.ONESIGNAL_API_KEY,
 };
 
+// Configuration cron
+const CRON_GROUPS_TOTAL_RAW = toNumber(process.env.CRON_GROUPS_TOTAL, 12);
+const CRON_GROUPS_TOTAL =
+  Number.isFinite(CRON_GROUPS_TOTAL_RAW) && CRON_GROUPS_TOTAL_RAW > 0
+    ? CRON_GROUPS_TOTAL_RAW
+    : 12;
+
+if (CRON_GROUPS_TOTAL !== 12) {
+  console.warn(
+    `[CRON] CRON_GROUPS_TOTAL=${CRON_GROUPS_TOTAL} ignoré car fenêtre fixe 03→14 (12 slots). Forçage à 12.`
+  );
+}
+
+const CRON_CONFIG = {
+  GROUPS_TOTAL: 12,
+  LOCK_TTL_MS: toNumber(
+    process.env.CRON_LOCK_TTL_MS,
+    2 * 60 * 60 * 1000 // 2 heures par défaut
+  ),
+  TIMEZONE: process.env.CRON_TIMEZONE || 'Europe/Paris',
+};
+
 // Messages d'erreur standardises
 const ERROR_MESSAGES = {
   INVALID_OPENID: 'Reponse OpenID invalide',
@@ -94,6 +116,7 @@ module.exports = {
   DATABASE_CONFIG,
   STEAM_CONFIG,
   NOTIFICATION_CONFIG,
+  CRON_CONFIG,
   CORS_OPTIONS,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,

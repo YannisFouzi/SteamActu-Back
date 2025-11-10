@@ -1,10 +1,11 @@
 const cron = require('node-cron');
 const { executeTask } = require('./taskExecutor');
-const { checkNews, syncUserGroup, syncAllUsers, syncWishlists } = require('./tasks');
+const { checkNews, syncUserGroup, syncWishlists } = require('./tasks');
 const { SCHEDULES } = require('./schedules');
+const { CRON_CONFIG } = require('../app');
 
-const TZ = 'Europe/Paris';
-const GROUPS_TOTAL = 12;
+const TZ = CRON_CONFIG.TIMEZONE;
+const GROUPS_TOTAL = Math.max(Number(CRON_CONFIG.GROUPS_TOTAL) || 1, 1);
 
 // Heure locale Europe/Paris -> [0..23]
 function getParisHour() {

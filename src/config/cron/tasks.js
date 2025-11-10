@@ -2,6 +2,8 @@
 const gamesSyncService = require('../../services/gamesSyncService'); // expose: syncAllUsersGames, syncUserGroupByIndex, syncUserGames
 // Wishlist: on gère la compatibilité côté code (groupée si dispo, sinon full)
 const syncWishlistService = require('../../services/syncWishlistService');
+const { acquireLock } = require('../../services/cron/jobLockService');
+const { CRON_CONFIG } = require('../app');
 
 async function checkNews() {
   const stats = await require('../../services/newsRotationService').checkNewsRotation();
@@ -16,16 +18,32 @@ async function checkNews() {
  * -> utilise gamesSyncService.syncUserGroupByIndex(groupIndex, groupsTotal)
  */
 async function syncUserGroup(opts = {}) {
-  const { groupIndex = 0, groupsTotal = 1 } = opts;
+  const { groupIndex = 0, groupsTotal = CRON_CONFIG.GROUPS_TOTAL } = opts;
+  const requestedGroups =
+    Number(groupsTotal) > 0 ? Number(groupsTotal) : CRON_CONFIG.GROUPS_TOTAL;
+  const lockAcquired = await acquireLock('USER_GROUP_SYNC', groupIndex);
+  if (!lockAcquired) {
+    return {
+      message: `Groupe ${groupIndex + 1}/${requestedGroups} → skip (lock)`,
+      groupIndex,
+      groupsTotal: requestedGroups,
+      skipped: true,
+      lockAcquired: false,
+    };
+  }
 
   // Appelle la méthode groupée EXISTANTE
   if (typeof gamesSyncService.syncUserGroupByIndex === 'function') {
-    const stats = await gamesSyncService.syncUserGroupByIndex(groupIndex, groupsTotal);
-    return {
-      message: `Groupe ${groupIndex + 1}/${groupsTotal} → ${stats.usersProcessed ?? 0} users`,
+    const stats = await gamesSyncService.syncUserGroupByIndex(
       groupIndex,
-      groupsTotal,
+      requestedGroups
+    );
+    return {
+      message: `Groupe ${groupIndex + 1}/${requestedGroups} → ${stats.usersProcessed ?? 0} users`,
+      groupIndex,
+      groupsTotal: requestedGroups,
       ...stats,
+      lockAcquired: true,
     };
   }
 
@@ -34,8 +52,9 @@ async function syncUserGroup(opts = {}) {
   return {
     message: `Fallback FULL (service groupé jeux absent) → ${stats.usersProcessed ?? 0} users`,
     groupIndex,
-    groupsTotal,
+    groupsTotal: requestedGroups,
     ...stats,
+    lockAcquired: true,
   };
 }
 
@@ -55,20 +74,36 @@ async function syncAllUsers() {
  * Sinon: seul groupIndex=0 exécute un FULL (les autres groupes no-op pour éviter 12x la charge).
  */
 async function syncWishlists(opts = {}) {
-  const { groupIndex = 0, groupsTotal = 1 } = opts;
+  const { groupIndex = 0, groupsTotal = CRON_CONFIG.GROUPS_TOTAL } = opts;
+  const requestedGroups =
+    Number(groupsTotal) > 0 ? Number(groupsTotal) : CRON_CONFIG.GROUPS_TOTAL;
+  const lockAcquired = await acquireLock('WISHLIST_SYNC', groupIndex);
+  if (!lockAcquired) {
+    return {
+      message: `Groupe ${groupIndex + 1}/${requestedGroups} → skip (lock)`,
+      groupIndex,
+      groupsTotal: requestedGroups,
+      skipped: true,
+      lockAcquired: false,
+    };
+  }
 
   // Méthode groupée disponible ?
   if (syncWishlistService && typeof syncWishlistService.syncWishlistsByGroup === 'function') {
-    const stats = await syncWishlistService.syncWishlistsByGroup(groupIndex, groupsTotal);
+    const stats = await syncWishlistService.syncWishlistsByGroup(
+      groupIndex,
+      requestedGroups
+    );
     return {
       message:
-        `Groupe ${groupIndex + 1}/${groupsTotal} → `
+        `Groupe ${groupIndex + 1}/${requestedGroups} → `
         + `${stats.usersProcessed ?? 0} users, `
         + `${stats.newGames ?? 0} nouveaux jeux, `
         + `${stats.totalAutoFollowed ?? 0} auto-suivis`,
       groupIndex,
-      groupsTotal,
+      groupsTotal: requestedGroups,
       ...stats,
+      lockAcquired: true,
     };
   }
 
@@ -78,21 +113,23 @@ async function syncWishlists(opts = {}) {
       const stats = await syncWishlistService.syncAllUsersWishlists();
       return {
         message:
-          `FULL wishlist (fallback, groupe 1/${groupsTotal}) → `
+          `FULL wishlist (fallback, groupe 1/${requestedGroups}) → `
           + `${stats.successCount ?? stats.usersProcessed ?? 0} users, `
           + `${stats.newGames ?? 0} nouveaux jeux, `
           + `${stats.totalAutoFollowed ?? 0} auto-suivis`,
         groupIndex,
-        groupsTotal,
+        groupsTotal: requestedGroups,
         ...stats,
+        lockAcquired: true,
       };
     }
     // Groupes 1..11 : no-op pour éviter 12x le FULL
     return {
-      message: `No-op wishlist (pas de méthode groupée) pour groupe ${groupIndex + 1}/${groupsTotal}`,
+      message: `No-op wishlist (pas de méthode groupée) pour groupe ${groupIndex + 1}/${requestedGroups}`,
       groupIndex,
-      groupsTotal,
+      groupsTotal: requestedGroups,
       skipped: true,
+      lockAcquired: true,
     };
   }
 
@@ -100,8 +137,9 @@ async function syncWishlists(opts = {}) {
   return {
     message: 'Wishlist service indisponible: aucune action exécutée',
     groupIndex,
-    groupsTotal,
+    groupsTotal: requestedGroups,
     skipped: true,
+    lockAcquired: true,
   };
 }
 

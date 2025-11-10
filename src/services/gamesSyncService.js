@@ -1,10 +1,8 @@
 const User = require('../models/User');
+const { CRON_CONFIG } = require('../config/app');
+const { isInBucket } = require('../utils/userBucket');
 const { syncUserGames } = require('./gameSync/userProcessor');
-const {
-  createStats,
-  updateStats,
-  createUserGroup,
-} = require('./gameSync/statsManager');
+const { createStats, updateStats } = require('./gameSync/statsManager');
 
 /**
  * Synchronise les jeux de tous les utilisateurs enregistrés
@@ -54,61 +52,66 @@ async function syncAllUsersGames() {
  * @param {number} totalGroups - Nombre total de groupes
  * @returns {Promise<Object>} Statistiques de synchronisation pour ce groupe
  */
-async function syncUserGroupByIndex(groupIndex, totalGroups) {
+async function syncUserGroupByIndex(
+  groupIndex,
+  totalGroups = CRON_CONFIG.GROUPS_TOTAL
+) {
+  const groupsTotal =
+    Number(totalGroups) > 0 ? Number(totalGroups) : CRON_CONFIG.GROUPS_TOTAL;
+  const gi = Number(groupIndex);
+
+  const stats = createStats({ groupIndex: gi, totalGroups: groupsTotal });
+
+  if (!Number.isInteger(gi) || gi < 0 || gi >= groupsTotal) {
+    console.warn(
+      `[SYNC][BIBLIO] Index de groupe invalide (${groupIndex}) pour ${groupsTotal} groupes`
+    );
+    stats.errors++;
+    return stats;
+  }
+
   console.log(
-    `Synchronisation du groupe ${groupIndex + 1}/${totalGroups} d'utilisateurs`
+    `Synchronisation du groupe ${gi + 1}/${groupsTotal} d'utilisateurs (bucket stable)`
   );
 
-  const stats = createStats({ groupIndex, totalGroups });
-
   try {
-    // Récupérer tous les utilisateurs
     const allUsers = await User.find({});
     stats.totalUsers = allUsers.length;
 
-    // Si aucun utilisateur, retourner immédiatement
     if (allUsers.length === 0) {
       console.log('Aucun utilisateur trouvé, rien à synchroniser.');
       return stats;
     }
 
-    // Créer le groupe d'utilisateurs
-    const { groupUsers, startIndex, endIndex } = createUserGroup(
-      allUsers,
-      groupIndex,
-      totalGroups
+    const bucketUsers = allUsers.filter((user) =>
+      isInBucket(user, gi, groupsTotal)
+    );
+    stats.usersInGroup = bucketUsers.length;
+
+    console.log(
+      `[SYNC][BIBLIO] Groupe ${gi} → ${bucketUsers.length} utilisateur(s) sur ${allUsers.length} au total`
     );
 
-    // DEBUG/MIGRATION: Log groupe details
-    console.log(
-      `[DEBUG/MIGRATION] Utilisateurs à traiter dans le groupe ${groupIndex}:`
-    );
-    console.log(`  - Total users dans BDD: ${allUsers.length}`);
-    console.log(
-      `  - Groupe ${groupIndex} contient: ${
-        groupUsers.length
-      } users (index ${startIndex}-${endIndex - 1})`
-    );
-    if (groupUsers.length > 0) {
-      console.log(`  - Users dans ce groupe:`);
-      groupUsers.forEach((u, i) => {
-        console.log(
-          `    ${i + 1}. ${u.username} (${u.steamId}) - lastChecked: ${
-            u.lastChecked?.toISOString() || 'null'
-          }`
-        );
-      });
+    if (bucketUsers.length === 0) {
+      stats.skipped = true;
+      console.log(
+        `[SYNC][BIBLIO] Aucun utilisateur dans ce bucket, fin de la synchronisation du groupe ${gi + 1}/${
+          groupsTotal
+        }.`
+      );
+      return stats;
     }
+
+    bucketUsers.forEach((u, index) => {
+      console.log(
+        `  - ${index + 1}. ${u.username} (${u.steamId}) - lastChecked: ${
+          u.lastChecked?.toISOString() || 'null'
+        }`
+      );
+    });
     console.log('');
 
-    console.log(
-      `Traitement de ${groupUsers.length} utilisateurs du groupe ${
-        groupIndex + 1
-      }/${totalGroups} (index ${startIndex}-${endIndex - 1})`
-    );
-
-    // Synchroniser chaque utilisateur du groupe
-    for (const user of groupUsers) {
+    for (const user of bucketUsers) {
       try {
         const result = await syncUserGames(user);
         updateStats(stats, result);
@@ -122,15 +125,13 @@ async function syncUserGroupByIndex(groupIndex, totalGroups) {
     }
 
     console.log(
-      `Synchronisation du groupe ${groupIndex + 1}/${totalGroups} terminée:`,
+      `Synchronisation du groupe ${gi + 1}/${groupsTotal} terminée:`,
       stats
     );
     return stats;
   } catch (error) {
     console.error(
-      `Erreur lors de la synchronisation du groupe ${
-        groupIndex + 1
-      }/${totalGroups}:`,
+      `Erreur lors de la synchronisation du groupe ${gi + 1}/${groupsTotal}:`,
       error
     );
     stats.errors++;
