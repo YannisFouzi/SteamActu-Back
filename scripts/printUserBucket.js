@@ -43,7 +43,6 @@ async function run() {
   const bucketIndex = userBucket(user, groupsTotal);
 
   console.log('\n=== Bucket utilisateur ===');
-  console.log(`Utilisateur : ${user.username || 'N/A'} (${user.steamId})`);
   console.log(`_id        : ${user._id.toString()}`);
   console.log(`GroupsTotal: ${groupsTotal}`);
   console.log(`Bucket     : ${bucketIndex} (groupe ${bucketIndex + 1}/${groupsTotal})\n`);

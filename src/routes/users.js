@@ -34,8 +34,6 @@ router.post('/register', async (req, res) => {
 router.get('/:steamId', validateUserExists, async (req, res) => {
     try {
       const { steamId } = req.params;
-      console.log('Récupération utilisateur:', steamId);
-
       res.json(req.user);
 
       const shouldSyncWishlist =
@@ -44,13 +42,13 @@ router.get('/:steamId', validateUserExists, async (req, res) => {
       if (shouldSyncWishlist) {
         syncUserWishlist(steamId).catch((err) => {
           console.error(
-            `Background wishlist preload failed for ${steamId}:`,
+            'Background wishlist preload failed:',
             err.message
           );
         });
       } else {
         console.log(
-          `Wishlist sync skipped for ${steamId} (lastFullSync already set)`
+          'Wishlist sync skipped (lastFullSync already set)'
         );
       }
     } catch (error) {
@@ -245,8 +243,6 @@ router.delete('/:steamId', async (req, res) => {
   try {
     const { steamId } = req.params;
 
-    console.log(`🗑️  Demande de suppression du compte: ${steamId}`);
-
     // Récupérer l'utilisateur
     const user = await User.findOne({ steamId });
     if (!user) {
@@ -279,7 +275,7 @@ router.delete('/:steamId', async (req, res) => {
 
     // Supprimer le compte utilisateur
     await User.deleteOne({ steamId });
-    console.log(`✅ Compte utilisateur ${user.username} (${steamId}) supprimé`);
+    console.log('✅ Compte utilisateur supprimé');
 
     res.json({
       message: 'Compte supprimé avec succès',

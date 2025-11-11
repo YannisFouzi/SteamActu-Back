@@ -17,9 +17,7 @@ function canSyncUser(user) {
   const lastSyncTime = user.lastChecked || new Date(0);
   const canSync = lastSyncTime <= cooldownTime;
 
-  console.log(
-    `[SYNC] canSyncUser() - User: ${user.username} (${user.steamId})`
-  );
+  console.log('[SYNC] canSyncUser() - Vérification utilisateur');
   console.log(`  - lastChecked: ${lastSyncTime.toISOString()}`);
   console.log(`  - Cooldown expires at: ${cooldownTime.toISOString()}`);
   console.log(`  - Current time: ${new Date().toISOString()}`);
@@ -193,7 +191,6 @@ function createUserResult(user) {
   return {
     userId: user._id,
     steamId: user.steamId,
-    username: user.username,
     updatedGames: [],
     removedGames: [],
     error: null,
@@ -212,18 +209,12 @@ async function syncUserGames(user) {
   try {
     const startTime = Date.now();
     console.log(`\n[SYNC] syncUserGames() - START`);
-    console.log(`  - User: ${user.username} (${user.steamId})`);
-
-    console.log(
-      `Synchronisation des jeux pour ${user.username} (${user.steamId})`
-    );
+    console.log(`  - Démarrage de la synchronisation utilisateur`);
 
     if (!canSyncUser(user)) {
       const lastSyncTime = user.lastChecked || new Date(0);
       console.log(
-        `Utilisateur ${
-          user.username
-        } synchronisé récemment (${lastSyncTime.toISOString()}), en attente.`
+        `Utilisateur synchronisé récemment (${lastSyncTime.toISOString()}), en attente.`
       );
       console.log(`[SYNC] syncUserGames() - SKIPPED (cooldown actif)\n`);
       return {
@@ -234,12 +225,11 @@ async function syncUserGames(user) {
     }
 
     console.log(`[SYNC] Steam API GetOwnedGames`);
-    console.log(`  - steamId: ${user.steamId}`);
 
     const userGames = await steamService.getUserGames(user.steamId);
 
     if (!userGames || !Array.isArray(userGames)) {
-      console.error(`Réponse invalide de l'API Steam pour ${user.username}`);
+      console.error(`Réponse invalide de l'API Steam pour un utilisateur`);
       console.log(`[SYNC] syncUserGames() - ERROR (Invalid Steam response)\n`);
       result.error = "Réponse invalide de l'API Steam";
       return result;
@@ -280,7 +270,7 @@ async function syncUserGames(user) {
     if (autoFollowResult.hasNewFollowedGames) {
       user.followedGames = autoFollowResult.updatedFollowedGames;
       console.log(
-        `✅ ${result.updatedGames.length} jeux auto-suivis pour ${user.username}`
+        `✅ ${result.updatedGames.length} jeux auto-suivis pour un utilisateur`
       );
     }
 
@@ -301,13 +291,11 @@ async function syncUserGames(user) {
 
     await user.save();
 
-    console.log(
-      `✅ Bibliothèque mise à jour: ${user.gameLibrary.games.length} jeux`
-    );
+    console.log(`✅ Bibliothèque mise à jour: ${user.gameLibrary.games.length} jeux`);
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`\n[SYNC] syncUserGames() - RÉSULTAT`);
-    console.log(`  - User: ${user.username} (${user.steamId})`);
+    console.log(`  - Résumé pour l'utilisateur synchronisé`);
     console.log(
       `  - gameLibrary.games: ${user.gameLibrary.games.length} jeux écrits ✅`
     );
@@ -322,7 +310,7 @@ async function syncUserGames(user) {
     return result;
   } catch (error) {
     console.error(
-      `Erreur lors de la synchronisation des jeux pour ${user.username}:`,
+      `Erreur lors de la synchronisation des jeux pour un utilisateur:`,
       error
     );
     result.error = error.message;

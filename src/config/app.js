@@ -106,8 +106,8 @@ const SUCCESS_MESSAGES = {
   API_OPERATIONAL: 'API de notifications Steam operationnelle !',
   MONGODB_CONNECTED: 'Connecte a MongoDB',
   SERVER_STARTED: (port) => `Serveur demarre sur le port ${port}`,
-  USER_AUTHENTICATED: (steamId) =>
-    `Utilisateur ${steamId} authentifie avec succes via Steam`,
+  USER_AUTHENTICATED: () =>
+    `Utilisateur authentifie avec succes via Steam`,
 };
 
 module.exports = {

@@ -26,7 +26,6 @@ const {
 router.get('/status/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
-    console.log(`Requête status pour steamId: ${steamId}`);
 
     const user = await User.findOne({ steamId })
       .select('gamesVersion wishlistVersion')
@@ -52,7 +51,6 @@ router.get('/status/:steamId', validateSteamId, async (req, res) => {
 router.get('/games/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
-    console.log(`Requête getUserGames pour steamId: ${steamId}`);
 
     const user = await User.findOne({ steamId })
       .select('gameLibrary followedGames recentActiveGames')
@@ -121,14 +119,13 @@ router.get('/profile/:steamId', validateSteamId, async (req, res) => {
 router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
-    console.log(`Requête getUserWishlist pour steamId: ${steamId}`);
 
     const user = await User.findOne({ steamId })
       .select('wishlist followedGames')
       .lean();
 
     if (!user?.wishlist?.games || user.wishlist.games.length === 0) {
-      console.log(`ℹ️ Wishlist vide pour ${steamId}`);
+      console.log('ℹ️ Wishlist vide');
       return res.json([]);
     }
 

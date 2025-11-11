@@ -6,13 +6,6 @@ const UserSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
-  username: {
-    type: String,
-    required: true,
-  },
-  avatarUrl: {
-    type: String,
-  },
   lastChecked: {
     type: Date,
     default: null, // null permet sync immédiate pour nouveaux users

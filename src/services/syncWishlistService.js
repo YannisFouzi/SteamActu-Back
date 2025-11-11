@@ -207,11 +207,11 @@ async function upsertWishlistCollection(wishlistGames) {
  */
 async function syncUserWishlist(steamId, wishlistData = null) {
   try {
-    console.log(`\n[WISHLIST] Synchronisation pour ${steamId}`);
+    console.log(`\n[WISHLIST] Synchronisation utilisateur démarrée`);
 
     const user = await User.findOne({ steamId });
     if (!user) {
-      console.log(`❌ Utilisateur ${steamId} non trouvé`);
+      console.log(`❌ Utilisateur non trouvé`);
       return { success: false, error: 'Utilisateur non trouvé' };
     }
 
@@ -234,7 +234,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
 
     // Si la wishlist est vide
     if (!Array.isArray(wishlistItems) || wishlistItems.length === 0) {
-      console.log(`ℹ️ Wishlist vide pour ${steamId}`);
+      console.log(`ℹ️ Wishlist vide`);
       user.wishlist = { games: [], lastFullSync: new Date() };
 
       // ✨ Bump version pour invalidation cache frontend
@@ -343,7 +343,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
       newGamesDetails: newGames,
     };
   } catch (error) {
-    console.error(`❌ Erreur sync wishlist pour ${steamId}:`, error);
+    console.error(`❌ Erreur sync wishlist:`, error);
     return { success: false, error: error.message };
   }
 }
@@ -380,11 +380,7 @@ async function syncAllUsersWishlists() {
     // Synchroniser chaque utilisateur avec pause entre les appels
     for (let i = 0; i < users.length; i++) {
       const user = users[i];
-      console.log(
-        `\n[${i + 1}/${users.length}] Traitement de ${user.steamId} (${
-          user.username
-        })`
-      );
+      console.log(`\n[${i + 1}/${users.length}] Traitement utilisateur`);
 
       const result = await syncUserWishlist(user.steamId);
 
@@ -418,8 +414,8 @@ async function syncAllUsersWishlists() {
     console.log(`🎯 Jeux auto-suivis : ${stats.totalAutoFollowed}`);
     if (stats.errors.length > 0) {
       console.log('\n❌ Erreurs détaillées :');
-      stats.errors.forEach((err) => {
-        console.log(`  - ${err.steamId}: ${err.error}`);
+      stats.errors.forEach(() => {
+        console.log(`  - Erreur signalée lors de la synchronisation d'un utilisateur`);
       });
     }
     console.log('='.repeat(60) + '\n');
@@ -467,7 +463,7 @@ async function syncWishlistsByGroup(
   const startTime = Date.now();
 
   // On minimise la projection : uniquement ce qui est nécessaire ici
-  const users = await User.find({}, { _id: 1, steamId: 1, username: 1 }).lean();
+  const users = await User.find({}, { _id: 1, steamId: 1 }).lean();
   console.log(`👥 ${users.length} utilisateur(s) totaux`);
 
   // Bucket stable par hash (user._id si dispo, sinon steamId)
@@ -490,7 +486,7 @@ async function syncWishlistsByGroup(
   for (let i = 0; i < bucketUsers.length; i++) {
     const u = bucketUsers[i];
     console.log(
-      `\n[${i + 1}/${bucketUsers.length}] Groupe ${gi + 1}/${gt} → ${u.steamId} (${u.username || 'unknown'})`
+      `\n[${i + 1}/${bucketUsers.length}] Groupe ${gi + 1}/${gt} → Traitement utilisateur`
     );
 
     const result = await syncUserWishlist(u.steamId);
@@ -524,7 +520,9 @@ async function syncWishlistsByGroup(
   console.log(`🎯  Auto-suivis : ${stats.totalAutoFollowed}`);
   if (stats.errors.length > 0) {
     console.log('\n❌ Erreurs détaillées :');
-    stats.errors.forEach((err) => console.log(`  - ${err.steamId}: ${err.error}`));
+    stats.errors.forEach(() =>
+      console.log(`  - Erreur signalée lors de la synchronisation d'un utilisateur`)
+    );
   }
   console.log('='.repeat(60) + '\n');
 

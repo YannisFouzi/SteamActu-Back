@@ -9,16 +9,14 @@ const { createStats, updateStats } = require('./statsManager');
  * @returns {Promise<Object>} Statistiques de synchronisation
  */
 async function syncAllUsersGames() {
-  console.log(
-    'Démarrage de la synchronisation automatique des bibliothèques...'
-  );
+  console.log('Démarrage de la synchronisation automatique des bibliothèques...');
   const stats = createStats();
 
   try {
     // Récupérer tous les utilisateurs
     const users = await User.find({});
     stats.totalUsers = users.length;
-    console.log(`Synchronisation des jeux pour ${users.length} utilisateurs`);
+    console.log(`Synchronisation des jeux pour ${users.length} utilisateur(s)`);
 
     // Pour chaque utilisateur
     for (const user of users) {
@@ -26,10 +24,7 @@ async function syncAllUsersGames() {
         const result = await syncUserGames(user);
         updateStats(stats, result);
       } catch (error) {
-        console.error(
-          `Erreur lors de la synchronisation des jeux pour l'utilisateur ${user.username}:`,
-          error
-        );
+        console.error('Erreur lors de la synchronisation des jeux pour un utilisateur:', error);
         stats.errors++;
       }
     }
@@ -70,9 +65,7 @@ async function syncUserGroupByIndex(
     return stats;
   }
 
-  console.log(
-    `Synchronisation du groupe ${gi + 1}/${groupsTotal} d'utilisateurs (bucket stable)`
-  );
+  console.log(`Synchronisation du groupe ${gi + 1}/${groupsTotal} d'utilisateurs (bucket stable)`);
 
   try {
     const allUsers = await User.find({});
@@ -102,24 +95,14 @@ async function syncUserGroupByIndex(
       return stats;
     }
 
-    bucketUsers.forEach((u, index) => {
-      console.log(
-        `  - ${index + 1}. ${u.username} (${u.steamId}) - lastChecked: ${
-          u.lastChecked?.toISOString() || 'null'
-        }`
-      );
-    });
-    console.log('');
+    console.log('  - Listing des utilisateurs masqué pour raisons de confidentialité');
 
     for (const user of bucketUsers) {
       try {
         const result = await syncUserGames(user);
         updateStats(stats, result);
       } catch (error) {
-        console.error(
-          `Erreur lors de la synchronisation de l'utilisateur ${user.username}:`,
-          error
-        );
+        console.error('Erreur lors de la synchronisation d’un utilisateur du groupe:', error);
         stats.errors++;
       }
     }

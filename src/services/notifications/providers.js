@@ -13,7 +13,7 @@ const { NOTIFICATION_CONFIG } = require('../../config/app');
  */
 async function simulationProvider(token, notification) {
   try {
-    console.log(`[Notification] Simulation pour ${token}:`, notification.title);
+    console.log('[Notification] Simulation envoyée:', notification.title);
 
     // Simulation d'un delai reseau
     await new Promise((resolve) => setTimeout(resolve, 100));

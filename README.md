@@ -146,8 +146,6 @@ GET /api/news/feed
 ```javascript
 {
   steamId: String,              // ID Steam unique
-  username: String,             // Nom d'utilisateur Steam
-  avatarUrl: String,            // URL de l'avatar Steam
   lastChecked: Date,            // Dernière vérification
   followedGames: [String],      // IDs des jeux suivis
   recentActiveGames: [{         // Jeux récemment actifs

@@ -18,7 +18,7 @@ async function registerOrUpdateUser(steamId) {
 
     if (user) {
       // L'utilisateur existe déjà, le retourner
-      console.log(`✅ User existant: ${user.username} (${steamId})`);
+      console.log(`✅ Utilisateur existant trouvé`);
       return user;
     }
 
@@ -38,14 +38,12 @@ async function registerOrUpdateUser(steamId) {
     // Créer un nouvel utilisateur avec les données du profil
     user = new User({
       steamId,
-      username: profileData.personaname || `Utilisateur ${steamId.slice(-4)}`,
-      avatarUrl: profileData.avatarfull || null,
       followedGames: [],
       lastChecked: null, // Important : null pour permettre sync immédiate
     });
 
     await user.save();
-    console.log(`✅ User créé: ${user.username} (${steamId})`);
+    console.log(`✅ Utilisateur créé`);
 
     // ⚡ SYNC IMMÉDIATE des jeux pour nouvel utilisateur
     // L'utilisateur veut voir ses jeux immédiatement, pas attendre dimanche 3h !
@@ -59,9 +57,7 @@ async function registerOrUpdateUser(steamId) {
         console.error(`⚠️ Erreur sync jeux (non bloquant):`, syncResult.error);
       } else {
         console.log(
-          `✅ Sync jeux réussie: ${
-            syncResult.updatedGames?.length || 0
-          } nouveaux jeux`
+          `✅ Sync jeux réussie: ${syncResult.updatedGames?.length || 0} nouveaux jeux`
         );
       }
     } catch (syncError) {
@@ -78,7 +74,7 @@ async function registerOrUpdateUser(steamId) {
 
     return user;
   } catch (error) {
-    console.error(`Erreur registerOrUpdateUser (${steamId}):`, error.message);
+    console.error(`Erreur registerOrUpdateUser:`, error.message);
     throw error;
   }
 }
@@ -95,16 +91,6 @@ async function updateUserProfile(steamId) {
       return null;
     }
 
-    const profileData = await fetchUserProfile(steamId);
-    if (!profileData) {
-      return user; // Retourner l'utilisateur existant si pas de données
-    }
-
-    // Mettre à jour les informations
-    user.username = profileData.personaname || user.username;
-    user.avatarUrl = profileData.avatarfull || user.avatarUrl;
-
-    await user.save();
     return user;
   } catch (error) {
     console.error(`Erreur updateUserProfile (${steamId}):`, error.message);
