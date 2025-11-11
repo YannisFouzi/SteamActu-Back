@@ -143,7 +143,9 @@ async function checkNewsRotation() {
                     steamId,
                     game.gameId,
                     game.name,
-                    news[0].title
+                    news[0].title,
+                    news[0].url,
+                    news[0].gid
                   )
                 )
               );

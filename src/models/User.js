@@ -44,11 +44,28 @@ const UserSchema = new mongoose.Schema({
   notificationSettings: {
     enabled: {
       type: Boolean,
-      default: true,
+      default: false,
     },
     pushToken: {
       type: String,
     },
+    fcmTokens: [
+      {
+        token: {
+          type: String,
+          required: true,
+        },
+        platform: {
+          type: String,
+          enum: ['android', 'ios', 'web'],
+          required: true,
+        },
+        addedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     autoFollowNewGames: {
       type: Boolean,
       default: false,

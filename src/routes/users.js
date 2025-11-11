@@ -103,6 +103,108 @@ router.put(
   }
 );
 
+// Enregistrer ou mettre à jour un token FCM
+router.post('/:steamId/fcm-token', validateUserExists, async (req, res) => {
+  try {
+    const { token, platform } = req.body;
+    const user = req.user;
+
+    // Validation stricte des paramètres
+    if (!token || typeof token !== 'string' || token.trim().length === 0) {
+      return res.status(400).json({
+        message: 'Token FCM requis et doit être une chaîne non vide',
+      });
+    }
+
+    // Validation longueur token (les tokens FCM font généralement 100-200+ caractères)
+    if (token.length < 50) {
+      return res.status(400).json({
+        message: 'Token FCM invalide (trop court)',
+      });
+    }
+
+    // Validation plateforme stricte
+    const validPlatforms = ['android', 'ios', 'web'];
+    if (!platform || !validPlatforms.includes(platform)) {
+      return res.status(400).json({
+        message: `Plateforme requise et doit être l'une de: ${validPlatforms.join(', ')}`,
+      });
+    }
+
+    // Initialiser le tableau si inexistant
+    if (!Array.isArray(user.notificationSettings.fcmTokens)) {
+      user.notificationSettings.fcmTokens = [];
+    }
+
+    // Vérifier si le token existe déjà
+    const existingTokenIndex = user.notificationSettings.fcmTokens.findIndex(
+      (t) => t.token === token
+    );
+
+    if (existingTokenIndex !== -1) {
+      // Token existe : mettre à jour la plateforme et la date
+      user.notificationSettings.fcmTokens[existingTokenIndex].platform =
+        platform;
+      user.notificationSettings.fcmTokens[existingTokenIndex].addedAt =
+        new Date();
+      console.log(`[FCM] Token mis à jour pour ${user.steamId} (${platform})`);
+    } else {
+      // Nouveau token : ajouter
+      user.notificationSettings.fcmTokens.push({
+        token,
+        platform,
+        addedAt: new Date(),
+      });
+      console.log(`[FCM] Nouveau token ajouté pour ${user.steamId} (${platform})`);
+    }
+
+    await user.save();
+
+    res.json({
+      message: 'Token FCM enregistré avec succès',
+      tokensCount: user.notificationSettings.fcmTokens.length,
+    });
+  } catch (error) {
+    console.error("Erreur lors de l'enregistrement du token FCM:", error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Supprimer un token FCM
+router.delete('/:steamId/fcm-token', validateUserExists, async (req, res) => {
+  try {
+    const { token } = req.body;
+    const user = req.user;
+
+    if (!token) {
+      return res.status(400).json({ message: 'Token FCM requis' });
+    }
+
+    // Supprimer le token
+    const initialLength = user.notificationSettings.fcmTokens?.length || 0;
+    user.notificationSettings.fcmTokens = (
+      user.notificationSettings.fcmTokens || []
+    ).filter((t) => t.token !== token);
+
+    const removed = initialLength - user.notificationSettings.fcmTokens.length;
+
+    if (removed === 0) {
+      return res.status(404).json({ message: 'Token non trouvé' });
+    }
+
+    await user.save();
+
+    console.log(`[FCM] Token supprimé pour ${user.steamId}`);
+    res.json({
+      message: 'Token FCM supprimé avec succès',
+      tokensCount: user.notificationSettings.fcmTokens.length,
+    });
+  } catch (error) {
+    console.error('Erreur lors de la suppression du token FCM:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
 // Mettre à jour la liste des jeux récemment actifs
 router.put(
   '/:steamId/active-games',
