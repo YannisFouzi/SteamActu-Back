@@ -57,10 +57,10 @@ async function testNotification() {
     }
 
     // Données de test
-    const appId = '730'; // Counter-Strike 2
-    const gameName = 'Counter-Strike 2';
-    const newsTitle = '🎮 Test notification - Nouvelle update majeure!';
-    const newsUrl = 'https://steamcommunity.com/games/2807960/announcements/detail/588409432234264798';
+    const appId = '3606480'; // Counter-Strike 2
+    const gameName = 'Battlefield™ 6';
+    const newsTitle = 'Pack Montrez le chemin';
+    const newsUrl = 'https://store.steampowered.com/news/app/2807960/view/588409432234264797?l=french';
     const newsGid = 'test_' + Date.now(); // GID de test
 
     console.log('\n📤 Envoi de la notification de test...');

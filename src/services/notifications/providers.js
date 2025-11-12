@@ -144,33 +144,30 @@ async function firebaseProvider(tokens, notification) {
       return false;
     }
 
-    // Construire le message FCM
+    const payloadData = {
+      title: notification.title || '',
+      body: notification.body || '',
+      allowUnfollow: '1',
+      ...Object.entries(notification.data || {}).reduce((acc, [key, val]) => {
+        acc[key] = String(val);
+        return acc;
+      }, {}),
+    };
+
+    // Construire le message FCM (data-only pour permettre les actions custom côté client)
     const message = {
-      notification: {
-        title: notification.title,
-        body: notification.body,
-      },
-      data: {
-        // Convertir toutes les valeurs en string (FCM requirement)
-        ...Object.entries(notification.data || {}).reduce((acc, [key, val]) => {
-          acc[key] = String(val);
-          return acc;
-        }, {}),
-      },
-      // Configuration Android
+      data: payloadData,
       android: {
         priority: 'high',
-        notification: {
-          channelId: 'steam_news',
-          sound: 'default',
-        },
       },
-      // Configuration iOS
       apns: {
+        headers: {
+          'apns-push-type': 'background',
+          'apns-priority': '5',
+        },
         payload: {
           aps: {
-            sound: 'default',
-            badge: 1,
+            'content-available': 1,
           },
         },
       },
@@ -179,9 +176,9 @@ async function firebaseProvider(tokens, notification) {
     // LOGS DÉTAILLÉS
     console.log('[Firebase] 📤 Préparation envoi notification:');
     console.log('  Tokens:', tokenList.length, 'devices');
-    console.log('  Title:', message.notification.title);
-    console.log('  Body:', message.notification.body);
-    console.log('  Data:', JSON.stringify(message.data));
+    console.log('  Title:', payloadData.title);
+    console.log('  Body:', payloadData.body);
+    console.log('  Data:', JSON.stringify(payloadData));
     console.log('  Message complet:', JSON.stringify(message, null, 2));
 
     // Envoyer à tous les tokens (multicast)
