@@ -35,18 +35,18 @@ async function testNotification() {
     }
 
     const notificationSettings = user.notificationSettings || {};
-    const enabled = Boolean(notificationSettings.enabled);
+    const newsEnabled = Boolean(notificationSettings.newsNotifications);
     const tokens = Array.isArray(notificationSettings.fcmTokens)
       ? notificationSettings.fcmTokens
       : [];
 
     console.log('\n📋 État utilisateur:');
-    console.log(`   Notifications activées: ${enabled ? 'OUI' : 'NON'}`);
+    console.log(`   Notifications news activées: ${newsEnabled ? 'OUI' : 'NON'}`);
     console.log(`   Tokens FCM enregistrés: ${tokens.length}`);
 
-    if (!enabled) {
+    if (!newsEnabled) {
       console.warn(
-        "⚠️ Les notifications sont désactivées pour cet utilisateur. Activez-les dans l'app avant de lancer le test.",
+        "⚠️ Les notifications d'actualités sont désactivées pour cet utilisateur. Activez-les dans l'app avant de lancer le test.",
       );
     }
 

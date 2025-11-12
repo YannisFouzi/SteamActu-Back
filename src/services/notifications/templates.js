@@ -44,6 +44,29 @@ function createAutoFollowNotification(appId, gameName) {
 }
 
 /**
+ * Crée une notification pour proposer le suivi d'un jeu détecté
+ * @param {string} appId - ID du jeu
+ * @param {string} gameName - Nom du jeu
+ * @param {string} source - Origine de la détection (library|wishlist)
+ * @returns {Object} - Notification formatée
+ */
+function createFollowPromptNotification(appId, gameName, source = 'library') {
+  const contextLabel =
+    source === 'wishlist' ? 'votre wishlist Steam' : 'votre bibliothèque Steam';
+
+  return {
+    title: 'Voulez-vous suivre ce jeu ?',
+    body: `${gameName || `Jeu ${appId}`} a été détecté dans ${contextLabel}.`,
+    data: {
+      type: 'follow_prompt',
+      appId,
+      source,
+      gameName: gameName || '',
+    },
+  };
+}
+
+/**
  * Crée une notification générale
  * @param {string} title - Titre
  * @param {string} body - Corps du message
@@ -64,5 +87,6 @@ function createGeneralNotification(title, body, data = {}) {
 module.exports = {
   createNewsNotification,
   createAutoFollowNotification,
+  createFollowPromptNotification,
   createGeneralNotification,
 };

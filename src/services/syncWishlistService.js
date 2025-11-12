@@ -19,6 +19,7 @@ const { fetchGameDetails } = require('./steam/apiClient');
 const { isInBucket } = require('../utils/userBucket');
 const { CRON_CONFIG } = require('../config/app');
 const { addUserToGameSubscription } = require('./users/subscriptionManager');
+const { sendFollowPromptNotifications } = require('./notifications/notificationService');
 
 /**
  * Sleep utilitaire (ms)
@@ -266,6 +267,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
 
     // Détecter nouveaux jeux (dans Steam mais pas en BDD)
     const newGames = [];
+    const followPrompts = [];
     for (const game of enrichedItems) {
       const appId = game.appid.toString();
       if (!cachedGameIds.has(appId)) {
@@ -282,35 +284,50 @@ async function syncUserWishlist(steamId, wishlistData = null) {
 
     // Auto-follow si activé (paramètre spécifique wishlist)
     let autoFollowedCount = 0;
-    if (
-      newGames.length > 0 &&
-      user.notificationSettings?.autoFollowWishlistGames === true
-    ) {
-      console.log(`🎯 Auto-follow wishlist activé...`);
+    let wishlistFollowMode = user.notificationSettings?.wishlistFollowMode;
+    if (!wishlistFollowMode) {
+      const legacy = user.notificationSettings?.autoFollowWishlistGames;
+      if (typeof legacy === 'boolean') {
+        wishlistFollowMode = legacy ? 'auto' : 'off';
+      } else {
+        wishlistFollowMode = 'off';
+      }
+    }
 
-      // Filtrer les jeux pas encore suivis
+    if (newGames.length > 0 && wishlistFollowMode !== 'off') {
       const existingFollowed = new Set(user.followedGames);
-      const gamesToFollow = newGames.filter(
+      const gamesToConsider = newGames.filter(
         (game) => !existingFollowed.has(game.appId)
       );
 
-      if (gamesToFollow.length > 0) {
-        try {
-          for (const game of gamesToFollow) {
-            await addUserToGameSubscription(
-              game.appId,
-              user.steamId,
-              game.name,
-              game.imageUrl
-            );
-            existingFollowed.add(game.appId);
-          }
+      if (wishlistFollowMode === 'auto') {
+        if (gamesToConsider.length > 0) {
+          try {
+            for (const game of gamesToConsider) {
+              await addUserToGameSubscription(
+                game.appId,
+                user.steamId,
+                game.name,
+                game.imageUrl
+              );
+              existingFollowed.add(game.appId);
+            }
 
-          user.followedGames = Array.from(existingFollowed);
-          autoFollowedCount = gamesToFollow.length;
-          console.log(`✅ ${autoFollowedCount} jeu(x) auto-suivi(s)`);
-        } catch (error) {
-          console.error(`❌ Erreur auto-follow:`, error.message);
+            user.followedGames = Array.from(existingFollowed);
+            autoFollowedCount = gamesToConsider.length;
+            console.log(`✅ ${autoFollowedCount} jeu(x) auto-suivi(s)`);
+          } catch (error) {
+            console.error(`❌ Erreur auto-follow:`, error.message);
+          }
+        }
+      } else if (wishlistFollowMode === 'prompt') {
+        for (const game of gamesToConsider) {
+          followPrompts.push({
+            appId: game.appId,
+            name: game.name,
+            imageUrl: game.imageUrl,
+            source: 'wishlist',
+          });
         }
       }
     }
@@ -335,12 +352,27 @@ async function syncUserWishlist(steamId, wishlistData = null) {
 
     console.log(`✅ Wishlist mise à jour: ${wishlistItems.length} jeux\n`);
 
+    if (followPrompts.length > 0) {
+      try {
+        const sent = await sendFollowPromptNotifications(user.steamId, followPrompts);
+        console.log(
+          `📬 ${sent}/${followPrompts.length} notification(s) follow_prompt envoyée(s) (wishlist)`
+        );
+      } catch (promptError) {
+        console.error(
+          `[WISHLIST] Erreur envoi notifications follow_prompt:`,
+          promptError.message
+        );
+      }
+    }
+
     return {
       success: true,
       newGames: newGames.length,
       autoFollowed: autoFollowedCount,
       totalWishlistGames: wishlistItems.length,
       newGamesDetails: newGames,
+      followPrompts,
     };
   } catch (error) {
     console.error(`❌ Erreur sync wishlist:`, error);

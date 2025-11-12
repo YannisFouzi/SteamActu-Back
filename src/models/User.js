@@ -42,7 +42,11 @@ const UserSchema = new mongoose.Schema({
   },
 
   notificationSettings: {
-    enabled: {
+    newsNotifications: {
+      type: Boolean,
+      default: false,
+    },
+    followPromptNotifications: {
       type: Boolean,
       default: false,
     },
@@ -66,13 +70,21 @@ const UserSchema = new mongoose.Schema({
         },
       },
     ],
-    autoFollowNewGames: {
-      type: Boolean,
-      default: false,
+    /**
+     * Modes de suivi automatique
+     * - off: aucun ajout automatique
+     * - auto: ajout direct aux jeux suivis
+     * - prompt: envoi d'une notification de confirmation
+     */
+    libraryFollowMode: {
+      type: String,
+      enum: ['off', 'auto', 'prompt'],
+      default: 'off',
     },
-    autoFollowWishlistGames: {
-      type: Boolean,
-      default: false,
+    wishlistFollowMode: {
+      type: String,
+      enum: ['off', 'auto', 'prompt'],
+      default: 'off',
     },
   },
 

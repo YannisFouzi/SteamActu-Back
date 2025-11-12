@@ -154,10 +154,12 @@ GET /api/news/feed
     lastNewsDate: Date
   }],
   notificationSettings: {       // Paramètres de notification
-    enabled: Boolean,
+    newsNotifications: Boolean,            // Notifications d’actualités
+    followPromptNotifications: Boolean,    // Notifications de confirmation de suivi
     pushToken: String,
-    autoFollowNewGames: Boolean
-  }
+    libraryFollowMode: 'off' | 'auto' | 'prompt',
+    wishlistFollowMode: 'off' | 'auto' | 'prompt'
+  },
 }
 ```
 

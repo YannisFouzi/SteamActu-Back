@@ -9,6 +9,7 @@
 const steamService = require('../steamService');
 const Game = require('../../models/Game');
 const { addUserToGameSubscription } = require('../users/subscriptionManager');
+const { sendFollowPromptNotifications } = require('../notifications/notificationService');
 
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
@@ -133,57 +134,108 @@ async function processAutoFollow(
 ) {
   const updatedFollowedGames = Array.from(followedGamesSet);
   const newGames = [];
+  const followPrompts = [];
   let hasNewFollowedGames = false;
 
-  const autoFollowEnabled = user.notificationSettings?.autoFollowNewGames;
+  let followMode = user.notificationSettings?.libraryFollowMode;
 
-  if (autoFollowEnabled) {
-    const gamesToFollow = [];
+  if (!followMode) {
+    const legacy = user.notificationSettings?.autoFollowNewGames;
+    if (typeof legacy === 'boolean') {
+      followMode = legacy ? 'auto' : 'off';
+    } else {
+      followMode = 'off';
+    }
+  }
 
-    for (const game of userGames) {
-      const appId = game.appid.toString();
+  if (followMode === 'off') {
+    return {
+      updatedFollowedGames,
+      newGames,
+      hasNewFollowedGames,
+      followPrompts,
+    };
+  }
 
-      if (!cachedGameIds.has(appId) && !followedGamesSet.has(appId)) {
+  const gamesToHandle = [];
+
+  for (const game of userGames) {
+    const appId = game.appid.toString();
+
+    if (!cachedGameIds.has(appId) && !followedGamesSet.has(appId)) {
+      gamesToHandle.push({ appId, name: game.name });
+    }
+  }
+
+  if (gamesToHandle.length === 0) {
+    return {
+      updatedFollowedGames,
+      newGames,
+      hasNewFollowedGames,
+      followPrompts,
+    };
+  }
+
+  try {
+    const games = await Game.find({ appId: { $in: gamesToHandle.map((g) => g.appId) } });
+    const gamesMap = new Map(games.map((g) => [g.appId, g]));
+
+    if (followMode === 'auto') {
+      for (const entry of gamesToHandle) {
+        const { appId } = entry;
         updatedFollowedGames.push(appId);
         hasNewFollowedGames = true;
-        gamesToFollow.push(appId);
+
+        const gameDoc = gamesMap.get(appId);
+        const gameName = gameDoc?.name || entry.name || `Jeu ${appId}`;
+        const imageUrl = gameDoc?.img_icon_url
+          ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`
+          : '';
 
         newGames.push({
           appId,
-          name: game.name,
+          name: gameName,
           action: 'auto-followed',
+        });
+
+        await addUserToGameSubscription(appId, user.steamId, gameName, imageUrl);
+      }
+
+      console.log(
+        `✅ ${gamesToHandle.length} GameSubscriptions mises à jour via auto-follow`
+      );
+    } else if (followMode === 'prompt') {
+      for (const entry of gamesToHandle) {
+        const { appId } = entry;
+        const gameDoc = gamesMap.get(appId);
+        const gameName = gameDoc?.name || entry.name || `Jeu ${appId}`;
+        const imageUrl = gameDoc?.img_icon_url
+          ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`
+          : '';
+
+        newGames.push({
+          appId,
+          name: gameName,
+          action: 'prompt',
+        });
+
+        followPrompts.push({
+          appId,
+          name: gameName,
+          imageUrl,
+          source: 'library',
         });
       }
     }
-
-    if (gamesToFollow.length > 0) {
-      try {
-        const games = await Game.find({ appId: { $in: gamesToFollow } });
-        const gamesMap = new Map(games.map((g) => [g.appId, g]));
-
-        for (const appId of gamesToFollow) {
-          const gameDoc = gamesMap.get(appId);
-          const gameName = gameDoc?.name || `Jeu ${appId}`;
-          const imageUrl = gameDoc?.img_icon_url
-            ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`
-            : '';
-
-          await addUserToGameSubscription(appId, user.steamId, gameName, imageUrl);
-        }
-
-        console.log(
-          `✅ ${gamesToFollow.length} GameSubscriptions mises à jour via auto-follow`
-        );
-      } catch (error) {
-        console.error('❌ Erreur auto-follow GameSubscription:', error.message);
-      }
-    }
+  } catch (error) {
+    console.error('❌ Erreur traitement follow mode:', error.message);
   }
 
   return {
     updatedFollowedGames,
     newGames,
     hasNewFollowedGames,
+    followPrompts,
   };
 }
 
@@ -266,9 +318,10 @@ async function syncUserGames(user) {
     );
 
     result.updatedGames = autoFollowResult.newGames;
+    result.followPrompts = autoFollowResult.followPrompts || [];
 
     if (autoFollowResult.hasNewFollowedGames) {
-      user.followedGames = autoFollowResult.updatedFollowedGames;
+      user.followedGames = Array.from(new Set(autoFollowResult.updatedFollowedGames));
       console.log(
         `✅ ${result.updatedGames.length} jeux auto-suivis pour un utilisateur`
       );
@@ -292,6 +345,23 @@ async function syncUserGames(user) {
     await user.save();
 
     console.log(`✅ Bibliothèque mise à jour: ${user.gameLibrary.games.length} jeux`);
+
+    if (result.followPrompts && result.followPrompts.length > 0) {
+      try {
+        const sent = await sendFollowPromptNotifications(
+          user.steamId,
+          result.followPrompts
+        );
+        console.log(
+          `📬 ${sent}/${result.followPrompts.length} notification(s) follow_prompt envoyée(s)`
+        );
+      } catch (promptError) {
+        console.error(
+          '[SYNC] Erreur envoi notifications follow_prompt:',
+          promptError.message
+        );
+      }
+    }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log(`\n[SYNC] syncUserGames() - RÉSULTAT`);

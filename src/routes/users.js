@@ -65,29 +65,122 @@ router.put(
   async (req, res) => {
     try {
       const {
-        enabled,
+        enabled, // legacy
+        newsNotifications,
+        followPromptNotifications,
         pushToken,
+        libraryFollowMode,
+        wishlistFollowMode,
         autoFollowNewGames,
         autoFollowWishlistGames,
       } = req.body;
       const user = req.user;
 
+      if (!user.notificationSettings) {
+        user.notificationSettings = {};
+      }
+
+      const FOLLOW_MODES = ['off', 'auto', 'prompt'];
+
+      function parseFollowMode(fieldName, value) {
+        if (value === undefined || value === null) {
+          return undefined;
+        }
+
+        if (typeof value === 'string') {
+          const normalized = value.toLowerCase();
+          if (!FOLLOW_MODES.includes(normalized)) {
+            throw new Error(
+              `${fieldName} doit être l'une des valeurs suivantes: ${FOLLOW_MODES.join(', ')}`
+            );
+          }
+          return normalized;
+        }
+
+        if (typeof value === 'boolean') {
+          return value ? 'auto' : 'off';
+        }
+
+        throw new Error(
+          `${fieldName} doit être une chaîne (off|auto|prompt) ou un booléen`
+        );
+      }
+
+      function parseOptionalBoolean(fieldName, value) {
+        if (value === undefined || value === null) {
+          return undefined;
+        }
+
+        if (typeof value === 'boolean') {
+          return value;
+        }
+
+        if (typeof value === 'string') {
+          const lowered = value.toLowerCase().trim();
+          if (['true', '1', 'yes'].includes(lowered)) {
+            return true;
+          }
+          if (['false', '0', 'no'].includes(lowered)) {
+            return false;
+          }
+        }
+
+        throw new Error(
+          `${fieldName} doit être un booléen ou une chaîne 'true'/'false'`
+        );
+      }
+
       // Mettre à jour les paramètres de notification
-      if (enabled !== undefined) {
-        user.notificationSettings.enabled = enabled;
+      let resolvedNewsNotifications;
+      let resolvedFollowPromptNotifications;
+      try {
+        const legacyEnabled = parseOptionalBoolean('enabled', enabled);
+        resolvedNewsNotifications =
+          parseOptionalBoolean('newsNotifications', newsNotifications) ??
+          legacyEnabled;
+        resolvedFollowPromptNotifications =
+          parseOptionalBoolean(
+            'followPromptNotifications',
+            followPromptNotifications
+          ) ?? legacyEnabled;
+      } catch (validationError) {
+        return res.status(400).json({ message: validationError.message });
+      }
+
+      try {
+        const resolvedLibraryMode = parseFollowMode(
+          'libraryFollowMode',
+          libraryFollowMode !== undefined ? libraryFollowMode : autoFollowNewGames
+        );
+        if (resolvedLibraryMode !== undefined) {
+          user.notificationSettings.libraryFollowMode = resolvedLibraryMode;
+        }
+
+        const resolvedWishlistMode = parseFollowMode(
+          'wishlistFollowMode',
+          wishlistFollowMode !== undefined
+            ? wishlistFollowMode
+            : autoFollowWishlistGames
+        );
+        if (resolvedWishlistMode !== undefined) {
+          user.notificationSettings.wishlistFollowMode = resolvedWishlistMode;
+        }
+      } catch (validationError) {
+        return res.status(400).json({ message: validationError.message });
+      }
+
+      if (resolvedNewsNotifications !== undefined) {
+        user.notificationSettings.newsNotifications =
+          resolvedNewsNotifications;
+      }
+
+      if (resolvedFollowPromptNotifications !== undefined) {
+        user.notificationSettings.followPromptNotifications =
+          resolvedFollowPromptNotifications;
       }
 
       if (pushToken) {
         user.notificationSettings.pushToken = pushToken;
-      }
-
-      if (autoFollowNewGames !== undefined) {
-        user.notificationSettings.autoFollowNewGames = autoFollowNewGames;
-      }
-
-      if (autoFollowWishlistGames !== undefined) {
-        user.notificationSettings.autoFollowWishlistGames =
-          autoFollowWishlistGames;
       }
 
       await user.save();
