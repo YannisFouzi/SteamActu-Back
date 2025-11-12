@@ -21,6 +21,7 @@ function createNewsNotification(appId, newsItem, gameName = null) {
       url: newsItem.url,
       appId,
       newsId: newsItem.gid,
+      context: newsItem.context || 'news',
     },
   };
 }
