@@ -23,37 +23,56 @@ function initializeFirebase() {
   try {
     const admin = require('firebase-admin');
 
-    // Vérifier les credentials
-    if (!NOTIFICATION_CONFIG.firebaseServiceAccountPath) {
+    let serviceAccount = null;
+
+    // MODE 1 : Charger depuis variable d'environnement (PRODUCTION - Railway)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      console.log('[Firebase] Chargement credentials depuis FIREBASE_SERVICE_ACCOUNT_JSON...');
+      try {
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        console.log('[Firebase] ✅ Credentials chargés depuis variable d\'env');
+      } catch (parseError) {
+        console.error('[Firebase] ❌ Erreur parsing JSON depuis env:', parseError.message);
+        isFirebaseInitialized = true;
+        return false;
+      }
+    }
+    // MODE 2 : Charger depuis fichier local (DEVELOPMENT - Local)
+    else if (NOTIFICATION_CONFIG.firebaseServiceAccountPath) {
+      console.log('[Firebase] Chargement credentials depuis fichier...');
+
+      // Résoudre le chemin absolu depuis la racine du projet
+      const serviceAccountPath = path.resolve(
+        process.cwd(),
+        NOTIFICATION_CONFIG.firebaseServiceAccountPath
+      );
+
+      // Vérifier que le fichier existe
+      if (!fs.existsSync(serviceAccountPath)) {
+        console.error(
+          `[Firebase] ❌ Fichier service account introuvable: ${serviceAccountPath}`
+        );
+        console.error(
+          `[Firebase] Vérifiez que FIREBASE_SERVICE_ACCOUNT_PATH pointe vers le bon fichier`
+        );
+        isFirebaseInitialized = true;
+        return false;
+      }
+
+      // Charger le service account avec chemin absolu
+      serviceAccount = require(serviceAccountPath);
+      console.log('[Firebase] ✅ Credentials chargés depuis fichier');
+    }
+    // Aucune méthode disponible
+    else {
       console.warn(
-        '[Firebase] FIREBASE_SERVICE_ACCOUNT_PATH non configuré. Provider désactivé.'
+        '[Firebase] Aucune credential configurée (ni FIREBASE_SERVICE_ACCOUNT_JSON ni FIREBASE_SERVICE_ACCOUNT_PATH). Provider désactivé.'
       );
       isFirebaseInitialized = true;
       return false;
     }
 
-    // Résoudre le chemin absolu depuis la racine du projet
-    const serviceAccountPath = path.resolve(
-      process.cwd(),
-      NOTIFICATION_CONFIG.firebaseServiceAccountPath
-    );
-
-    // Vérifier que le fichier existe
-    if (!fs.existsSync(serviceAccountPath)) {
-      console.error(
-        `[Firebase] ❌ Fichier service account introuvable: ${serviceAccountPath}`
-      );
-      console.error(
-        `[Firebase] Vérifiez que FIREBASE_SERVICE_ACCOUNT_PATH pointe vers le bon fichier`
-      );
-      isFirebaseInitialized = true;
-      return false;
-    }
-
-    // Charger le service account avec chemin absolu
-    const serviceAccount = require(serviceAccountPath);
-
-    // Initialiser Firebase Admin
+    // Initialiser Firebase Admin avec les credentials
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
