@@ -173,20 +173,25 @@ async function firebaseProvider(tokens, notification) {
       }, {}),
     };
 
-    // Construire le message FCM (data-only pour permettre les actions custom côté client)
+    // Construire le message FCM avec notification ET data pour supporter les clics quand l'app est tuée
     const message = {
+      notification: {
+        title: notification.title || '',
+        body: notification.body || '',
+      },
       data: payloadData,
       android: {
         priority: 'high',
       },
       apns: {
         headers: {
-          'apns-push-type': 'background',
-          'apns-priority': '5',
+          'apns-push-type': 'alert',
+          'apns-priority': '10',
         },
         payload: {
           aps: {
-            'content-available': 1,
+            sound: 'default',
+            'mutable-content': 1,
           },
         },
       },
