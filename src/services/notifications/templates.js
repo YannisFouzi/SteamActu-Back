@@ -13,7 +13,7 @@
 function createNewsNotification(appId, newsItem, gameName = null) {
   return {
     title: gameName
-      ? `${gameName} - Nouvelle actualité`
+      ? `${gameName}`
       : 'Nouvelle actualité jeu',
     body: newsItem.title,
     data: {
@@ -22,6 +22,7 @@ function createNewsNotification(appId, newsItem, gameName = null) {
       appId,
       newsId: newsItem.gid,
       context: newsItem.context || 'news',
+      allowUnfollow: true, // Permet l'affichage du bouton "Ne plus suivre ce jeu"
     },
   };
 }
@@ -39,6 +40,7 @@ function createAutoFollowNotification(appId, gameName) {
     data: {
       type: 'auto_follow',
       appId,
+      allowUnfollow: false, // Pas de bouton unfollow sur les notifications d'auto-follow
     },
   };
 }
@@ -62,6 +64,7 @@ function createFollowPromptNotification(appId, gameName, source = 'library') {
       appId,
       source,
       gameName: gameName || '',
+      allowUnfollow: false, // Pas de bouton unfollow sur les prompts de suivi
     },
   };
 }

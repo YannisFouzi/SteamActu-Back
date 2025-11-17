@@ -91,11 +91,11 @@ function initializeFirebase() {
 
 /**
  * Provider de simulation pour le developpement
- * @param {string} token - Token de notification
+ * @param {string} _token - Token de notification
  * @param {Object} notification - Notification a envoyer
  * @returns {Promise<boolean>} - Succes de l'envoi
  */
-async function simulationProvider(token, notification) {
+async function simulationProvider(_token, notification) {
   try {
     console.log('[Notification] Simulation envoyée:', notification.title);
 
@@ -163,22 +163,26 @@ async function firebaseProvider(tokens, notification) {
       return false;
     }
 
+    // Construire le payload de données pour FCM
+    // allowUnfollow est déterminé par les templates de notification (true/false)
+    // et converti en string '1'/'0' pour la transmission FCM
+    const allowUnfollowValue = notification.data?.allowUnfollow === true ? '1' : '0';
+
     const payloadData = {
       title: notification.title || '',
       body: notification.body || '',
-      allowUnfollow: '1',
+      allowUnfollow: allowUnfollowValue,
       ...Object.entries(notification.data || {}).reduce((acc, [key, val]) => {
-        acc[key] = String(val);
+        // Éviter de dupliquer allowUnfollow qui est déjà géré ci-dessus
+        if (key !== 'allowUnfollow') {
+          acc[key] = String(val);
+        }
         return acc;
       }, {}),
     };
 
     // Construire le message FCM avec notification ET data pour supporter les clics quand l'app est tuée
     const message = {
-      notification: {
-        title: notification.title || '',
-        body: notification.body || '',
-      },
       data: payloadData,
       android: {
         priority: 'high',
@@ -202,6 +206,9 @@ async function firebaseProvider(tokens, notification) {
     console.log('  Tokens:', tokenList.length, 'devices');
     console.log('  Title:', payloadData.title);
     console.log('  Body:', payloadData.body);
+    console.log('  Type:', payloadData.type || 'N/A');
+    console.log('  AppId:', payloadData.appId || 'N/A');
+    console.log('  AllowUnfollow:', payloadData.allowUnfollow);
     console.log('  Data:', JSON.stringify(payloadData));
     console.log('  Message complet:', JSON.stringify(message, null, 2));
 

@@ -57,8 +57,8 @@ async function testNotification() {
     }
 
     // Données de test
-    const appId = '3606480'; // Counter-Strike 2
-    const gameName = 'Battlefield™ 6';
+    const appId = '2807960'; // Counter-Strike 2
+    const gameName = 'Battlefield 6';
     const newsTitle = 'Pack Montrez le chemin';
     const newsUrl = 'https://store.steampowered.com/news/app/2807960/view/588409432234264797?l=french';
     const newsGid = 'test_' + Date.now(); // GID de test
