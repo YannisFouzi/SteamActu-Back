@@ -180,26 +180,21 @@ async function fetchUserWishlist(steamId) {
 async function searchGames(query, limit = 5) {
   try {
     const response = await axios.get(
-      'https://store.steampowered.com/api/storesearch/',
+      `https://steamcommunity.com/actions/SearchApps/${encodeURIComponent(query)}`,
       {
-        params: {
-          term: query,
-          l: 'french',
-          cc: 'fr',
-        },
         timeout: 5000,
       }
     );
 
-    if (!response.data || !response.data.items) {
+    if (!response.data || !Array.isArray(response.data)) {
       return [];
     }
 
-    const results = response.data.items.slice(0, limit).map((item) => ({
-      appid: parseInt(item.id),
+    const results = response.data.slice(0, limit).map((item) => ({
+      appid: parseInt(item.appid),
       name: item.name,
-      header_image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.id}/header.jpg`,
-      tiny_image: item.tiny_image || null,
+      header_image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appid}/header.jpg`,
+      tiny_image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appid}/capsule_sm_120.jpg`,
     }));
 
     return results;
