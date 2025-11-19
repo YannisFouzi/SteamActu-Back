@@ -87,13 +87,7 @@ async function fetchGameNews(appId, options = {}) {
 
   const allNews = data.appnews.newsitems || [];
 
-  // Filtrer uniquement les news des 2 dernières semaines
-  const twoWeeksInSeconds = 14 * 24 * 60 * 60;
-  const twoWeeksAgo = Math.floor(Date.now() / 1000) - twoWeeksInSeconds;
-
-  const recentNews = allNews.filter(news => news.date >= twoWeeksAgo);
-
-  return recentNews.slice(0, count);
+  return allNews.slice(0, count);
 }
 
 /**

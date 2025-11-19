@@ -8,8 +8,9 @@ const {
   filterAndSortNews,
 } = require('./newsFeed/newsProcessor');
 
-// Constantes
-const RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
+// Fenêtre de fraicheur des actualités (source de vérité unique)
+const NEWS_WINDOW_DAYS = 14;
+const RECENT_WINDOW_MS = NEWS_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
 /**
  * Build a multi-game news feed combining Steam news for several titles.
