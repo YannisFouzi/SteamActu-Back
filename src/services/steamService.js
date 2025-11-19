@@ -33,7 +33,7 @@ async function getUserGames(steamId) {
 async function getGameNews(
   appId,
   count = 5,
-  maxLength = 300,
+  maxLength = 5000, // Augmenté pour permettre l'extraction des images
   language = 'fr',
   steamOnly = true
 ) {

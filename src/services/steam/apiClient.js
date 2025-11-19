@@ -61,7 +61,7 @@ async function fetchUserGames(steamId) {
 async function fetchGameNews(appId, options = {}) {
   const {
     count = 5,
-    maxLength = 300,
+    maxLength = 5000, // Augmenté pour permettre l'extraction des images
     language = 'fr',
     steamOnly = true,
   } = options;

@@ -3,6 +3,7 @@
  */
 
 const steamService = require('../steamService');
+const { getGameLogoUrl, extractFirstImage } = require('./imageExtractor');
 
 /**
  * Traite les actualités pour une liste de jeux
@@ -22,7 +23,7 @@ async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
       const newsItems = await steamService.getGameNews(
         game.appId,
         perGameLimit,
-        800,
+        undefined, // Utilise la valeur par défaut (5000)
         language
       );
 
@@ -36,6 +37,7 @@ async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
         feedItems.push({
           appId: game.appId,
           gameName: game.name,
+          gameLogoUrl: getGameLogoUrl(game.appId),
           isFollowed: followedSet.has(game.appId),
           news: {
             id: item.gid,
@@ -44,6 +46,7 @@ async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
             author: item.author,
             date: newsDate,
             contents: item.contents,
+            firstImageUrl: extractFirstImage(item.contents),
             feedLabel: item.feedlabel,
           },
         });
