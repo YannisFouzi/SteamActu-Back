@@ -63,16 +63,14 @@ async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
 }
 
 /**
- * Filtre et trie les actualités par date
+ * Trie les actualités par date décroissante
  * @param {Array} feedItems - Actualités à traiter
- * @param {number} cutoffTimestamp - Timestamp de coupure (30 jours)
- * @returns {Object} - Actualités triées et filtrées
+ * @returns {Object} - Actualités triées
  */
-function filterAndSortNews(feedItems, cutoffTimestamp) {
-  // Filtrer STRICTEMENT les actualités de moins de 30 jours
-  const timeline = feedItems
-    .filter((item) => item.news.date >= cutoffTimestamp)
-    .sort((a, b) => b.news.date - a.news.date);
+function filterAndSortNews(feedItems = []) {
+  const timeline = [...feedItems].sort(
+    (a, b) => (b.news?.date || 0) - (a.news?.date || 0)
+  );
 
   return { timeline, recentItems: timeline };
 }

@@ -1,4 +1,4 @@
-﻿const { getUserAndFollowedGames, optimizeCandidates } = require('./newsFeed/newsFeedUserManager');
+const { getUserAndFollowedGames, optimizeCandidates } = require('./newsFeed/newsFeedUserManager');
 const {
   createCandidateManager,
   addSubscriptionCandidates,
@@ -8,9 +8,13 @@ const {
   filterAndSortNews,
 } = require('./newsFeed/newsProcessor');
 
-// Fenêtre de fraicheur des actualités (source de vérité unique)
+const MS_IN_DAY = 24 * 60 * 60 * 1000;
 const NEWS_WINDOW_DAYS = 14;
-const RECENT_WINDOW_MS = NEWS_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+const FAVORITE_WINDOW_DAYS = 30;
+const RECENT_WINDOW_MS = NEWS_WINDOW_DAYS * MS_IN_DAY;
+const FAVORITE_WINDOW_MS = FAVORITE_WINDOW_DAYS * MS_IN_DAY;
+
+const buildNewsKey = (appId, newsId) => `${appId}:${newsId}`;
 
 /**
  * Build a multi-game news feed combining Steam news for several titles.
@@ -19,6 +23,7 @@ const RECENT_WINDOW_MS = NEWS_WINDOW_DAYS * 24 * 60 * 60 * 1000;
  * @param {number} [options.limit=20] - Maximum number of news items returned.
  * @param {number} [options.perGameLimit=3] - Max number of news pulled per game.
  * @param {string} [options.language='fr'] - Steam language param.
+ * @param {boolean} [options.favoritesOnly=false] - Filter favorites only
  * @returns {Promise<{items: Array, metadata: Object}>}
  */
 async function getNewsFeed({
@@ -26,26 +31,21 @@ async function getNewsFeed({
   limit = 20,
   perGameLimit = 3,
   language = 'fr',
+  favoritesOnly = false,
 } = {}) {
-  // Normaliser les paramètres
   const safeLimit = Math.max(200, Math.min(limit || 200, 200));
   const safePerGameLimit = Math.max(20, Math.min(perGameLimit || 20, 20));
   const now = Date.now();
-  const cutoffTimestamp = now - RECENT_WINDOW_MS;
 
-  // Récupérer l'utilisateur et ses jeux suivis
   const { user, followedSet } = await getUserAndFollowedGames(steamId);
 
-  // Créer le gestionnaire de candidats
   const { candidateMap, pushCandidate } = createCandidateManager();
 
-  // Ajouter les candidats des GameSubscriptions
   const canContinue = await addSubscriptionCandidates(
     pushCandidate,
     followedSet
   );
 
-  // Aucun jeu suivi → rien à retourner
   if (!canContinue) {
     return {
       items: [],
@@ -53,11 +53,15 @@ async function getNewsFeed({
         totalGamesQueried: 0,
         totalNewsRetrieved: 0,
         source: 'followed',
+        favoriteStats: {
+          hasFavorites: false,
+          favoritesOnly: Boolean(favoritesOnly),
+          count: 0,
+        },
       },
     };
   }
 
-  // Optimiser la liste des candidats
   let gamesToProcess = optimizeCandidates(
     candidateMap.values(),
     user,
@@ -65,7 +69,6 @@ async function getNewsFeed({
     safePerGameLimit
   );
 
-  // Si aucun jeu à traiter, retourner vide
   if (gamesToProcess.length === 0) {
     return {
       items: [],
@@ -73,33 +76,95 @@ async function getNewsFeed({
         totalGamesQueried: 0,
         totalNewsRetrieved: 0,
         source: 'followed',
+        favoriteStats: {
+          hasFavorites: false,
+          favoritesOnly: Boolean(favoritesOnly),
+          count: 0,
+        },
       },
     };
   }
 
-  // Traiter les actualités pour tous les jeux
   const { feedItems } = await processNewsForGames(
     gamesToProcess,
     followedSet,
     { perGameLimit: safePerGameLimit, language }
   );
 
-  // Filtrer et trier les actualités
-  const { timeline, recentItems } = filterAndSortNews(
-    feedItems,
-    cutoffTimestamp
-  );
+  const { timeline } = filterAndSortNews(feedItems);
 
-  // Mettre à jour les jeux actifs de l'utilisateur
+  const favoriteEntries = Array.isArray(user?.newsFavorites)
+    ? user.newsFavorites
+    : [];
+  const favoriteLookup = new Map();
+  const validFavorites = [];
+  let favoritesChanged = false;
+
+  favoriteEntries.forEach((fav) => {
+    if (!fav?.appId || !fav?.newsId) {
+      favoritesChanged = true;
+      return;
+    }
+
+    const newsDateMs = fav.newsDate ? new Date(fav.newsDate).getTime() : null;
+    if (!newsDateMs || now - newsDateMs > FAVORITE_WINDOW_MS) {
+      favoritesChanged = true;
+      return;
+    }
+
+    const key = buildNewsKey(fav.appId, fav.newsId);
+    favoriteLookup.set(key, fav);
+    validFavorites.push(fav);
+  });
+
+  if (favoritesChanged && user) {
+    user.newsFavorites = validFavorites;
+    await user.save();
+  }
+
+  const filteredTimeline = [];
+  let favoritesCount = 0;
+
+  timeline.forEach((item) => {
+    const newsDate = item.news?.date || 0;
+    const key = buildNewsKey(item.appId, item.news?.id);
+    const isFavorite = favoriteLookup.has(key);
+    const maxAge = isFavorite ? FAVORITE_WINDOW_MS : RECENT_WINDOW_MS;
+
+    if (now - newsDate > maxAge) {
+      return;
+    }
+
+    if (favoritesOnly && !isFavorite) {
+      return;
+    }
+
+    if (isFavorite) {
+      favoritesCount++;
+    }
+
+    filteredTimeline.push({
+      ...item,
+      isFavorite,
+    });
+  });
+
+  const hasFavorites = favoritesCount > 0;
+
   return {
-    items: timeline,
+    items: filteredTimeline,
     metadata: {
       totalGamesQueried: gamesToProcess.length,
       totalNewsRetrieved: feedItems.length,
-      returnedCount: timeline.length,
-      recentCount: recentItems.length,
+      returnedCount: filteredTimeline.length,
+      recentCount: filteredTimeline.length,
       source: 'followed',
       steamId: steamId || null,
+      favoriteStats: {
+        hasFavorites,
+        favoritesOnly: Boolean(favoritesOnly),
+        count: favoritesCount,
+      },
     },
   };
 }

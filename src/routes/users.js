@@ -401,6 +401,68 @@ router.delete(
   }
 );
 
+// Ajouter une news aux favoris
+router.post('/:steamId/news-favorites', validateUserExists, async (req, res) => {
+  try {
+    const { appId, newsId, newsDate } = req.body || {};
+    if (!appId || !newsId || !newsDate) {
+      return res
+        .status(400)
+        .json({ message: 'appId, newsId et newsDate sont requis' });
+    }
+
+    const user = req.user;
+    if (!Array.isArray(user.newsFavorites)) {
+      user.newsFavorites = [];
+    }
+
+    const exists = user.newsFavorites.some(
+      fav => fav.appId === appId && fav.newsId === newsId,
+    );
+
+    if (!exists) {
+      user.newsFavorites.push({
+        appId,
+        newsId,
+        newsDate: new Date(newsDate),
+        createdAt: new Date(),
+      });
+      await user.save();
+    }
+
+    res.json({favorites: user.newsFavorites});
+  } catch (error) {
+    console.error('Erreur lors de l’ajout du favori:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Supprimer une news des favoris
+router.delete(
+  '/:steamId/news-favorites/:appId/:newsId',
+  validateUserExists,
+  async (req, res) => {
+    try {
+      const { appId, newsId } = req.params;
+      const user = req.user;
+
+      if (!Array.isArray(user.newsFavorites) || user.newsFavorites.length === 0) {
+        return res.json({favorites: []});
+      }
+
+      user.newsFavorites = user.newsFavorites.filter(
+        fav => !(fav.appId === appId && fav.newsId === newsId),
+      );
+      await user.save();
+
+      res.json({favorites: user.newsFavorites});
+    } catch (error) {
+      console.error('Erreur lors de la suppression du favori:', error);
+      res.status(500).json({ message: 'Erreur serveur' });
+    }
+  },
+);
+
 router.get('/:steamId/followed-games-details', async (req, res) => {
   try {
     const { steamId } = req.params;

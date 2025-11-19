@@ -157,6 +157,26 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  newsFavorites: [
+    {
+      appId: {
+        type: String,
+        required: true,
+      },
+      newsId: {
+        type: String,
+        required: true,
+      },
+      newsDate: {
+        type: Date,
+        required: true,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
 });
 
 // Note: Index sur steamId déjà créé automatiquement par l'option "unique: true"

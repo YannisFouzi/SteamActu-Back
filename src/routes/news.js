@@ -26,13 +26,17 @@ router.get("/game/:appId", async (req, res) => {
 // Récupérer un fil d'actualités global
 router.get("/feed", async (req, res) => {
   try {
-    const { steamId, limit, perGameLimit, language } = req.query;
+    const { steamId, limit, perGameLimit, language, favoritesOnly } = req.query;
 
     const feed = await newsFeedService.getNewsFeed({
       steamId,
       limit: limit ? parseInt(limit, 10) : undefined,
       perGameLimit: perGameLimit ? parseInt(perGameLimit, 10) : undefined,
       language: language || "fr",
+      favoritesOnly:
+        typeof favoritesOnly === "string"
+          ? favoritesOnly.toLowerCase() === "true"
+          : Boolean(favoritesOnly),
     });
 
     res.json(feed);
