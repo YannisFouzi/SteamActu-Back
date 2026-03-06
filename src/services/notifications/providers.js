@@ -163,17 +163,13 @@ async function firebaseProvider(tokens, notification) {
       return false;
     }
 
-    // Construire le payload de données pour FCM
-    // allowUnfollow est déterminé par les templates de notification (true/false)
-    // et converti en string '1'/'0' pour la transmission FCM
-    const allowUnfollowValue = notification.data?.allowUnfollow === true ? '1' : '0';
+    // Construire le payload de donnees pour FCM
+    // allowUnfollow est converti en string 'true'/'false' pour la transmission FCM
+    const allowUnfollowValue = notification.data?.allowUnfollow === true ? 'true' : 'false';
 
     const payloadData = {
-      title: notification.title || '',
-      body: notification.body || '',
       allowUnfollow: allowUnfollowValue,
       ...Object.entries(notification.data || {}).reduce((acc, [key, val]) => {
-        // Éviter de dupliquer allowUnfollow qui est déjà géré ci-dessus
         if (key !== 'allowUnfollow') {
           acc[key] = String(val);
         }
@@ -181,9 +177,17 @@ async function firebaseProvider(tokens, notification) {
       }, {}),
     };
 
-    // Construire le message FCM avec notification ET data pour supporter les clics quand l'app est tuée
+    // Determiner si la notification a besoin de boutons action (Notifee)
+    // Si oui → data-only (Notifee affiche et gere les boutons)
+    // Si non → notification+data (FCM affiche nativement, tap fiable)
+    const needsActionButtons = allowUnfollowValue === 'true';
+
     const message = {
-      data: payloadData,
+      data: {
+        ...payloadData,
+        title: notification.title || '',
+        body: notification.body || '',
+      },
       android: {
         priority: 'high',
       },
@@ -201,16 +205,29 @@ async function firebaseProvider(tokens, notification) {
       },
     };
 
-    // LOGS DÉTAILLÉS
+    // Ajouter la cle notification seulement pour les notifs sans bouton action
+    // FCM affiche nativement → tap fiable dans tous les etats Android
+    if (!needsActionButtons) {
+      message.notification = {
+        title: notification.title || '',
+        body: notification.body || '',
+      };
+      message.android.notification = {
+        channelId: 'steam_news',
+        sound: 'default',
+      };
+    }
+
+    // LOGS DETAILLES
     console.log('[Firebase] 📤 Préparation envoi notification:');
+    console.log('  Mode:', needsActionButtons ? 'data-only (Notifee + boutons)' : 'notification+data (FCM natif)');
     console.log('  Tokens:', tokenList.length, 'devices');
-    console.log('  Title:', payloadData.title);
-    console.log('  Body:', payloadData.body);
+    console.log('  Title:', notification.title || '');
+    console.log('  Body:', notification.body || '');
     console.log('  Type:', payloadData.type || 'N/A');
     console.log('  AppId:', payloadData.appId || 'N/A');
     console.log('  AllowUnfollow:', payloadData.allowUnfollow);
-    console.log('  Data:', JSON.stringify(payloadData));
-    console.log('  Message complet:', JSON.stringify(message, null, 2));
+    console.log('  Data:', JSON.stringify(message.data));
 
     // Envoyer à tous les tokens (multicast)
     const response = await firebaseAdmin.messaging().sendEachForMulticast({
