@@ -196,8 +196,8 @@ async function searchGames(query, limit = 5) {
     const results = response.data.slice(0, limit).map((item) => ({
       appid: parseInt(item.appid),
       name: item.name,
-      header_image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appid}/header.jpg`,
-      tiny_image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appid}/capsule_sm_120.jpg`,
+      header_image: item.logo || `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appid}/header.jpg`,
+      tiny_image: item.icon || `https://cdn.cloudflare.steamstatic.com/steam/apps/${item.appid}/capsule_sm_120.jpg`,
     }));
 
     return results;
