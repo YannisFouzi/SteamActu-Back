@@ -15,6 +15,9 @@ function formatGame(game, lastUpdateTimestamp = 0) {
     appid: appId, // Utiliser appid (lowercase) pour compatibilité mobile
     appId, // Garder appId aussi pour compatibilité
     name: game.name,
+    header_image: (game.header_image && game.header_image !== 'none')
+      ? game.header_image
+      : `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appid}/header.jpg`,
     logoUrl: game.img_logo_url
       ? `http://media.steampowered.com/steamcommunity/public/images/apps/${game.appid}/${game.img_logo_url}.jpg`
       : null,

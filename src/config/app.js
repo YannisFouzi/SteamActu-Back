@@ -46,6 +46,12 @@ const STEAM_CONFIG = {
   baseUrl: 'https://api.steampowered.com',
 };
 
+// Configuration SteamGridDB (icônes haute qualité)
+const STEAMGRIDDB_CONFIG = {
+  apiKey: process.env.STEAMGRIDDB_API_KEY || '',
+  baseUrl: 'https://www.steamgriddb.com/api/v2',
+};
+
 function toNumber(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -116,6 +122,7 @@ module.exports = {
   SECURITY_CONFIG,
   DATABASE_CONFIG,
   STEAM_CONFIG,
+  STEAMGRIDDB_CONFIG,
   NOTIFICATION_CONFIG,
   CRON_CONFIG,
   CORS_OPTIONS,

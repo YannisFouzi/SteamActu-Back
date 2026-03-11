@@ -3,26 +3,7 @@
  * Gère la génération des URLs de logos de jeux et l'extraction des images depuis le contenu des news
  */
 
-// URLs CDN Steam officielles
-const STEAM_CDN = 'https://cdn.cloudflare.steamstatic.com';
 const STEAM_CLAN_CDN = 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/clans';
-
-/**
- * Génère l'URL du logo PNG d'un jeu Steam
- * Utilise le CDN Cloudflare officiel de Steam
- *
- * @param {string|number} appId - ID de l'application Steam
- * @returns {string} URL du logo PNG
- *
- * @example
- * getGameLogoUrl(570) // => "https://cdn.cloudflare.steamstatic.com/steam/apps/570/logo.png"
- */
-function getGameLogoUrl(appId) {
-  if (!appId) {
-    return null;
-  }
-  return `${STEAM_CDN}/steam/apps/${appId}/logo.png`;
-}
 
 /**
  * Extrait la première image du contenu d'une news Steam
@@ -120,7 +101,6 @@ function extractAllImages(contents) {
 }
 
 module.exports = {
-  getGameLogoUrl,
   extractFirstImage,
   extractAllImages,
 };

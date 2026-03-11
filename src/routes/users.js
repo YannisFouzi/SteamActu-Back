@@ -485,6 +485,7 @@ router.get('/:steamId/followed-games-details', async (req, res) => {
     const followedGamesDetails = subscriptions.map((sub) => ({
       appId: sub.gameId,
       name: sub.name,
+      header_image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${sub.gameId}/header.jpg`,
       imageUrl: sub.imageUrl || '',
     }));
 

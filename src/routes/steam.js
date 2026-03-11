@@ -14,6 +14,7 @@ const User = require('../models/User');
 const Game = require('../models/Game');
 const Wishlist = require('../models/Wishlist');
 const { validateSteamId } = require('../middleware/steamValidators');
+const { fetchGameDetails } = require('../services/steam/apiClient');
 const {
   formatGame,
   getLastUpdateTimestamp,
@@ -68,10 +69,32 @@ router.get('/games/:steamId', validateSteamId, async (req, res) => {
 
     const gameIds = userGames.map((g) => g.gameId);
     const gamesData = await Game.find({ appId: { $in: gameIds } })
-      .select('appId name img_icon_url')
+      .select('appId name img_icon_url header_image')
       .lean();
 
     const gamesMap = new Map(gamesData.map((g) => [g.appId, g]));
+
+    // Lazy loading : enrichir les jeux sans header_image en base (uniquement ceux jamais tentés)
+    // 'none' = déjà tenté, pas d'image dispo → on ne réessaie pas
+    const gamesToEnrich = gamesData.filter((g) => !g.header_image);
+    if (gamesToEnrich.length > 0) {
+      let enrichedCount = 0;
+      for (const g of gamesToEnrich) {
+        const details = await fetchGameDetails(g.appId).catch(() => null);
+        const headerImage = details?.header_image || 'none';
+        await Game.updateOne(
+          { appId: g.appId },
+          { $set: { header_image: headerImage } }
+        );
+        if (details?.header_image) {
+          g.header_image = details.header_image;
+          enrichedCount++;
+        }
+      }
+      if (enrichedCount > 0) {
+        console.log(`[LAZY] ${enrichedCount}/${gamesToEnrich.length} jeux enrichis avec header_image`);
+      }
+    }
 
     const games = userGames.map((userGame) => {
       const gameData = gamesMap.get(userGame.gameId);
@@ -79,6 +102,7 @@ router.get('/games/:steamId', validateSteamId, async (req, res) => {
         appid: userGame.gameId,
         name: gameData?.name || `Game ${userGame.gameId}`,
         img_icon_url: gameData?.img_icon_url || '',
+        header_image: gameData?.header_image || '',
         playtime_forever: userGame.playtime_forever || 0,
         rtime_last_played: userGame.rtime_last_played || 0,
         playtime_2weeks: userGame.playtime_2weeks || 0,
@@ -144,8 +168,8 @@ router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
         return {
           appid: parseInt(userGame.gameId, 10),
           name: gameData.name || `Game ${userGame.gameId}`,
-          capsule: gameData.img_icon_url || '',
-          header_image: gameData.img_icon_url || '',
+          capsule: gameData.header_image || '',
+          header_image: gameData.header_image || '',
           date_added: userGame.date_added,
           priority: userGame.priority,
           isFollowed: followedSet.has(userGame.gameId),

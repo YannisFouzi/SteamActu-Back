@@ -11,7 +11,7 @@ const GameSubscription = require('../../models/GameSubscription');
 function createCandidateManager() {
   const candidateMap = new Map();
 
-  const pushCandidate = (appId, name, source) => {
+  const pushCandidate = (appId, name, source, imageUrl) => {
     if (!appId) return;
 
     const normalizedId = appId.toString();
@@ -20,6 +20,7 @@ function createCandidateManager() {
         appId: normalizedId,
         name: name || `Jeu ${normalizedId}`,
         source,
+        imageUrl: imageUrl || null,
       });
     }
   };
@@ -45,7 +46,7 @@ async function addSubscriptionCandidates(pushCandidate, followedSet) {
 
   subscriptions.forEach((sub) => {
     if (sub?.gameId) {
-      pushCandidate(sub.gameId, sub.name, 'subscription');
+      pushCandidate(sub.gameId, sub.name, 'subscription', sub.imageUrl);
     }
   });
 

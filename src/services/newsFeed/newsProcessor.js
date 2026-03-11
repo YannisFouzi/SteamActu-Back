@@ -3,7 +3,7 @@
  */
 
 const steamService = require('../steamService');
-const { getGameLogoUrl, extractFirstImage } = require('./imageExtractor');
+const { extractFirstImage } = require('./imageExtractor');
 
 /**
  * Traite les actualités pour une liste de jeux
@@ -37,7 +37,7 @@ async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
         feedItems.push({
           appId: game.appId,
           gameName: game.name,
-          gameLogoUrl: getGameLogoUrl(game.appId),
+          gameLogoUrl: game.imageUrl || null,
           isFollowed: followedSet.has(game.appId),
           news: {
             id: item.gid,

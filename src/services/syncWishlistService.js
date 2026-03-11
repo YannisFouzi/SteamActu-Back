@@ -47,7 +47,7 @@ async function enrichWishlistItems(wishlistItems) {
 
   const appIds = wishlistItems.map((item) => item.appid.toString());
   const existingDocs = await Wishlist.find({ appId: { $in: appIds } })
-    .select('appId name img_icon_url')
+    .select('appId name header_image')
     .lean();
   const existingMap = new Map(existingDocs.map((doc) => [doc.appId, doc]));
 
@@ -62,8 +62,8 @@ async function enrichWishlistItems(wishlistItems) {
     );
 
     if (cachedDoc) {
-      const capsule = cachedDoc.img_icon_url || defaultCapsule;
-      const header = cachedDoc.img_icon_url || defaultHeader;
+      const capsule = cachedDoc.header_image || defaultCapsule;
+      const header = cachedDoc.header_image || defaultHeader;
       enrichedItems[index] = {
         appid: item.appid,
         name: cachedDoc.name,
@@ -177,10 +177,9 @@ async function upsertWishlistCollection(wishlistGames) {
         $setOnInsert: {
           appId: steamGame.appid.toString(),
           name: steamGame.name,
-          img_icon_url:
+          header_image:
             steamGame.capsule ||
             steamGame.header_image ||
-            steamGame.img_icon_url ||
             '',
         },
       },
@@ -275,7 +274,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
           appId,
           name: game.name,
           imageUrl:
-            game.capsule || game.header_image || game.img_icon_url || '',
+            game.capsule || game.header_image || '',
         });
       }
     }

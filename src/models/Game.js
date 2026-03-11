@@ -30,6 +30,10 @@ const GameSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  header_image: {
+    type: String,
+    default: '',
+  },
 });
 
 module.exports = mongoose.model('Game', GameSchema);

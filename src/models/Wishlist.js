@@ -27,7 +27,7 @@ const WishlistSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  img_icon_url: {
+  header_image: {
     type: String,
     default: '',
   },
