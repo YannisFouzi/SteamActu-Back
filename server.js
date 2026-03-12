@@ -26,6 +26,9 @@ const authRoutes = require("./src/routes/auth");
 
 const app = express();
 
+// Trust proxy pour HTTPS derriere Railway/reverse proxy
+app.set("trust proxy", 1);
+
 // Middleware globaux
 app.use(cors(CORS_OPTIONS));
 app.use(express.json());
