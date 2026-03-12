@@ -5,6 +5,7 @@
 
 const mongoose = require('mongoose');
 const { DATABASE_CONFIG, SUCCESS_MESSAGES } = require('../config/app');
+const UserNewsState = require('../models/UserNewsState');
 
 /**
  * Initialise la connexion a MongoDB
@@ -13,6 +14,10 @@ async function connectDatabase() {
   try {
     await mongoose.connect(DATABASE_CONFIG.uri, DATABASE_CONFIG.options);
     console.log(SUCCESS_MESSAGES.MONGODB_CONNECTED);
+
+    // Sync indexes uniquement pour UserNewsState (nouveau modèle)
+    await UserNewsState.syncIndexes();
+
     return true;
   } catch (error) {
     const safeMessage =

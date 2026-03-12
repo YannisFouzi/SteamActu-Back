@@ -83,7 +83,7 @@ async function fetchRecentlyPlayedGames(steamId) {
 async function fetchGameNews(appId, options = {}) {
   const {
     count = 5,
-    maxLength = 5000, // Augmenté pour permettre l'extraction des images
+    maxLength = 0, // 0 = contenu complet (évite de tronquer les images/carousels)
     language = 'fr',
     steamOnly = true,
   } = options;

@@ -4,6 +4,7 @@
  */
 
 const GameSubscription = require('../models/GameSubscription');
+const UserNewsState = require('../models/UserNewsState');
 const steamService = require('./steamService');
 const notificationService = require('./notifications/notificationService');
 
@@ -123,17 +124,38 @@ async function checkNewsRotation() {
 
             // Envoyer des notifications aux abonnés (PARALLÉLISÉ par batch)
             const subscribers = game.subscribers || [];
+            const newsGid = String(news[0].gid);
+
+            // Filtrer les abonnés qui ont déjà vu cette news (inFeedAt ou pushSentAt)
+            const alreadyServed = await UserNewsState.find({
+              steamId: { $in: subscribers },
+              appId: String(game.gameId),
+              newsId: newsGid,
+              $or: [
+                { inFeedAt: { $ne: null } },
+                { pushSentAt: { $ne: null } },
+              ],
+            }).select('steamId').lean();
+
+            const alreadyServedSet = new Set(alreadyServed.map((s) => s.steamId));
+            const eligibleSubscribers = subscribers.filter(
+              (sid) => !alreadyServedSet.has(sid)
+            );
+
             console.log(
-              `📬 Envoi de notifications à ${subscribers.length} abonné(s)`
+              `📬 ${eligibleSubscribers.length}/${subscribers.length} abonné(s) éligibles (${alreadyServedSet.size} déjà servi(s))`
             );
 
             // Envoyer par batches pour éviter surcharge
+            const MS_IN_DAY = 24 * 60 * 60 * 1000;
+            const RETENTION_DAYS = 90;
+
             for (
               let i = 0;
-              i < subscribers.length;
+              i < eligibleSubscribers.length;
               i += CONFIG.NOTIFICATION_BATCH_SIZE
             ) {
-              const batch = subscribers.slice(
+              const batch = eligibleSubscribers.slice(
                 i,
                 i + CONFIG.NOTIFICATION_BATCH_SIZE
               );
@@ -150,10 +172,30 @@ async function checkNewsRotation() {
                 )
               );
 
-              // Compter les succès
-              results.forEach((result) => {
-                if (result.status === 'fulfilled') {
+              // Compter les succès réels et marquer pushSentAt
+              const pushSentOps = [];
+              results.forEach((result, idx) => {
+                if (result.status === 'fulfilled' && result.value === true) {
                   stats.notificationsSent++;
+                  pushSentOps.push({
+                    updateOne: {
+                      filter: {
+                        steamId: batch[idx],
+                        appId: String(game.gameId),
+                        newsId: newsGid,
+                      },
+                      update: {
+                        $set: { pushSentAt: new Date() },
+                        $setOnInsert: {
+                          steamId: batch[idx],
+                          appId: String(game.gameId),
+                          newsId: newsGid,
+                          expiresAt: new Date(Date.now() + RETENTION_DAYS * MS_IN_DAY),
+                        },
+                      },
+                      upsert: true,
+                    },
+                  });
                 } else {
                   console.error(
                     `❌ Erreur envoi notification:`,
@@ -161,6 +203,13 @@ async function checkNewsRotation() {
                   );
                 }
               });
+
+              // Enregistrer pushSentAt en bulk
+              if (pushSentOps.length > 0) {
+                await UserNewsState.bulkWrite(pushSentOps, { ordered: false }).catch((err) => {
+                  console.error('UserNewsState pushSentAt bulkWrite error:', err.message);
+                });
+              }
             }
 
             // Mettre à jour le timestamp

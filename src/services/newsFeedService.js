@@ -7,8 +7,10 @@ const {
   processNewsForGames,
   filterAndSortNews,
 } = require('./newsFeed/newsProcessor');
+const UserNewsState = require('../models/UserNewsState');
 
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
+const RETENTION_DAYS = 90;
 const NEWS_WINDOW_DAYS = 14;
 const FAVORITE_WINDOW_DAYS = 30;
 const RECENT_WINDOW_MS = NEWS_WINDOW_DAYS * MS_IN_DAY;
@@ -150,6 +152,36 @@ async function getNewsFeed({
   });
 
   const hasFavorites = favoritesCount > 0;
+
+  // Marquer les news servies dans le fil pour ce user (inFeedAt)
+  if (steamId && filteredTimeline.length > 0) {
+    const expiresAt = new Date(now + RETENTION_DAYS * MS_IN_DAY);
+    const bulkOps = filteredTimeline.map((item) => ({
+      updateOne: {
+        filter: {
+          steamId,
+          appId: String(item.appId),
+          newsId: String(item.news?.id),
+        },
+        update: {
+          $set: { inFeedAt: new Date(now) },
+          $setOnInsert: {
+            steamId,
+            appId: String(item.appId),
+            newsId: String(item.news?.id),
+            expiresAt,
+          },
+        },
+        upsert: true,
+      },
+    }));
+
+    try {
+      await UserNewsState.bulkWrite(bulkOps, { ordered: false });
+    } catch (err) {
+      console.error('UserNewsState bulkWrite error:', err.message);
+    }
+  }
 
   return {
     items: filteredTimeline,
