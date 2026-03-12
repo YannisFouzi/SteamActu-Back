@@ -10,6 +10,11 @@
  */
 function formatGame(game, lastUpdateTimestamp = 0) {
   const appId = game.appid.toString();
+  const rawLastPlayed = Number(game.rtime_last_played);
+  const normalizedLastPlayed =
+    Number.isFinite(rawLastPlayed) && rawLastPlayed > 0
+      ? rawLastPlayed
+      : null;
 
   return {
     appid: appId, // Utiliser appid (lowercase) pour compatibilité mobile
@@ -29,7 +34,7 @@ function formatGame(game, lastUpdateTimestamp = 0) {
       recent: game.playtime_2weeks || 0,
     },
     lastUpdateTimestamp,
-    rtime_last_played: game.rtime_last_played || 0,
+    rtime_last_played: normalizedLastPlayed,
   };
 }
 

@@ -12,6 +12,7 @@ const STEAM_BASE_URL = STEAM_CONFIG.baseUrl;
 // URLs des endpoints Steam
 const ENDPOINTS = {
   OWNED_GAMES: `${STEAM_BASE_URL}/IPlayerService/GetOwnedGames/v0001/`,
+  RECENTLY_PLAYED: `${STEAM_BASE_URL}/IPlayerService/GetRecentlyPlayedGames/v0001/`,
   GAME_NEWS: `${STEAM_BASE_URL}/ISteamNews/GetNewsForApp/v0002/`,
   PLAYER_SUMMARIES: `${STEAM_BASE_URL}/ISteamUser/GetPlayerSummaries/v0002/`,
   WISHLIST: `${STEAM_BASE_URL}/IWishlistService/GetWishlist/v1/`,
@@ -50,6 +51,27 @@ async function fetchUserGames(steamId) {
 
   const data = await makeApiCall(ENDPOINTS.OWNED_GAMES, params, `getUserGames`);
   return data.response.games || [];
+}
+
+/**
+ * Récupère les jeux récemment lancés (fenêtre Steam: 2 semaines).
+ * @param {string} steamId - ID Steam de l'utilisateur
+ * @returns {Promise<Array>} - Liste des jeux récents
+ */
+async function fetchRecentlyPlayedGames(steamId) {
+  const params = {
+    key: STEAM_API_KEY,
+    steamid: steamId,
+    format: 'json',
+    count: 0, // 0 = comportement par défaut Steam (retourne la liste récente)
+  };
+
+  const data = await makeApiCall(
+    ENDPOINTS.RECENTLY_PLAYED,
+    params,
+    `getRecentlyPlayedGames`
+  );
+  return data.response?.games || [];
 }
 
 /**
@@ -209,6 +231,7 @@ async function searchGames(query, limit = 5) {
 
 module.exports = {
   fetchUserGames,
+  fetchRecentlyPlayedGames,
   fetchGameNews,
   fetchUserProfile,
   fetchUserWishlist,

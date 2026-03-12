@@ -15,6 +15,7 @@ const Game = require('../models/Game');
 const Wishlist = require('../models/Wishlist');
 const { validateSteamId } = require('../middleware/steamValidators');
 const { fetchGameDetails } = require('../services/steam/apiClient');
+const { syncUserGames } = require('../services/gamesSync/userProcessor');
 const {
   formatGame,
   getLastUpdateTimestamp,
@@ -52,6 +53,22 @@ router.get('/status/:steamId', validateSteamId, async (req, res) => {
 router.get('/games/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
+    const shouldRefreshRecent =
+      req.query?.refresh === 'recent' ||
+      req.query?.refresh === '1' ||
+      req.query?.refresh === 'true';
+
+    if (shouldRefreshRecent) {
+      const userForRefresh = await User.findOne({ steamId });
+      if (!userForRefresh) {
+        return res.status(404).json({ message: 'Utilisateur non trouvé' });
+      }
+
+      await syncUserGames(userForRefresh, {
+        force: true,
+        reason: 'api:/steam/games?refresh=recent',
+      });
+    }
 
     const user = await User.findOne({ steamId })
       .select('gameLibrary followedGames recentActiveGames')
@@ -98,13 +115,19 @@ router.get('/games/:steamId', validateSteamId, async (req, res) => {
 
     const games = userGames.map((userGame) => {
       const gameData = gamesMap.get(userGame.gameId);
+      const rawLastPlayed = Number(userGame.rtime_last_played);
+      const normalizedLastPlayed =
+        Number.isFinite(rawLastPlayed) && rawLastPlayed > 0
+          ? rawLastPlayed
+          : null;
+
       return {
         appid: userGame.gameId,
         name: gameData?.name || `Game ${userGame.gameId}`,
         img_icon_url: gameData?.img_icon_url || '',
         header_image: gameData?.header_image || '',
         playtime_forever: userGame.playtime_forever || 0,
-        rtime_last_played: userGame.rtime_last_played || 0,
+        rtime_last_played: normalizedLastPlayed,
         playtime_2weeks: userGame.playtime_2weeks || 0,
       };
     });

@@ -101,7 +101,7 @@ const UserSchema = new mongoose.Schema({
         },
         rtime_last_played: {
           type: Number,
-          default: 0,
+          default: null,
         },
         playtime_2weeks: {
           type: Number,

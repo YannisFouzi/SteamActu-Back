@@ -13,7 +13,11 @@ const { sendFollowPromptNotifications } = require('../notifications/notification
 
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
-function canSyncUser(user) {
+function canSyncUser(user, force = false) {
+  if (force) {
+    return true;
+  }
+
   const cooldownTime = new Date(Date.now() - SYNC_COOLDOWN_MS);
   const lastSyncTime = user.lastChecked || new Date(0);
   const canSync = lastSyncTime <= cooldownTime;
@@ -25,6 +29,28 @@ function canSyncUser(user) {
   console.log(`  - Can sync: ${canSync ? 'true ✅' : 'false ❌'}`);
 
   return canSync;
+}
+
+function toPositiveNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return null;
+  }
+  return numeric;
+}
+
+function resolveLastPlayedTimestamp(ownedGame, recentlyPlayedGame, previousGame) {
+  const candidates = [
+    toPositiveNumber(ownedGame?.rtime_last_played),
+    toPositiveNumber(recentlyPlayedGame?.rtime_last_played),
+    toPositiveNumber(previousGame?.rtime_last_played),
+  ].filter(Boolean);
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return Math.max(...candidates);
 }
 
 function normalizeFollowedGames(user) {
@@ -255,7 +281,8 @@ function createUserResult(user) {
  * @param {Object} user - Utilisateur
  * @returns {Promise<Object>} - Résultat de synchronisation
  */
-async function syncUserGames(user) {
+async function syncUserGames(user, options = {}) {
+  const { force = false, reason = 'scheduled' } = options;
   const result = createUserResult(user);
 
   try {
@@ -263,7 +290,7 @@ async function syncUserGames(user) {
     console.log(`\n[SYNC] syncUserGames() - START`);
     console.log(`  - Démarrage de la synchronisation utilisateur`);
 
-    if (!canSyncUser(user)) {
+    if (!canSyncUser(user, force)) {
       const lastSyncTime = user.lastChecked || new Date(0);
       console.log(
         `Utilisateur synchronisé récemment (${lastSyncTime.toISOString()}), en attente.`
@@ -276,9 +303,18 @@ async function syncUserGames(user) {
       };
     }
 
-    console.log(`[SYNC] Steam API GetOwnedGames`);
+    console.log(`[SYNC] Steam API GetOwnedGames + GetRecentlyPlayedGames (reason=${reason}, force=${force})`);
 
-    const userGames = await steamService.getUserGames(user.steamId);
+    const [userGames, recentlyPlayedGames] = await Promise.all([
+      steamService.getUserGames(user.steamId),
+      steamService.getRecentlyPlayedGames(user.steamId).catch((error) => {
+        console.warn(
+          '[SYNC] GetRecentlyPlayedGames indisponible, fallback OwnedGames:',
+          error?.message || error
+        );
+        return [];
+      }),
+    ]);
 
     if (!userGames || !Array.isArray(userGames)) {
       console.error(`Réponse invalide de l'API Steam pour un utilisateur`);
@@ -288,6 +324,7 @@ async function syncUserGames(user) {
     }
 
     console.log(`  - Jeux récupérés: ${userGames.length}`);
+    console.log(`  - Jeux récemment lancés (2 semaines): ${recentlyPlayedGames.length}`);
 
     await upsertGamesCollection(userGames);
     console.log(`✅ ${userGames.length} jeux créés/mis à jour dans Games`);
@@ -327,13 +364,34 @@ async function syncUserGames(user) {
       );
     }
 
+    const previousLibraryMap = new Map(
+      (user.gameLibrary?.games || []).map((g) => [g.gameId, g])
+    );
+
+    const recentlyPlayedMap = new Map(
+      (recentlyPlayedGames || []).map((g) => [g.appid?.toString(), g])
+    );
+
     user.gameLibrary = {
-      games: userGames.map((g) => ({
-        gameId: g.appid.toString(),
-        playtime_forever: g.playtime_forever || 0,
-        rtime_last_played: g.rtime_last_played || 0,
-        playtime_2weeks: g.playtime_2weeks || 0,
-      })),
+      games: userGames.map((g) => {
+        const gameId = g.appid.toString();
+        const previousGame = previousLibraryMap.get(gameId);
+        const recentGame = recentlyPlayedMap.get(gameId);
+
+        const lastPlayed = resolveLastPlayedTimestamp(g, recentGame, previousGame);
+        const recentPlaytime = Math.max(
+          Number(g.playtime_2weeks) || 0,
+          Number(recentGame?.playtime_2weeks) || 0
+        );
+
+        return {
+          gameId,
+          playtime_forever: Number(g.playtime_forever) || 0,
+          // Null = "inconnu/non fourni" (ne pas écraser artificiellement avec 0)
+          rtime_last_played: lastPlayed,
+          playtime_2weeks: recentPlaytime,
+        };
+      }),
       lastFullSync: new Date(),
     };
 

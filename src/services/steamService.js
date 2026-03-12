@@ -5,6 +5,7 @@
 
 const {
   fetchUserGames,
+  fetchRecentlyPlayedGames,
   fetchGameNews,
   fetchUserProfile,
   fetchUserWishlist,
@@ -19,6 +20,15 @@ const { registerOrUpdateUser } = require('./steam/steamUserManager');
  */
 async function getUserGames(steamId) {
   return fetchUserGames(steamId);
+}
+
+/**
+ * Récupère les jeux récemment lancés (2 semaines) d'un utilisateur
+ * @param {string} steamId - ID Steam de l'utilisateur
+ * @returns {Promise<Array>} Liste des jeux récents
+ */
+async function getRecentlyPlayedGames(steamId) {
+  return fetchRecentlyPlayedGames(steamId);
 }
 
 /**
@@ -64,6 +74,7 @@ async function searchGames(query, limit = 5) {
 
 module.exports = {
   getUserGames,
+  getRecentlyPlayedGames,
   getGameNews,
   getUserProfile,
   registerOrUpdateUser,
