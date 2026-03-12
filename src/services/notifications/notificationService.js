@@ -75,13 +75,15 @@ async function sendNewsNotification(
 
     // Extraire uniquement les tokens (string[])
     const tokens = fcmTokens.map((t) => t.token);
+    const language = user.language || 'fr';
 
     // Creer la notification avec le template
     const notification = createNewsNotification(
       appId,
       { title: newsTitle, url: newsUrl, gid: newsGid },
       gameName,
-      steamId
+      steamId,
+      language
     );
 
     // Envoyer via le provider actif
@@ -155,6 +157,7 @@ async function sendFollowPromptNotifications(steamId, prompts = []) {
     let activeTokens = fcmTokens.map((t) => t.token);
     const provider = getActiveProvider();
     let sentCount = 0;
+    const language = user.language || 'fr';
 
     for (const prompt of prompts) {
       if (activeTokens.length === 0) {
@@ -164,7 +167,8 @@ async function sendFollowPromptNotifications(steamId, prompts = []) {
       const notification = createFollowPromptNotification(
         prompt.appId,
         prompt.name,
-        prompt.source || 'library'
+        prompt.source || 'library',
+        language
       );
 
       notification.data = {

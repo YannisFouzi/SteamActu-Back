@@ -8,6 +8,7 @@ const {
   filterAndSortNews,
 } = require('./newsFeed/newsProcessor');
 const UserNewsState = require('../models/UserNewsState');
+const { normalizeAppLanguage } = require('../utils/language');
 
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
 const RETENTION_DAYS = 90;
@@ -32,7 +33,7 @@ async function getNewsFeed({
   steamId,
   limit = 20,
   perGameLimit = 3,
-  language = 'fr',
+  language,
   favoritesOnly = false,
 } = {}) {
   const safeLimit = Math.max(200, Math.min(limit || 200, 200));
@@ -40,6 +41,7 @@ async function getNewsFeed({
   const now = Date.now();
 
   const { user, followedSet } = await getUserAndFollowedGames(steamId);
+  const resolvedLanguage = normalizeAppLanguage(language || user?.language);
 
   const { candidateMap, pushCandidate } = createCandidateManager();
 
@@ -90,7 +92,7 @@ async function getNewsFeed({
   const { feedItems } = await processNewsForGames(
     gamesToProcess,
     followedSet,
-    { perGameLimit: safePerGameLimit, language }
+    { perGameLimit: safePerGameLimit, language: resolvedLanguage }
   );
 
   const { timeline } = filterAndSortNews(feedItems);

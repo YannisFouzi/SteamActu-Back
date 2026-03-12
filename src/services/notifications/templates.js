@@ -1,20 +1,55 @@
-/**
- * Templates de notifications
- * Centralise le formatage des differents types de notifications
- */
+const { normalizeAppLanguage } = require('../../utils/language');
 
-/**
- * Cree une notification pour une nouvelle actualite
- * @param {string} appId - ID de l'application
- * @param {Object} newsItem - Actualite
- * @param {string} gameName - Nom du jeu (optionnel)
- * @returns {Object} - Notification formatee
- */
-function createNewsNotification(appId, newsItem, gameName = null, steamId = null) {
+const TEMPLATES = {
+  newsFallbackTitle: {
+    fr: 'Nouvelle actualite jeu',
+    en: 'New game update',
+  },
+  autoFollowTitle: {
+    fr: 'Nouveau jeu suivi automatiquement',
+    en: 'New game automatically followed',
+  },
+  autoFollowBody: {
+    fr: gameName => `${gameName} a ete ajoute a vos jeux suivis`,
+    en: gameName => `${gameName} was added to your followed games`,
+  },
+  followPromptTitle: {
+    fr: 'Voulez-vous suivre ce jeu ?',
+    en: 'Do you want to follow this game?',
+  },
+  followPromptContext: {
+    fr: {
+      library: 'votre bibliotheque Steam',
+      wishlist: 'votre wishlist Steam',
+    },
+    en: {
+      library: 'your Steam library',
+      wishlist: 'your Steam wishlist',
+    },
+  },
+  followPromptBody: {
+    fr: (gameName, contextLabel, appId) =>
+      `${gameName || `Jeu ${appId}`} a ete detecte dans ${contextLabel}.`,
+    en: (gameName, contextLabel, appId) =>
+      `${gameName || `Game ${appId}`} was detected in ${contextLabel}.`,
+  },
+};
+
+function getTemplateLanguage(language) {
+  return normalizeAppLanguage(language);
+}
+
+function createNewsNotification(
+  appId,
+  newsItem,
+  gameName = null,
+  steamId = null,
+  language = 'fr'
+) {
+  const resolvedLanguage = getTemplateLanguage(language);
+
   return {
-    title: gameName
-      ? `${gameName}`
-      : 'Nouvelle actualite jeu',
+    title: gameName || TEMPLATES.newsFallbackTitle[resolvedLanguage],
     body: newsItem.title,
     data: {
       type: 'news',
@@ -23,60 +58,53 @@ function createNewsNotification(appId, newsItem, gameName = null, steamId = null
       ...(steamId ? { steamId } : {}),
       newsId: newsItem.gid,
       context: newsItem.context || 'news',
-      allowUnfollow: true, // Permet l'affichage du bouton "Ne plus suivre ce jeu"
+      allowUnfollow: true,
     },
   };
 }
 
-/**
- * Cree une notification pour un nouveau jeu suivi automatiquement
- * @param {string} appId - ID de l'application
- * @param {string} gameName - Nom du jeu
- * @returns {Object} - Notification formatee
- */
-function createAutoFollowNotification(appId, gameName) {
+function createAutoFollowNotification(appId, gameName, language = 'fr') {
+  const resolvedLanguage = getTemplateLanguage(language);
+
   return {
-    title: 'Nouveau jeu suivi automatiquement',
-    body: `${gameName} a ete ajoute a vos jeux suivis`,
+    title: TEMPLATES.autoFollowTitle[resolvedLanguage],
+    body: TEMPLATES.autoFollowBody[resolvedLanguage](gameName),
     data: {
       type: 'auto_follow',
       appId,
-      allowUnfollow: false, // Pas de bouton unfollow sur les notifications d'auto-follow
+      allowUnfollow: false,
     },
   };
 }
 
-/**
- * Cree une notification pour proposer le suivi d'un jeu detecte
- * @param {string} appId - ID du jeu
- * @param {string} gameName - Nom du jeu
- * @param {string} source - Origine de la detection (library|wishlist)
- * @returns {Object} - Notification formatee
- */
-function createFollowPromptNotification(appId, gameName, source = 'library') {
+function createFollowPromptNotification(
+  appId,
+  gameName,
+  source = 'library',
+  language = 'fr'
+) {
+  const resolvedLanguage = getTemplateLanguage(language);
   const contextLabel =
-    source === 'wishlist' ? 'votre wishlist Steam' : 'votre bibliotheque Steam';
+    TEMPLATES.followPromptContext[resolvedLanguage][source] ||
+    TEMPLATES.followPromptContext[resolvedLanguage].library;
 
   return {
-    title: 'Voulez-vous suivre ce jeu ?',
-    body: `${gameName || `Jeu ${appId}`} a ete detecte dans ${contextLabel}.`,
+    title: TEMPLATES.followPromptTitle[resolvedLanguage],
+    body: TEMPLATES.followPromptBody[resolvedLanguage](
+      gameName,
+      contextLabel,
+      appId
+    ),
     data: {
       type: 'follow_prompt',
       appId,
       source,
       gameName: gameName || '',
-      allowUnfollow: false, // Pas de bouton unfollow sur les prompts de suivi
+      allowUnfollow: false,
     },
   };
 }
 
-/**
- * Cree une notification generale
- * @param {string} title - Titre
- * @param {string} body - Corps du message
- * @param {Object} data - Donnees supplementaires
- * @returns {Object} - Notification formatee
- */
 function createGeneralNotification(title, body, data = {}) {
   return {
     title,

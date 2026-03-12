@@ -5,6 +5,11 @@
 
 const axios = require('axios');
 const { STEAM_CONFIG } = require('../../config/app');
+const {
+  normalizeAppLanguage,
+  toSteamNewsLanguage,
+  toSteamStoreLanguage,
+} = require('../../utils/language');
 
 const STEAM_API_KEY = STEAM_CONFIG.apiKey;
 const STEAM_BASE_URL = STEAM_CONFIG.baseUrl;
@@ -93,7 +98,7 @@ async function fetchGameNews(appId, options = {}) {
     count: 100, // Récupérer plus de news pour filtrer ensuite
     maxlength: maxLength,
     format: 'json',
-    language,
+    language: toSteamNewsLanguage(language),
   };
 
   // Ajouter le filtre feeds si steamOnly est activé
@@ -139,12 +144,15 @@ async function fetchUserProfile(steamId) {
  * @param {number} appId - ID du jeu
  * @returns {Promise<Object|null>} - Détails du jeu ou null
  */
-async function fetchGameDetails(appId) {
+async function fetchGameDetails(appId, language = 'fr') {
   try {
     const response = await axios.get(
       `https://store.steampowered.com/api/appdetails`,
       {
-        params: { appids: appId, l: 'french' },
+        params: {
+          appids: appId,
+          l: toSteamStoreLanguage(normalizeAppLanguage(language)),
+        },
         timeout: 8000, // ⚡ 8 secondes max (augmenté pour éviter timeouts)
       }
     );

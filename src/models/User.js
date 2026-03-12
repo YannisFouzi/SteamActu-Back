@@ -6,6 +6,11 @@ const UserSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
+  language: {
+    type: String,
+    enum: ['fr', 'en'],
+    default: 'fr',
+  },
   lastChecked: {
     type: Date,
     default: null, // null permet sync immédiate pour nouveaux users

@@ -14,14 +14,19 @@ const {
   addUserToGameSubscription,
   removeUserFromGameSubscription,
 } = require('../services/users/subscriptionManager');
+const {
+  isSupportedAppLanguage,
+  normalizeAppLanguage,
+  SUPPORTED_LANGUAGES,
+} = require('../utils/language');
 
 // Enregistrer un nouvel utilisateur
 router.post('/register', async (req, res) => {
   try {
-    const { steamId } = req.body;
+    const { steamId, language } = req.body;
 
     // Déléguer la logique métier au service
-    const user = await steamService.registerOrUpdateUser(steamId);
+    const user = await steamService.registerOrUpdateUser(steamId, language);
 
     res.status(200).json(user);
   } catch (error) {
@@ -541,6 +546,32 @@ router.delete('/:steamId', async (req, res) => {
     });
   } catch (error) {
     console.error('Erreur lors de la suppression du compte:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+router.put('/:steamId/language', validateUserExists, async (req, res) => {
+  try {
+    const { language } = req.body || {};
+
+    if (
+      !isSupportedAppLanguage(language)
+    ) {
+      return res.status(400).json({
+        message: `language doit etre l'une des valeurs suivantes: ${SUPPORTED_LANGUAGES.join(', ')}`,
+      });
+    }
+
+    const normalizedLanguage = normalizeAppLanguage(language);
+    req.user.language = normalizedLanguage;
+    await req.user.save();
+
+    res.json({
+      steamId: req.user.steamId,
+      language: req.user.language,
+    });
+  } catch (error) {
+    console.error('Erreur lors de la mise a jour de la langue:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

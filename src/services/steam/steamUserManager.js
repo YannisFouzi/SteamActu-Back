@@ -1,99 +1,69 @@
-/**
- * Gestionnaire des utilisateurs Steam
- * Gère la création et mise à jour des utilisateurs dans la base de données
- */
-
 const User = require('../../models/User');
-const { fetchUserProfile } = require('./apiClient');
+const {
+  DEFAULT_LANGUAGE,
+  isSupportedAppLanguage,
+  normalizeAppLanguage,
+} = require('../../utils/language');
+const {fetchUserProfile} = require('./apiClient');
 
-/**
- * Enregistre ou met à jour un utilisateur dans la base de données
- * @param {string} steamId - ID Steam de l'utilisateur
- * @returns {Promise<Object>} - Utilisateur enregistré
- */
-async function registerOrUpdateUser(steamId) {
+async function registerOrUpdateUser(steamId, language) {
   try {
-    // Vérifier si l'utilisateur existe déjà
-    let user = await User.findOne({ steamId });
+    const hasExplicitLanguage = isSupportedAppLanguage(language);
+    const normalizedLanguage = hasExplicitLanguage
+      ? normalizeAppLanguage(language)
+      : DEFAULT_LANGUAGE;
+    let user = await User.findOne({steamId});
 
     if (user) {
-      // L'utilisateur existe déjà, le retourner
-      console.log(`✅ Utilisateur existant trouvé`);
+      if (hasExplicitLanguage && user.language !== normalizedLanguage) {
+        user.language = normalizedLanguage;
+        await user.save();
+      }
+
+      console.log('User already exists');
       return user;
     }
 
-    console.log(`\n${'='.repeat(70)}`);
-    console.log(`🆕 NOUVEL UTILISATEUR - Création + Sync immédiate`);
-    console.log(`${'='.repeat(70)}`);
-
-    // Récupérer les informations du profil Steam
     const profileData = await fetchUserProfile(steamId);
 
     if (!profileData) {
-      throw new Error(
-        'Impossible de récupérer les informations du profil Steam'
-      );
+      throw new Error('Unable to fetch Steam profile data');
     }
 
-    // Créer un nouvel utilisateur avec les données du profil
     user = new User({
       steamId,
+      language: normalizedLanguage,
       followedGames: [],
-      lastChecked: null, // Important : null pour permettre sync immédiate
+      lastChecked: null,
     });
 
     await user.save();
-    console.log(`✅ Utilisateur créé`);
-
-    // ⚡ SYNC IMMÉDIATE des jeux pour nouvel utilisateur
-    // L'utilisateur veut voir ses jeux immédiatement, pas attendre dimanche 3h !
-    console.log(`⚡ Lancement sync immédiate des jeux...`);
 
     try {
-      const { syncUserGames } = require('../gamesSync/userProcessor');
-      const syncResult = await syncUserGames(user);
-
-      if (syncResult.error) {
-        console.error(`⚠️ Erreur sync jeux (non bloquant):`, syncResult.error);
-      } else {
-        console.log(
-          `✅ Sync jeux réussie: ${syncResult.updatedGames?.length || 0} nouveaux jeux`
-        );
-      }
+      const {syncUserGames} = require('../gamesSync/userProcessor');
+      await syncUserGames(user);
     } catch (syncError) {
-      console.error(`⚠️ Erreur sync jeux (non bloquant):`, syncError.message);
-      // On ne bloque pas l'inscription si la sync échoue
+      console.error('Initial games sync failed:', syncError.message);
     }
 
-    // NOTE: Wishlist sync désactivée à la connexion (trop lent)
-
-    // Recharger le user pour avoir les données à jour (après sync games)
-    user = await User.findOne({ steamId });
-
-    console.log(`${'='.repeat(70)}\n`);
-
+    user = await User.findOne({steamId});
     return user;
   } catch (error) {
-    console.error(`Erreur registerOrUpdateUser:`, error.message);
+    console.error('registerOrUpdateUser error:', error.message);
     throw error;
   }
 }
 
-/**
- * Met à jour le profil d'un utilisateur existant
- * @param {string} steamId - ID Steam de l'utilisateur
- * @returns {Promise<Object|null>} - Utilisateur mis à jour ou null
- */
 async function updateUserProfile(steamId) {
   try {
-    const user = await User.findOne({ steamId });
+    const user = await User.findOne({steamId});
     if (!user) {
       return null;
     }
 
     return user;
   } catch (error) {
-    console.error(`Erreur updateUserProfile (${steamId}):`, error.message);
+    console.error(`updateUserProfile error (${steamId}):`, error.message);
     throw error;
   }
 }
