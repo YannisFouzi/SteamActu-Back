@@ -1,6 +1,6 @@
 /**
  * Service de notifications push
- * Architecture modulaire prête pour l'évolution future
+ * Architecture modulaire prete pour l'evolution future
  */
 
 const { getActiveProvider } = require('./providers');
@@ -8,13 +8,13 @@ const { createNewsNotification, createFollowPromptNotification } = require('./te
 const User = require('../../models/User');
 
 /**
- * Envoie une notification à un utilisateur
- * @param {string} token - Token de notification push du périphérique
- * @param {Object} notification - Détails de la notification
+ * Envoie une notification a un utilisateur
+ * @param {string} token - Token de notification push du peripherique
+ * @param {Object} notification - Details de la notification
  * @param {string} notification.title - Titre de la notification
  * @param {string} notification.body - Contenu de la notification
- * @param {Object} notification.data - Données supplémentaires pour la notification
- * @returns {Promise<boolean>} - Succès de l'envoi
+ * @param {Object} notification.data - Donnees supplementaires pour la notification
+ * @returns {Promise<boolean>} - Succes de l'envoi
  */
 async function sendNotification(token, notification) {
   try {
@@ -31,14 +31,14 @@ async function sendNotification(token, notification) {
 }
 
 /**
- * Envoie une notification de nouvelle actualité à un utilisateur
+ * Envoie une notification de nouvelle actualite a un utilisateur
  * @param {string} steamId - Steam ID de l'utilisateur
  * @param {string} appId - ID de l'application Steam
  * @param {string} gameName - Nom du jeu
  * @param {string} newsTitle - Titre de la news
  * @param {string} newsUrl - URL de la news Steam
  * @param {string} newsGid - GID de la news (identifiant unique Steam)
- * @returns {Promise<boolean>} - Succès de l'envoi
+ * @returns {Promise<boolean>} - Succes de l'envoi
  */
 async function sendNewsNotification(
   steamId,
@@ -49,7 +49,7 @@ async function sendNewsNotification(
   newsGid
 ) {
   try {
-    // Récupérer l'utilisateur depuis MongoDB
+    // Recuperer l'utilisateur depuis MongoDB
     const user = await User.findOne({ steamId }).lean();
 
     if (!user) {
@@ -57,15 +57,15 @@ async function sendNewsNotification(
       return false;
     }
 
-    // Vérifier que les notifications sont activées
+    // Verifier que les notifications sont activees
     // Note: undefined ou true = enabled, seul false = disabled
     // Cela permet aux anciens users (sans notificationSettings) de recevoir des notifs
     if (!user.notificationSettings?.newsNotifications) {
-      console.log(`[Notification] Notifications news désactivées pour ${steamId}`);
+      console.log(`[Notification] Notifications news desactivees pour ${steamId}`);
       return false;
     }
 
-    // Récupérer les tokens FCM
+    // Recuperer les tokens FCM
     const fcmTokens = user.notificationSettings?.fcmTokens || [];
 
     if (fcmTokens.length === 0) {
@@ -76,18 +76,19 @@ async function sendNewsNotification(
     // Extraire uniquement les tokens (string[])
     const tokens = fcmTokens.map((t) => t.token);
 
-    // Créer la notification avec le template
+    // Creer la notification avec le template
     const notification = createNewsNotification(
       appId,
       { title: newsTitle, url: newsUrl, gid: newsGid },
-      gameName
+      gameName,
+      steamId
     );
 
     // Envoyer via le provider actif
     const provider = getActiveProvider();
     const result = await provider(tokens, notification);
 
-    // Gérer les tokens invalides (auto-cleanup)
+    // Gerer les tokens invalides (auto-cleanup)
     if (result && typeof result === 'object' && result.invalidTokens) {
       console.log(
         `[Notification] Nettoyage de ${result.invalidTokens.length} token(s) invalide(s)`
@@ -111,7 +112,7 @@ async function sendNewsNotification(
     return Boolean(result);
   } catch (error) {
     console.error(
-      `[Notification] Erreur envoi news à ${steamId}:`,
+      `[Notification] Erreur envoi news a ${steamId}:`,
       error.message
     );
     return false;
@@ -119,10 +120,10 @@ async function sendNewsNotification(
 }
 
 /**
- * Envoie une ou plusieurs notifications de suivi manuel pour des jeux détectés
+ * Envoie une ou plusieurs notifications de suivi manuel pour des jeux detectes
  * @param {string} steamId - Steam ID de l'utilisateur
- * @param {Array} prompts - Jeux détectés nécessitant confirmation
- * @returns {Promise<number>} - Nombre de notifications envoyées avec succès
+ * @param {Array} prompts - Jeux detectes necessitant confirmation
+ * @returns {Promise<number>} - Nombre de notifications envoyees avec succes
  */
 async function sendFollowPromptNotifications(steamId, prompts = []) {
   try {
@@ -139,7 +140,7 @@ async function sendFollowPromptNotifications(steamId, prompts = []) {
 
     if (!user.notificationSettings?.followPromptNotifications) {
       console.log(
-        `[Notification] Notifications follow_prompt désactivées pour ${steamId}`
+        `[Notification] Notifications follow_prompt desactivees pour ${steamId}`
       );
       return 0;
     }
@@ -208,7 +209,7 @@ async function sendFollowPromptNotifications(steamId, prompts = []) {
     return sentCount;
   } catch (error) {
     console.error(
-      `[Notification] Erreur envoi follow_prompt à ${steamId}:`,
+      `[Notification] Erreur envoi follow_prompt a ${steamId}:`,
       error.message
     );
     return 0;
