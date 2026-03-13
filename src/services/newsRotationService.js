@@ -7,6 +7,7 @@ const GameSubscription = require('../models/GameSubscription');
 const UserNewsState = require('../models/UserNewsState');
 const steamService = require('./steamService');
 const notificationService = require('./notifications/notificationService');
+const { extractFirstImage } = require('./newsFeed/imageExtractor');
 
 // Configuration
 const CONFIG = {
@@ -119,6 +120,7 @@ async function checkNewsRotation() {
 
           // Si nouvelles actualités détectées
           if (latestNewsTimestamp > currentTimestamp) {
+            const firstImageUrl = extractFirstImage(news[0].contents);
             console.log(`✨ Nouvelles actualités détectées pour ${game.name}!`);
             stats.newNewsFound++;
 
@@ -167,7 +169,8 @@ async function checkNewsRotation() {
                     game.name,
                     news[0].title,
                     news[0].url,
-                    news[0].gid
+                    news[0].gid,
+                    firstImageUrl
                   )
                 )
               );

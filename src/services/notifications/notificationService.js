@@ -38,6 +38,7 @@ async function sendNotification(token, notification) {
  * @param {string} newsTitle - Titre de la news
  * @param {string} newsUrl - URL de la news Steam
  * @param {string} newsGid - GID de la news (identifiant unique Steam)
+ * @param {string|null} firstImageUrl - Premiere image detectee dans la news
  * @returns {Promise<boolean>} - Succes de l'envoi
  */
 async function sendNewsNotification(
@@ -46,7 +47,8 @@ async function sendNewsNotification(
   gameName,
   newsTitle,
   newsUrl,
-  newsGid
+  newsGid,
+  firstImageUrl = null
 ) {
   try {
     // Recuperer l'utilisateur depuis MongoDB
@@ -80,7 +82,12 @@ async function sendNewsNotification(
     // Creer la notification avec le template
     const notification = createNewsNotification(
       appId,
-      { title: newsTitle, url: newsUrl, gid: newsGid },
+      {
+        title: newsTitle,
+        url: newsUrl,
+        gid: newsGid,
+        firstImageUrl,
+      },
       gameName,
       steamId,
       language

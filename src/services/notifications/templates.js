@@ -57,6 +57,7 @@ function createNewsNotification(
       appId,
       ...(steamId ? { steamId } : {}),
       newsId: newsItem.gid,
+      ...(newsItem.firstImageUrl ? { imageUrl: newsItem.firstImageUrl } : {}),
       context: newsItem.context || 'news',
       allowUnfollow: true,
     },
