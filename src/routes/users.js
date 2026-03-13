@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const Game = require('../models/Game');
+const Wishlist = require('../models/Wishlist');
 const GameSubscription = require('../models/GameSubscription');
 const steamService = require('../services/steamService');
 require('../services/gamesSync/userProcessor');
@@ -19,6 +21,9 @@ const {
   normalizeAppLanguage,
   SUPPORTED_LANGUAGES,
 } = require('../utils/language');
+
+const isUsableHeaderImage = (imageUrl) =>
+  Boolean(imageUrl && imageUrl !== 'none');
 
 // Enregistrer un nouvel utilisateur
 router.post('/register', async (req, res) => {
@@ -472,7 +477,7 @@ router.get('/:steamId/followed-games-details', async (req, res) => {
   try {
     const { steamId } = req.params;
 
-    const user = await User.findOne({ steamId });
+    const user = await User.findOne({ steamId }).select('followedGames').lean();
     if (!user) {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
@@ -481,18 +486,63 @@ router.get('/:steamId/followed-games-details', async (req, res) => {
       return res.json({ followedGames: [] });
     }
 
-    const subscriptions = await GameSubscription.find({
-      gameId: { $in: user.followedGames },
-    })
-      .select('gameId name imageUrl')
-      .lean();
+    const followedGameIds = user.followedGames.map((gameId) =>
+      gameId.toString()
+    );
 
-    const followedGamesDetails = subscriptions.map((sub) => ({
-      appId: sub.gameId,
-      name: sub.name,
-      header_image: `https://cdn.cloudflare.steamstatic.com/steam/apps/${sub.gameId}/header.jpg`,
-      imageUrl: sub.imageUrl || '',
-    }));
+    const [subscriptions, games, wishlistGames] = await Promise.all([
+      GameSubscription.find({
+        gameId: { $in: followedGameIds },
+      })
+        .select('gameId name imageUrl')
+        .lean(),
+      Game.find({
+        appId: { $in: followedGameIds },
+      })
+        .select('appId name header_image')
+        .lean(),
+      Wishlist.find({
+        appId: { $in: followedGameIds },
+      })
+        .select('appId name header_image')
+        .lean(),
+    ]);
+
+    const subscriptionsMap = new Map(
+      subscriptions.map((sub) => [sub.gameId.toString(), sub])
+    );
+    const gamesMap = new Map(
+      games.map((game) => [game.appId.toString(), game])
+    );
+    const wishlistMap = new Map(
+      wishlistGames.map((game) => [game.appId.toString(), game])
+    );
+
+    const followedGamesDetails = followedGameIds.map((appId) => {
+      const subscription = subscriptionsMap.get(appId);
+      const game = gamesMap.get(appId);
+      const wishlistGame = wishlistMap.get(appId);
+      const canonicalHeaderImage =
+        (isUsableHeaderImage(wishlistGame?.header_image) &&
+          wishlistGame.header_image) ||
+        (isUsableHeaderImage(game?.header_image) && game.header_image) ||
+        '';
+
+      return {
+        appId,
+        name:
+          wishlistGame?.name ||
+          game?.name ||
+          subscription?.name ||
+          `Game ${appId}`,
+        header_image: canonicalHeaderImage,
+        imageUrl: subscription?.imageUrl || '',
+      };
+    });
+
+    followedGamesDetails.sort((a, b) =>
+      a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })
+    );
 
     res.json({ followedGames: followedGamesDetails });
   } catch (error) {
