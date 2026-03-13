@@ -22,8 +22,11 @@ const {
   SUPPORTED_LANGUAGES,
 } = require('../utils/language');
 
+const FOLLOW_MODES = ['off', 'auto', 'prompt'];
+
 const isUsableHeaderImage = (imageUrl) =>
   Boolean(imageUrl && imageUrl !== 'none');
+
 
 // Enregistrer un nouvel utilisateur
 router.post('/register', async (req, res) => {
@@ -90,9 +93,8 @@ router.put(
         user.notificationSettings = {};
       }
 
-      const FOLLOW_MODES = ['off', 'auto', 'prompt'];
 
-      function parseFollowMode(fieldName, value) {
+      const parseFollowMode = (fieldName, value) => {
         if (value === undefined || value === null) {
           return undefined;
         }
@@ -114,9 +116,9 @@ router.put(
         throw new Error(
           `${fieldName} doit être une chaîne (off|auto|prompt) ou un booléen`
         );
-      }
+      };
 
-      function parseOptionalBoolean(fieldName, value) {
+      const parseOptionalBoolean = (fieldName, value) => {
         if (value === undefined || value === null) {
           return undefined;
         }
@@ -138,7 +140,7 @@ router.put(
         throw new Error(
           `${fieldName} doit être un booléen ou une chaîne 'true'/'false'`
         );
-      }
+      };
 
       // Mettre à jour les paramètres de notification
       let resolvedNewsNotifications;
