@@ -46,6 +46,11 @@ const STEAM_CONFIG = {
   baseUrl: 'https://api.steampowered.com',
 };
 
+// Simulation profil privé (dev uniquement)
+const SIMULATION_CONFIG = {
+  privateProfile: process.env.SIMULATE_PRIVATE_PROFILE === 'true',
+};
+
 // Configuration SteamGridDB (icônes haute qualité)
 const STEAMGRIDDB_CONFIG = {
   apiKey: process.env.STEAMGRIDDB_API_KEY || '',
@@ -128,4 +133,5 @@ module.exports = {
   CORS_OPTIONS,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
+  SIMULATION_CONFIG,
 };

@@ -20,6 +20,7 @@ const {
   formatGame,
   getLastUpdateTimestamp,
 } = require('../services/steam/gameFormatter');
+const { SIMULATION_CONFIG } = require('../config/app');
 
 /**
  * Endpoint léger pour vérifier les versions de données
@@ -53,6 +54,12 @@ router.get('/status/:steamId', validateSteamId, async (req, res) => {
 router.get('/games/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
+
+    if (SIMULATION_CONFIG.privateProfile) {
+      console.log(`🔒 [SIMULATION] Profil privé simulé — /games/${steamId} retourne []`);
+      return res.json([]);
+    }
+
     const shouldRefreshRecent =
       req.query?.refresh === 'recent' ||
       req.query?.refresh === '1' ||
@@ -166,6 +173,11 @@ router.get('/profile/:steamId', validateSteamId, async (req, res) => {
 router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
+
+    if (SIMULATION_CONFIG.privateProfile) {
+      console.log(`🔒 [SIMULATION] Profil privé simulé — /wishlist/${steamId} retourne []`);
+      return res.json([]);
+    }
 
     const user = await User.findOne({ steamId })
       .select('wishlist followedGames')

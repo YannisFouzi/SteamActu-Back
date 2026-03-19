@@ -4,7 +4,7 @@
  */
 
 const axios = require('axios');
-const { STEAM_CONFIG } = require('../../config/app');
+const { STEAM_CONFIG, SIMULATION_CONFIG } = require('../../config/app');
 const {
   normalizeAppLanguage,
   toSteamNewsLanguage,
@@ -46,6 +46,11 @@ async function makeApiCall(url, params, context) {
  * @returns {Promise<Array>} - Liste des jeux
  */
 async function fetchUserGames(steamId) {
+  if (SIMULATION_CONFIG.privateProfile) {
+    console.log(`🔒 [SIMULATION] Profil privé simulé — fetchUserGames retourne []`);
+    return [];
+  }
+
   const params = {
     key: STEAM_API_KEY,
     steamid: steamId,
@@ -64,6 +69,11 @@ async function fetchUserGames(steamId) {
  * @returns {Promise<Array>} - Liste des jeux récents
  */
 async function fetchRecentlyPlayedGames(steamId) {
+  if (SIMULATION_CONFIG.privateProfile) {
+    console.log(`🔒 [SIMULATION] Profil privé simulé — fetchRecentlyPlayedGames retourne []`);
+    return [];
+  }
+
   const params = {
     key: STEAM_API_KEY,
     steamid: steamId,
@@ -135,7 +145,14 @@ async function fetchUserProfile(steamId) {
     `getUserProfile (${steamId})`
   );
   const players = data.response.players || [];
-  return players.length > 0 ? players[0] : null;
+  const profile = players.length > 0 ? players[0] : null;
+
+  if (profile && SIMULATION_CONFIG.privateProfile) {
+    console.log(`🔒 [SIMULATION] Profil privé simulé — communityvisibilitystate: 1`);
+    return { ...profile, communityvisibilitystate: 1 };
+  }
+
+  return profile;
 }
 
 /**
@@ -182,6 +199,11 @@ async function fetchGameDetails(appId, language = 'fr') {
  * @returns {Promise<Array>} - Liste brute des jeux de la wishlist
  */
 async function fetchUserWishlist(steamId) {
+  if (SIMULATION_CONFIG.privateProfile) {
+    console.log(`🔒 [SIMULATION] Profil privé simulé — fetchUserWishlist retourne []`);
+    return [];
+  }
+
   console.log(`📋 Récupération wishlist brute via API officielle Steam...`);
 
   try {
