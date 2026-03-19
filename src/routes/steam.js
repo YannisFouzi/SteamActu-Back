@@ -14,8 +14,9 @@ const User = require('../models/User');
 const Game = require('../models/Game');
 const Wishlist = require('../models/Wishlist');
 const { validateSteamId } = require('../middleware/steamValidators');
-const { fetchGameDetails } = require('../services/steam/apiClient');
+const { fetchGameDetails, fetchUserGames } = require('../services/steam/apiClient');
 const { syncUserGames } = require('../services/gamesSync/userProcessor');
+const { syncUserWishlist } = require('../services/syncWishlistService');
 const {
   formatGame,
   getLastUpdateTimestamp,
@@ -56,7 +57,7 @@ router.get('/games/:steamId', validateSteamId, async (req, res) => {
     const { steamId } = req.params;
 
     if (SIMULATION_CONFIG.privateProfile) {
-      console.log(`🔒 [SIMULATION] Profil privé simulé — /games/${steamId} retourne []`);
+      console.log(`🔒 [SIMULATION] Route /games → réponse vide (profil privé simulé)`);
       return res.json([]);
     }
 
@@ -175,7 +176,7 @@ router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
     const { steamId } = req.params;
 
     if (SIMULATION_CONFIG.privateProfile) {
-      console.log(`🔒 [SIMULATION] Profil privé simulé — /wishlist/${steamId} retourne []`);
+      console.log(`🔒 [SIMULATION] Route /wishlist → réponse vide (profil privé simulé)`);
       return res.json([]);
     }
 
@@ -239,6 +240,36 @@ router.get('/search', async (req, res) => {
     res.json(results);
   } catch (error) {
     console.error('Erreur dans /search:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Vérifier la visibilité du profil Steam et sync si public
+router.post('/check-visibility/:steamId', validateSteamId, async (req, res) => {
+  try {
+    const { steamId } = req.params;
+
+    // Appel direct à l'API Steam pour tester l'accès aux jeux
+    const games = await fetchUserGames(steamId);
+
+    if (!games || games.length === 0) {
+      return res.json({ visible: false });
+    }
+
+    // Profil public — sync complet games + wishlist
+    const user = await User.findOne({ steamId });
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    await syncUserGames(user, { force: true, reason: 'check-visibility' });
+    await syncUserWishlist(steamId);
+
+    console.log(`✅ [CHECK-VISIBILITY] Profil public détecté pour ${steamId} — sync complet effectué`);
+
+    res.json({ visible: true, gamesCount: games.length });
+  } catch (error) {
+    console.error('Erreur dans /check-visibility:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

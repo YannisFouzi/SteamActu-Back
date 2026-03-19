@@ -5,6 +5,7 @@ const {
   normalizeAppLanguage,
 } = require('../../utils/language');
 const {fetchUserProfile} = require('./apiClient');
+const {checkGamesVisibility} = require('./visibilityCheck');
 
 async function registerOrUpdateUser(steamId, language) {
   try {
@@ -39,11 +40,16 @@ async function registerOrUpdateUser(steamId, language) {
 
     await user.save();
 
-    try {
-      const {syncUserGames} = require('../gamesSync/userProcessor');
-      await syncUserGames(user);
-    } catch (syncError) {
-      console.error('Initial games sync failed:', syncError.message);
+    const isVisible = await checkGamesVisibility(steamId);
+    if (isVisible) {
+      try {
+        const {syncUserGames} = require('../gamesSync/userProcessor');
+        await syncUserGames(user);
+      } catch (syncError) {
+        console.error('Initial games sync failed:', syncError.message);
+      }
+    } else {
+      console.log(`🔒 [REGISTER] Profil privé détecté pour ${steamId} — sync initial ignoré`);
     }
 
     user = await User.findOne({steamId});

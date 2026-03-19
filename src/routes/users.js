@@ -7,6 +7,7 @@ const GameSubscription = require('../models/GameSubscription');
 const steamService = require('../services/steamService');
 require('../services/gamesSync/userProcessor');
 const { syncUserWishlist } = require('../services/syncWishlistService');
+const { checkGamesVisibility } = require('../services/steam/visibilityCheck');
 const {
   validateUserExists,
   validateActiveGamesFormat,
@@ -53,11 +54,16 @@ router.get('/:steamId', validateUserExists, async (req, res) => {
         !req.user?.wishlist || !req.user.wishlist?.lastFullSync;
 
       if (shouldSyncWishlist) {
-        syncUserWishlist(steamId).catch((err) => {
-          console.error(
-            'Background wishlist preload failed:',
-            err.message
-          );
+        checkGamesVisibility(steamId).then((isVisible) => {
+          if (isVisible) {
+            syncUserWishlist(steamId).catch((err) => {
+              console.error('Background wishlist preload failed:', err.message);
+            });
+          } else {
+            console.log(`🔒 [GET USER] Profil privé pour ${steamId} — wishlist sync ignoré`);
+          }
+        }).catch((err) => {
+          console.error('Background visibility check failed:', err.message);
         });
       } else {
         console.log(

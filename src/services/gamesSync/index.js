@@ -3,6 +3,7 @@ const { CRON_CONFIG } = require('../../config/app');
 const { isInBucket } = require('../../utils/userBucket');
 const { syncUserGames } = require('./userProcessor');
 const { createStats, updateStats } = require('./statsManager');
+const { checkGamesVisibility } = require('../steam/visibilityCheck');
 
 /**
  * Synchronise les jeux de tous les utilisateurs enregistrés
@@ -21,6 +22,11 @@ async function syncAllUsersGames() {
     // Pour chaque utilisateur
     for (const user of users) {
       try {
+        const isVisible = await checkGamesVisibility(user.steamId);
+        if (!isVisible) {
+          console.log(`🔒 [SYNC] Profil privé pour ${user.steamId} — sync ignoré`);
+          continue;
+        }
         const result = await syncUserGames(user);
         updateStats(stats, result);
       } catch (error) {
@@ -99,10 +105,15 @@ async function syncUserGroupByIndex(
 
     for (const user of bucketUsers) {
       try {
+        const isVisible = await checkGamesVisibility(user.steamId);
+        if (!isVisible) {
+          console.log(`🔒 [SYNC] Profil privé pour ${user.steamId} — sync groupe ignoré`);
+          continue;
+        }
         const result = await syncUserGames(user);
         updateStats(stats, result);
       } catch (error) {
-        console.error('Erreur lors de la synchronisation d’un utilisateur du groupe:', error);
+        console.error("Erreur lors de la synchronisation d'un utilisateur du groupe:", error);
         stats.errors++;
       }
     }
