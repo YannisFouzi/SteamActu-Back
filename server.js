@@ -23,6 +23,11 @@ const userRoutes = require("./src/routes/users");
 const newsRoutes = require("./src/routes/news");
 const steamRoutes = require("./src/routes/steam");
 const authRoutes = require("./src/routes/auth");
+const {
+  steamLimiter,
+  authLimiter,
+  apiLimiter,
+} = require("./src/middleware/rateLimiter");
 
 const app = express();
 
@@ -39,12 +44,12 @@ app.get("/", (req, res) => {
 });
 
 // Routes d'authentification (publiques)
-app.use("/auth", authRoutes);
+app.use("/auth", authLimiter, authRoutes);
 
 // Routes API (publiques pour l'app mobile)
-app.use("/api/users", userRoutes);
-app.use("/api/news", newsRoutes);
-app.use("/api/steam", steamRoutes);
+app.use("/api/users", apiLimiter, userRoutes);
+app.use("/api/news", apiLimiter, newsRoutes);
+app.use("/api/steam", steamLimiter, steamRoutes);
 
 // Routes debug (dev uniquement)
 if (SERVER_CONFIG.NODE_ENV === "development") {
