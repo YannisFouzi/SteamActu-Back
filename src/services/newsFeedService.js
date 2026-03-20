@@ -36,8 +36,8 @@ async function getNewsFeed({
   language,
   favoritesOnly = false,
 } = {}) {
-  const safeLimit = Math.max(200, Math.min(limit || 200, 200));
-  const safePerGameLimit = Math.max(20, Math.min(perGameLimit || 20, 20));
+  const safeLimit = Math.min(Math.max(limit || 20, 1), 200);
+  const safePerGameLimit = Math.min(Math.max(perGameLimit || 3, 1), 20);
   const now = Date.now();
 
   const { user, followedSet } = await getUserAndFollowedGames(steamId);
