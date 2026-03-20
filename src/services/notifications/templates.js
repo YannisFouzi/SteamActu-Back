@@ -82,7 +82,8 @@ function createFollowPromptNotification(
   appId,
   gameName,
   source = 'library',
-  language = 'fr'
+  language = 'fr',
+  steamId = null
 ) {
   const resolvedLanguage = getTemplateLanguage(language);
   const contextLabel =
@@ -102,6 +103,7 @@ function createFollowPromptNotification(
       source,
       gameName: gameName || '',
       allowUnfollow: false,
+      ...(steamId ? { steamId } : {}),
     },
   };
 }

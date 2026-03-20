@@ -175,7 +175,8 @@ async function sendFollowPromptNotifications(steamId, prompts = []) {
         prompt.appId,
         prompt.name,
         prompt.source || 'library',
-        language
+        language,
+        steamId
       );
 
       notification.data = {
