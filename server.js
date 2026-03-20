@@ -46,6 +46,13 @@ app.use("/api/users", userRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/steam", steamRoutes);
 
+// Routes debug (dev uniquement)
+if (SERVER_CONFIG.NODE_ENV === "development") {
+  const debugRoutes = require("./src/routes/debug");
+  app.use("/api/debug", debugRoutes);
+  console.log("[DEBUG] Routes /api/debug activées (dev only)");
+}
+
 // Middleware global de gestion des erreurs (doit rester en dernier)
 const errorHandler = require("./src/middleware/errorHandler");
 app.use(errorHandler);
