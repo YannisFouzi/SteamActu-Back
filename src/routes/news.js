@@ -4,16 +4,22 @@ const User = require('../models/User');
 const newsFeedService = require('../services/newsFeedService');
 const steamService = require('../services/steamService');
 const { normalizeAppLanguage } = require('../utils/language');
+const { isValidAppId, isValidSteamId, clampQueryInt } = require('../middleware/steamValidators');
 
 router.get('/game/:appId', async (req, res) => {
   try {
     const {appId} = req.params;
+
+    if (!isValidAppId(appId)) {
+      return res.status(400).json({message: 'AppID invalide'});
+    }
+
     const {count, maxLength, language, steamOnly} = req.query;
 
     const news = await steamService.getGameNews(
       appId,
-      count ? parseInt(count, 10) : 5,
-      maxLength ? parseInt(maxLength, 10) : 300,
+      clampQueryInt(count, 5, 1, 100),
+      clampQueryInt(maxLength, 300, 0, 5000),
       normalizeAppLanguage(language),
       steamOnly === 'false' ? false : true,
     );
@@ -28,6 +34,10 @@ router.get('/feed', async (req, res) => {
   try {
     const {steamId, limit, perGameLimit, language, favoritesOnly} = req.query;
 
+    if (steamId && !isValidSteamId(steamId)) {
+      return res.status(400).json({message: 'SteamID invalide'});
+    }
+
     let resolvedLanguage = normalizeAppLanguage(language);
 
     if (!language && steamId) {
@@ -37,8 +47,8 @@ router.get('/feed', async (req, res) => {
 
     const feed = await newsFeedService.getNewsFeed({
       steamId,
-      limit: limit ? parseInt(limit, 10) : undefined,
-      perGameLimit: perGameLimit ? parseInt(perGameLimit, 10) : undefined,
+      limit: limit !== undefined ? clampQueryInt(limit, 20, 1, 200) : undefined,
+      perGameLimit: perGameLimit !== undefined ? clampQueryInt(perGameLimit, 3, 1, 20) : undefined,
       language: resolvedLanguage,
       favoritesOnly:
         typeof favoritesOnly === 'string'

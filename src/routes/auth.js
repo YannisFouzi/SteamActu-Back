@@ -109,7 +109,7 @@ router.post("/steam/start", (req, res) => {
     });
   } catch (error) {
     console.error("[AUTH] Erreur creation tentative:", error.message);
-    res.status(500).json({ error: "Erreur interne" });
+    res.status(500).json({ message: "Erreur interne" });
   }
 });
 
@@ -120,7 +120,7 @@ router.get("/steam/status/:authToken", (req, res) => {
   const { authToken } = req.params;
 
   if (!authToken) {
-    return res.status(400).json({ error: "authToken requis" });
+    return res.status(400).json({ message: "authToken requis" });
   }
 
   const attempt = getAttempt(authToken);
@@ -171,7 +171,7 @@ router.get("/steam/return", validateOpenIdResponse, async (req, res) => {
         identity: identity || null,
       });
       return res.status(400).json({
-        error: ERROR_MESSAGES.STEAMID_NOT_FOUND,
+        message: ERROR_MESSAGES.STEAMID_NOT_FOUND,
       });
     }
 
@@ -211,7 +211,7 @@ router.get("/steam/return", validateOpenIdResponse, async (req, res) => {
   } catch (error) {
     console.error("Erreur lors de l'authentification Steam:", error);
     res.status(500).json({
-      error: ERROR_MESSAGES.AUTH_ERROR,
+      message: ERROR_MESSAGES.AUTH_ERROR,
     });
   }
 });

@@ -12,6 +12,12 @@ const {
   validateUserExists,
   validateActiveGamesFormat,
 } = require('../middleware/userValidators');
+const {
+  validateSteamId,
+  validateBodySteamId,
+  validateAppId,
+  isValidAppId,
+} = require('../middleware/steamValidators');
 const { sanitizeActiveGames } = require('../services/users/userGameProcessor');
 const {
   addUserToGameSubscription,
@@ -30,7 +36,7 @@ const isUsableHeaderImage = (imageUrl) =>
 
 
 // Enregistrer un nouvel utilisateur
-router.post('/register', async (req, res) => {
+router.post('/register', validateBodySteamId, async (req, res) => {
   try {
     const { steamId, language } = req.body;
 
@@ -45,7 +51,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Récupérer les informations d'un utilisateur
-router.get('/:steamId', validateUserExists, async (req, res) => {
+router.get('/:steamId', validateSteamId, validateUserExists, async (req, res) => {
     try {
       const { steamId } = req.params;
       res.json(req.user);
@@ -80,6 +86,7 @@ router.get('/:steamId', validateUserExists, async (req, res) => {
 // Mettre à jour les paramètres de notification
 router.put(
   '/:steamId/notifications',
+  validateSteamId,
   validateUserExists,
   async (req, res) => {
     try {
@@ -215,7 +222,7 @@ router.put(
 );
 
 // Enregistrer ou mettre à jour un token FCM
-router.post('/:steamId/fcm-token', validateUserExists, async (req, res) => {
+router.post('/:steamId/fcm-token', validateSteamId, validateUserExists, async (req, res) => {
   try {
     const { token, platform } = req.body;
     const user = req.user;
@@ -282,7 +289,7 @@ router.post('/:steamId/fcm-token', validateUserExists, async (req, res) => {
 });
 
 // Supprimer un token FCM
-router.delete('/:steamId/fcm-token', validateUserExists, async (req, res) => {
+router.delete('/:steamId/fcm-token', validateSteamId, validateUserExists, async (req, res) => {
   try {
     const { token } = req.body;
     const user = req.user;
@@ -319,6 +326,7 @@ router.delete('/:steamId/fcm-token', validateUserExists, async (req, res) => {
 // Mettre à jour la liste des jeux récemment actifs
 router.put(
   '/:steamId/active-games',
+  validateSteamId,
   validateUserExists,
   async (req, res) => {
     try {
@@ -345,11 +353,15 @@ router.put(
 );
 
 // Suivre un jeu
-router.post('/:steamId/follow', validateUserExists, async (req, res) => {
+router.post('/:steamId/follow', validateSteamId, validateUserExists, async (req, res) => {
     try {
       const { steamId } = req.params;
       const { appId, name, logoUrl } = req.body;
       const user = req.user;
+
+      if (!isValidAppId(String(appId || ''))) {
+        return res.status(400).json({ message: 'AppID invalide' });
+      }
 
       if (!Array.isArray(user.followedGames)) {
         user.followedGames = [];
@@ -383,6 +395,8 @@ router.post('/:steamId/follow', validateUserExists, async (req, res) => {
 // Ne plus suivre un jeu
 router.delete(
   '/:steamId/follow/:appId',
+  validateSteamId,
+  validateAppId,
   validateUserExists,
   async (req, res) => {
     try {
@@ -420,7 +434,7 @@ router.delete(
 );
 
 // Ajouter une news aux favoris
-router.post('/:steamId/news-favorites', validateUserExists, async (req, res) => {
+router.post('/:steamId/news-favorites', validateSteamId, validateUserExists, async (req, res) => {
   try {
     const { appId, newsId, newsDate } = req.body || {};
     if (!appId || !newsId || !newsDate) {
@@ -458,6 +472,8 @@ router.post('/:steamId/news-favorites', validateUserExists, async (req, res) => 
 // Supprimer une news des favoris
 router.delete(
   '/:steamId/news-favorites/:appId/:newsId',
+  validateSteamId,
+  validateAppId,
   validateUserExists,
   async (req, res) => {
     try {
@@ -481,7 +497,7 @@ router.delete(
   },
 );
 
-router.get('/:steamId/followed-games-details', async (req, res) => {
+router.get('/:steamId/followed-games-details', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -560,7 +576,7 @@ router.get('/:steamId/followed-games-details', async (req, res) => {
 });
 
 // Supprimer le compte utilisateur
-router.delete('/:steamId', async (req, res) => {
+router.delete('/:steamId', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -608,7 +624,7 @@ router.delete('/:steamId', async (req, res) => {
   }
 });
 
-router.put('/:steamId/language', validateUserExists, async (req, res) => {
+router.put('/:steamId/language', validateSteamId, validateUserExists, async (req, res) => {
   try {
     const { language } = req.body || {};
 

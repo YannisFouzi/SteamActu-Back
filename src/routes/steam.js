@@ -13,7 +13,7 @@ const steamService = require('../services/steamService');
 const User = require('../models/User');
 const Game = require('../models/Game');
 const Wishlist = require('../models/Wishlist');
-const { validateSteamId } = require('../middleware/steamValidators');
+const { validateSteamId, clampQueryInt } = require('../middleware/steamValidators');
 const { fetchGameDetails, fetchUserGames } = require('../services/steam/apiClient');
 const { syncUserGames } = require('../services/gamesSync/userProcessor');
 const { syncUserWishlist } = require('../services/syncWishlistService');
@@ -218,7 +218,7 @@ router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Erreur dans /wishlist/:steamId:', error);
-    res.status(500).json({ message: 'Erreur serveur', error: error.message });
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
@@ -234,7 +234,7 @@ router.get('/search', async (req, res) => {
 
     const results = await steamService.searchGames(
       q.trim(),
-      parseInt(limit) || 5
+      clampQueryInt(limit, 5, 1, 20)
     );
 
     res.json(results);
