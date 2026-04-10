@@ -21,7 +21,7 @@ API REST moderne et robuste pour la gestion des notifications et actualités Ste
 - **Framework Web** : Express.js 4.21.2
 - **Base de Données** : MongoDB avec Mongoose 8.12.1
 - **Authentification** : Steam OpenID 2.0
-- **Tâches Planifiées** : Node-cron 3.0.3
+- **Tâches Planifiées** : Agenda.js 5 (jobs persistants MongoDB)
 - **Requêtes HTTP** : Axios 1.8.2
 - **Variables d'Environnement** : dotenv 16.4.7
 
@@ -33,10 +33,8 @@ backend/
 ├── src/
 │   ├── config/              # Configuration de l'application
 │   │   ├── app.js          # Configuration Express et constantes
-│   │   └── cron/           # Système de tâches planifiées
-│   │       ├── index.js    # Initialisation des cron jobs
-│   │       ├── schedules.js # Définition des plannings
-│   │       ├── taskExecutor.js # Exécuteur de tâches
+│   │   └── cron/           # Scheduler Agenda.js
+│   │       ├── index.js    # Init Agenda, define + every des jobs
 │   │       └── tasks.js    # Tâches métier
 │   ├── database/           # Gestion de la base de données
 │   │   └── connection.js   # Connexion MongoDB et shutdown
@@ -131,13 +129,19 @@ GET /api/news/game/:appId
 GET /api/news/feed
 ```
 
-### 5. Tâches Planifiées Automatisées
+### 5. Tâches Planifiées (Agenda.js)
 
-**Système de cron jobs robuste** :
+**Scheduler persistant avec locking distribué** :
 
-- **Vérification des actualités** : toutes les heures
-- **Synchronisation par groupes** : toutes les 30 minutes
-- **Synchronisation complète** : hebdomadaire (dimanche 3h)
+Jobs stockés dans MongoDB (collection `agendaJobs`), survivent aux redémarrages. Locking atomique natif via `lockedAt` — un seul worker par job.
+
+| Job | Cron | Description |
+|-----|------|-------------|
+| `news-check` | `0 * * * *` | Toutes les heures — polling adaptatif (tiers hot/warm/cold) |
+| `user-group-sync` | `0 3-14 * * *` | 03:00→14:00, 1 des 12 groupes par heure |
+| `wishlist-sync` | `30 3-14 * * *` | 03:30→14:30, mêmes groupes, +30min offset |
+
+Timezone : `Europe/Paris`. Graceful shutdown : `stopAgenda()` avant `disconnectDatabase()`.
 
 ## 🗄️ Modèles de Données
 
@@ -167,19 +171,13 @@ GET /api/news/feed
 
 ```javascript
 {
-  appId: String,                // ID de l'application Steam
+  gameId: String,               // ID de l'application Steam
   name: String,                 // Nom du jeu
-  logoUrl: String,              // URL du logo
+  imageUrl: String,             // URL de l'image
   subscribers: [String],        // Liste des SteamID abonnés
+  lastNewsTimestamp: Number,     // Timestamp Steam dernière news connue
   lastNewsCheck: Date,          // Dernière vérification d'actualités
-  newsCache: [{                 // Cache des actualités
-    id: String,
-    title: String,
-    url: String,
-    date: Date,
-    author: String,
-    contents: String
-  }]
+  nextNewsCheckAt: Date,        // Prochaine vérification éligible (polling adaptatif)
 }
 ```
 
@@ -367,37 +365,29 @@ GET /api/news/feed?steamId={steamId}&perGameLimit=10
 - Synchronisation des métadonnées
 - Gestion des erreurs API Steam
 
-## ⚡ Système de Tâches Planifiées
+## ⚡ Polling Adaptatif des News
 
-### Configuration des Plannings
+### Principe
 
-```javascript
-// Schedules dans src/config/cron/schedules.js
-const SCHEDULES = {
-  NEWS_CHECK: "0 * * * *", // Toutes les heures
-  USER_GROUP_SYNC: "30 */2 * * *", // Toutes les 2h à :30
-  FULL_SYNC: "0 3 * * 0", // Dimanche à 3h
-};
-```
+Chaque jeu reçoit un **tier** selon l'ancienneté de sa dernière news Steam, qui détermine le cooldown avant le prochain check :
 
-### Tâches Disponibles
+| Tier | Condition | Cooldown |
+|------|-----------|----------|
+| **Hot** | `lastNewsCheck == null` ou news < 30 jours | 1 h |
+| **Warm** | News entre 30 et 60 jours | 6 h |
+| **Cold** | News > 60 jours ou aucune news connue | 24 h |
 
-1. **Vérification des actualités** (`checkNews`)
+### Fonctionnement
 
-   - Scan des jeux avec abonnés
-   - Récupération des nouvelles actualités
-   - Envoi de notifications push
+- Le job `news-check` tourne toutes les heures
+- Seuls les jeux dont `nextNewsCheckAt <= now` (ou `null`) sont vérifiés
+- Limite : **200 appels Steam max par run** (`MAX_STEAM_NEWS_CALLS_PER_RUN`)
+- Après chaque check, `nextNewsCheckAt` est recalculé selon le tier **frais** (post-appel Steam)
+- Erreur Steam → retry dans 15 min
 
-2. **Synchronisation par groupes** (`syncUserGroup`)
+### Migration
 
-   - Mise à jour des bibliothèques par batches
-   - Optimisation des appels API
-   - Gestion des quotas Steam
-
-3. **Synchronisation complète** (`syncAllUsers`)
-   - Vérification complète hebdomadaire
-   - Nettoyage des données obsolètes
-   - Maintenance de la base de données
+Script `scripts/migrate-next-news-check-at.js` : backfill étalé sur 1h pour les jeux déjà vérifiés, `null` pour les jamais vérifiés (éligibles immédiatement).
 
 ## 🛡️ Sécurité et Validation
 
@@ -521,7 +511,7 @@ CMD ["npm", "start"]
 ### Cache et Performance
 
 - **Cache MongoDB** avec index sur steamId et appId
-- **Limitation des requêtes** Steam API (1000/jour)
+- **Polling adaptatif** Steam API (tiers hot/warm/cold, max 200 appels/run)
 - **Batching des opérations** pour réduire la latence
 - **Compression gzip** activée sur Express
 
