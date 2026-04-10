@@ -49,7 +49,7 @@ async function registerOrUpdateUser(steamId, language) {
         console.error('Initial games sync failed:', syncError.message);
       }
     } else {
-      console.log(`🔒 [REGISTER] Profil privé détecté pour ${steamId} — sync initial ignoré`);
+      console.log(`[LOCKED] [REGISTER] Profil prive detecte pour ${steamId} — sync initial ignore`);
     }
 
     user = await User.findOne({steamId});

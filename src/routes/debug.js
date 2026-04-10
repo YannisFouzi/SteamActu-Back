@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { sendNewsNotification } = require('../services/notifications/notificationService');
+const { syncUserWishlist } = require('../services/syncWishlistService');
 const { isValidSteamId } = require('../middleware/steamValidators');
 
 /**
@@ -42,6 +43,33 @@ router.post('/simulate-news-notification', async (req, res) => {
   }
 
   res.json({ message: 'Notification envoyée', steamId, appId: String(appId) });
+});
+
+/**
+ * POST /api/debug/force-wishlist-sync
+ *
+ * Force la sync wishlist pour un seul utilisateur.
+ * Reproduit exactement ce que le cron ferait.
+ *
+ * Body: { steamId }
+ */
+router.post('/force-wishlist-sync', async (req, res) => {
+  const { steamId } = req.body;
+
+  if (!isValidSteamId(steamId)) {
+    return res.status(400).json({ message: 'steamId invalide' });
+  }
+
+  console.log(`\n[DEBUG] === FORCE WISHLIST SYNC pour ${steamId} ===`);
+
+  try {
+    const result = await syncUserWishlist(steamId);
+    console.log('[DEBUG] Résultat sync:', JSON.stringify(result, null, 2));
+    res.json({ message: 'Sync terminée', result });
+  } catch (error) {
+    console.error('[DEBUG] Erreur sync wishlist:', error.message);
+    res.status(500).json({ message: 'Erreur sync', error: error.message });
+  }
 });
 
 module.exports = router;

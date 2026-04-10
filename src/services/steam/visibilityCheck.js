@@ -15,7 +15,7 @@ async function checkGamesVisibility(steamId) {
     const visible = Array.isArray(games) && games.length > 0;
 
     if (!visible) {
-      console.log(`🔒 [VISIBILITY] Profil privé ou bibliothèque vide pour ${steamId}`);
+      console.log(`[LOCKED] [VISIBILITY] Profil prive ou bibliotheque vide pour ${steamId}`);
     }
 
     return visible;

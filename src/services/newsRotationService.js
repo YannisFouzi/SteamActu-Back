@@ -37,7 +37,7 @@ function sleep(ms) {
 async function checkNewsRotation() {
   // Vérifier le lock (éviter double exécution)
   if (isRotationRunning) {
-    console.log('⚠️ Rotation déjà en cours, skip...');
+    console.log('[WARN] Rotation déjà en cours, skip...');
     return {
       gamesChecked: 0,
       apiCalls: 0,
@@ -51,7 +51,7 @@ async function checkNewsRotation() {
 
   try {
     console.log('\n' + '='.repeat(60));
-    console.log('📰 DÉBUT VÉRIFICATION ACTUALITÉS (ROTATION)');
+    console.log('[NEWS] DÉBUT VÉRIFICATION ACTUALITÉS (ROTATION)');
     console.log('='.repeat(60));
 
     const startTime = Date.now();
@@ -62,10 +62,10 @@ async function checkNewsRotation() {
       .sort({ lastNewsCheck: 1 }) // Plus anciens d'abord (null en premier)
       .limit(CONFIG.MAX_GAMES_TO_CHECK);
 
-    console.log(`🎮 ${games.length} jeu(x) à vérifier`);
+    console.log(`[GAMES] ${games.length} jeu(x) à vérifier`);
 
     if (games.length === 0) {
-      console.log('ℹ️ Aucun jeu à vérifier');
+      console.log('[INFO] Aucun jeu à vérifier');
       return {
         gamesChecked: 0,
         apiCalls: 0,
@@ -90,7 +90,7 @@ async function checkNewsRotation() {
       // Vérifier la limite d'appels API
       if (stats.apiCalls >= CONFIG.MAX_API_CALLS) {
         console.log(
-          `⚠️ Limite d'appels API atteinte (${CONFIG.MAX_API_CALLS}), arrêt de la rotation`
+          `[WARN] Limite d'appels API atteinte (${CONFIG.MAX_API_CALLS}), arrêt de la rotation`
         );
         break;
       }
@@ -121,7 +121,7 @@ async function checkNewsRotation() {
           // Si nouvelles actualités détectées
           if (latestNewsTimestamp > currentTimestamp) {
             const firstImageUrl = extractFirstImage(news[0].contents);
-            console.log(`✨ Nouvelles actualités détectées pour ${game.name}!`);
+            console.log(`[NEW] Nouvelles actualités détectées pour ${game.name}!`);
             stats.newNewsFound++;
 
             // Envoyer des notifications aux abonnés (PARALLÉLISÉ par batch)
@@ -145,7 +145,7 @@ async function checkNewsRotation() {
             );
 
             console.log(
-              `📬 ${eligibleSubscribers.length}/${subscribers.length} abonné(s) éligibles (${alreadyServedSet.size} déjà servi(s))`
+              `[INFO] ${eligibleSubscribers.length}/${subscribers.length} abonné(s) éligibles (${alreadyServedSet.size} déjà servi(s))`
             );
 
             // Envoyer par batches pour éviter surcharge
@@ -201,7 +201,7 @@ async function checkNewsRotation() {
                   });
                 } else {
                   console.error(
-                    `❌ Erreur envoi notification:`,
+                    `[ERROR] Erreur envoi notification:`,
                     result.reason?.message
                   );
                 }
@@ -217,12 +217,12 @@ async function checkNewsRotation() {
 
             // Mettre à jour le timestamp
             game.lastNewsTimestamp = latestNewsTimestamp;
-            console.log(`✅ Timestamp mis à jour : ${latestNewsTimestamp}`);
+            console.log(`[OK] Timestamp mis à jour : ${latestNewsTimestamp}`);
           } else {
-            console.log(`ℹ️ Pas de nouvelles actualités`);
+            console.log(`[INFO] Pas de nouvelles actualités`);
           }
         } else {
-          console.log(`ℹ️ Aucune actualité disponible`);
+          console.log(`[INFO] Aucune actualité disponible`);
         }
 
         // Collecter les mises à jour (sauvegarde en bulk plus tard)
@@ -241,7 +241,7 @@ async function checkNewsRotation() {
         }
       } catch (error) {
         console.error(
-          `❌ Erreur lors de la vérification de ${game.name}:`,
+          `[ERROR] Erreur lors de la vérification de ${game.name}:`,
           error.message
         );
         stats.errors.push({
@@ -279,27 +279,27 @@ async function checkNewsRotation() {
 
         await GameSubscription.bulkWrite(bulkOps);
         console.log(
-          `💾 ${gamesToUpdate.length} jeu(x) mis à jour en bulk dans MongoDB`
+          `[INFO] ${gamesToUpdate.length} jeu(x) mis à jour en bulk dans MongoDB`
         );
       } catch (bulkError) {
-        console.error(`❌ Erreur bulkWrite:`, bulkError.message);
+        console.error(`[ERROR] Erreur bulkWrite:`, bulkError.message);
       }
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
     console.log('\n' + '='.repeat(60));
-    console.log('📊 RÉSUMÉ VÉRIFICATION ACTUALITÉS');
+    console.log('[INFO] RÉSUMÉ VÉRIFICATION ACTUALITÉS');
     console.log('='.repeat(60));
-    console.log(`⏱️  Durée : ${duration}s`);
-    console.log(`🎮 Jeux vérifiés : ${stats.gamesChecked}`);
-    console.log(`🔌 Appels API Steam : ${stats.apiCalls}`);
-    console.log(`✨ Nouvelles actualités trouvées : ${stats.newNewsFound}`);
-    console.log(`📬 Notifications envoyées : ${stats.notificationsSent}`);
-    console.log(`❌ Erreurs : ${stats.errors.length}`);
+    console.log(`[TIMER] Durée : ${duration}s`);
+    console.log(`[GAMES] Jeux vérifiés : ${stats.gamesChecked}`);
+    console.log(`[SYNC] Appels API Steam : ${stats.apiCalls}`);
+    console.log(`[NEW] Nouvelles actualités trouvées : ${stats.newNewsFound}`);
+    console.log(`[INFO] Notifications envoyées : ${stats.notificationsSent}`);
+    console.log(`[ERROR] Erreurs : ${stats.errors.length}`);
 
     if (stats.errors.length > 0) {
-      console.log('\n❌ Erreurs détaillées :');
+      console.log('\n[ERROR] Erreurs détaillées :');
       stats.errors.forEach((err) => {
         console.log(`  - ${err.gameName} (${err.gameId}): ${err.error}`);
       });
@@ -310,7 +310,7 @@ async function checkNewsRotation() {
     return stats;
   } catch (error) {
     console.error(
-      '❌ Erreur globale lors de la vérification des actualités:',
+      '[ERROR] Erreur globale lors de la vérification des actualités:',
       error
     );
     throw error;

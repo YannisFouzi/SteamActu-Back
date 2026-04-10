@@ -24,7 +24,7 @@ async function syncAllUsersGames() {
       try {
         const isVisible = await checkGamesVisibility(user.steamId);
         if (!isVisible) {
-          console.log(`🔒 [SYNC] Profil privé pour ${user.steamId} — sync ignoré`);
+          console.log(`[LOCKED] [SYNC] Profil privé pour ${user.steamId} — sync ignoré`);
           continue;
         }
         const result = await syncUserGames(user);
@@ -107,7 +107,7 @@ async function syncUserGroupByIndex(
       try {
         const isVisible = await checkGamesVisibility(user.steamId);
         if (!isVisible) {
-          console.log(`🔒 [SYNC] Profil privé pour ${user.steamId} — sync groupe ignoré`);
+          console.log(`[LOCKED] [SYNC] Profil privé pour ${user.steamId} — sync groupe ignoré`);
           continue;
         }
         const result = await syncUserGames(user);

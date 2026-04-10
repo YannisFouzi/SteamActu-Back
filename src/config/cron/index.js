@@ -23,14 +23,14 @@ function hourToGroupIndex(hour /* 0..23 */) {
 function initCronJobs() {
   // NEWS_CHECK : toutes les heures
   cron.schedule(SCHEDULES.NEWS_CHECK, () => {
-    executeTask('📰 NEWS_CHECK (hourly)', checkNews);
+    executeTask('NEWS_CHECK (hourly)', checkNews);
   }, { timezone: TZ });
 
   // USER_GROUP_SYNC : tous les jours 03..14 (12 groupes)
   cron.schedule(SCHEDULES.USER_GROUP_SYNC_WINDOW, () => {
     const h = getParisHour();
     const groupIndex = hourToGroupIndex(h);
-    executeTask(`👥 USER_GROUP_SYNC (groupe ${groupIndex + 1}/${GROUPS_TOTAL})`, () =>
+    executeTask(`USER_GROUP_SYNC (groupe ${groupIndex + 1}/${GROUPS_TOTAL})`, () =>
       syncUserGroup({ groupIndex, groupsTotal: GROUPS_TOTAL })
     );
   }, { timezone: TZ });
@@ -40,14 +40,14 @@ function initCronJobs() {
   cron.schedule(SCHEDULES.WISHLIST_SYNC_WINDOW, () => {
     const h = getParisHour();
     const groupIndex = hourToGroupIndex(h);
-    executeTask(`🎯 WISHLIST_SYNC (groupe ${groupIndex + 1}/${GROUPS_TOTAL})`, () =>
+    executeTask(`WISHLIST_SYNC (groupe ${groupIndex + 1}/${GROUPS_TOTAL})`, () =>
       syncWishlists({ groupIndex, groupsTotal: GROUPS_TOTAL })
     );
   }, { timezone: TZ });
 
   // FULL_SYNC disponible mais non planifié
   // cron.schedule(SCHEDULES.FULL_SYNC, () => {
-  //   executeTask('🔄 FULL_SYNC (manuel conseillé)', syncAllUsers);
+  //   executeTask('FULL_SYNC (manuel conseille)', syncAllUsers);
   // }, { timezone: TZ });
 }
 

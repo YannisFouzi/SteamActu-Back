@@ -57,7 +57,7 @@ router.get('/games/:steamId', validateSteamId, async (req, res) => {
     const { steamId } = req.params;
 
     if (SIMULATION_CONFIG.privateProfile) {
-      console.log(`🔒 [SIMULATION] Route /games → réponse vide (profil privé simulé)`);
+      console.log(`[LOCKED] [SIMULATION] Route /games → réponse vide (profil privé simulé)`);
       return res.json([]);
     }
 
@@ -103,19 +103,33 @@ router.get('/games/:steamId', validateSteamId, async (req, res) => {
     // 'none' = déjà tenté, pas d'image dispo → on ne réessaie pas
     const gamesToEnrich = gamesData.filter((g) => !g.header_image);
     if (gamesToEnrich.length > 0) {
+      const BATCH_SIZE = 5;
       let enrichedCount = 0;
-      for (const g of gamesToEnrich) {
-        const details = await fetchGameDetails(g.appId).catch(() => null);
-        const headerImage = details?.header_image || 'none';
-        await Game.updateOne(
-          { appId: g.appId },
-          { $set: { header_image: headerImage } }
+
+      for (let i = 0; i < gamesToEnrich.length; i += BATCH_SIZE) {
+        const batch = gamesToEnrich.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(
+          batch.map((g) => fetchGameDetails(g.appId).catch(() => null))
         );
-        if (details?.header_image) {
-          g.header_image = details.header_image;
-          enrichedCount++;
+
+        const bulkOps = [];
+        for (let j = 0; j < batch.length; j++) {
+          const headerImage = results[j]?.header_image || 'none';
+          bulkOps.push({
+            updateOne: {
+              filter: { appId: batch[j].appId },
+              update: { $set: { header_image: headerImage } },
+            },
+          });
+          if (results[j]?.header_image) {
+            batch[j].header_image = results[j].header_image;
+            enrichedCount++;
+          }
         }
+
+        await Game.bulkWrite(bulkOps, { ordered: false });
       }
+
       if (enrichedCount > 0) {
         console.log(`[LAZY] ${enrichedCount}/${gamesToEnrich.length} jeux enrichis avec header_image`);
       }
@@ -176,7 +190,7 @@ router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
     const { steamId } = req.params;
 
     if (SIMULATION_CONFIG.privateProfile) {
-      console.log(`🔒 [SIMULATION] Route /wishlist → réponse vide (profil privé simulé)`);
+      console.log(`[LOCKED] [SIMULATION] Route /wishlist → réponse vide (profil privé simulé)`);
       return res.json([]);
     }
 
@@ -185,7 +199,7 @@ router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
       .lean();
 
     if (!user?.wishlist?.games || user.wishlist.games.length === 0) {
-      console.log('ℹ️ Wishlist vide');
+      console.log('[INFO] Wishlist vide');
       return res.json([]);
     }
 
@@ -214,7 +228,7 @@ router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
       .filter(Boolean)
       .sort((a, b) => b.date_added - a.date_added);
 
-    console.log(`✅ ${result.length} jeux retournés depuis BDD`);
+    console.log(`[OK] ${result.length} jeux retournés depuis BDD`);
     res.json(result);
   } catch (error) {
     console.error('Erreur dans /wishlist/:steamId:', error);
@@ -229,6 +243,12 @@ router.get('/search', async (req, res) => {
     if (!q || q.trim().length < 2) {
       return res.status(400).json({
         message: 'La recherche doit contenir au moins 2 caractères',
+      });
+    }
+
+    if (q.trim().length > 100) {
+      return res.status(400).json({
+        message: 'La recherche ne peut pas dépasser 100 caractères',
       });
     }
 
@@ -265,7 +285,7 @@ router.post('/check-visibility/:steamId', validateSteamId, async (req, res) => {
     await syncUserGames(user, { force: true, reason: 'check-visibility' });
     await syncUserWishlist(steamId);
 
-    console.log(`✅ [CHECK-VISIBILITY] Profil public détecté pour ${steamId} — sync complet effectué`);
+    console.log(`[OK] [CHECK-VISIBILITY] Profil public détecté pour ${steamId} — sync complet effectué`);
 
     res.json({ visible: true, gamesCount: games.length });
   } catch (error) {

@@ -30,9 +30,9 @@ function initializeFirebase() {
       console.log('[Firebase] Chargement credentials depuis FIREBASE_SERVICE_ACCOUNT_JSON...');
       try {
         serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-        console.log('[Firebase] ✅ Credentials chargés depuis variable d\'env');
+        console.log('[Firebase] [OK] Credentials chargés depuis variable d\'env');
       } catch (parseError) {
-        console.error('[Firebase] ❌ Erreur parsing JSON depuis env:', parseError.message);
+        console.error('[Firebase] [ERROR] Erreur parsing JSON depuis env:', parseError.message);
         isFirebaseInitialized = true;
         return false;
       }
@@ -50,7 +50,7 @@ function initializeFirebase() {
       // Vérifier que le fichier existe
       if (!fs.existsSync(serviceAccountPath)) {
         console.error(
-          `[Firebase] ❌ Fichier service account introuvable: ${serviceAccountPath}`
+          `[Firebase] [ERROR] Fichier service account introuvable: ${serviceAccountPath}`
         );
         console.error(
           `[Firebase] Vérifiez que FIREBASE_SERVICE_ACCOUNT_PATH pointe vers le bon fichier`
@@ -61,7 +61,7 @@ function initializeFirebase() {
 
       // Charger le service account avec chemin absolu
       serviceAccount = require(serviceAccountPath);
-      console.log('[Firebase] ✅ Credentials chargés depuis fichier');
+      console.log('[Firebase] [OK] Credentials chargés depuis fichier');
     }
     // Aucune méthode disponible
     else {
@@ -80,10 +80,10 @@ function initializeFirebase() {
     firebaseAdmin = admin;
     isFirebaseInitialized = true;
 
-    console.log('[Firebase] ✅ Firebase Admin SDK initialisé avec succès');
+    console.log('[Firebase] [OK] Firebase Admin SDK initialisé avec succès');
     return true;
   } catch (error) {
-    console.error('[Firebase] ❌ Erreur initialisation:', error.message);
+    console.error('[Firebase] [ERROR] Erreur initialisation:', error.message);
     isFirebaseInitialized = true;
     return false;
   }
@@ -177,10 +177,10 @@ async function firebaseProvider(tokens, notification) {
       }, {}),
     };
 
-    // Determiner si la notification a besoin de boutons action (Notifee)
-    // Si oui → data-only (Notifee affiche et gere les boutons)
-    // Si non → notification+data (FCM affiche nativement, tap fiable)
-    const needsActionButtons = allowUnfollowValue === 'true';
+    // Data-only (Notifee) pour les notifs qui ont une action custom (unfollow OU follow_prompt)
+    // Notifee gere l'affichage + le tap de maniere fiable, y compris au cold start
+    const needsNotifeeHandling =
+      allowUnfollowValue === 'true' || payloadData.type === 'follow_prompt';
 
     const message = {
       data: {
@@ -207,7 +207,7 @@ async function firebaseProvider(tokens, notification) {
 
     // Ajouter la cle notification seulement pour les notifs sans bouton action
     // FCM affiche nativement → tap fiable dans tous les etats Android
-    if (!needsActionButtons) {
+    if (!needsNotifeeHandling) {
       message.notification = {
         title: notification.title || '',
         body: notification.body || '',
@@ -219,8 +219,8 @@ async function firebaseProvider(tokens, notification) {
     }
 
     // LOGS DETAILLES
-    console.log('[Firebase] 📤 Préparation envoi notification:');
-    console.log('  Mode:', needsActionButtons ? 'data-only (Notifee + boutons)' : 'notification+data (FCM natif)');
+    console.log('[Firebase] [INFO] Préparation envoi notification:');
+    console.log('  Mode:', needsNotifeeHandling ? 'data-only (Notifee + boutons)' : 'notification+data (FCM natif)');
     console.log('  Tokens:', tokenList.length, 'devices');
     console.log('  Title:', notification.title || '');
     console.log('  Body:', notification.body || '');
@@ -236,7 +236,7 @@ async function firebaseProvider(tokens, notification) {
     });
 
     console.log(
-      `[Firebase] ✅ ${response.successCount}/${tokenList.length} notifications envoyées`
+      `[Firebase] [OK] ${response.successCount}/${tokenList.length} notifications envoyées`
     );
 
     // Logger les tokens invalides pour nettoyage
@@ -246,7 +246,7 @@ async function firebaseProvider(tokens, notification) {
         if (!resp.success) {
           const errorCode = resp.error?.code;
           console.warn(
-            `[Firebase] ⚠️ Échec envoi token [${idx}]: ${errorCode}`
+            `[Firebase] [WARN] Échec envoi token [${idx}]: ${errorCode}`
           );
 
           // Liste des erreurs FCM indiquant un token définitivement invalide
@@ -267,17 +267,17 @@ async function firebaseProvider(tokens, notification) {
 
           if (PERMANENT_ERROR_CODES.includes(errorCode)) {
             console.warn(
-              `[Firebase] → Token marqué pour suppression (erreur permanente)`
+              `[Firebase] [WARN] Token marqué pour suppression (erreur permanente)`
             );
             failedTokens.push(tokenList[idx]);
           } else if (TEMPORARY_ERROR_CODES.includes(errorCode)) {
             console.warn(
-              `[Firebase] → Token conservé (erreur temporaire, réessayer plus tard)`
+              `[Firebase] [WARN] Token conservé (erreur temporaire, réessayer plus tard)`
             );
           } else {
             // Erreur inconnue : logger mais ne pas supprimer par précaution
             console.error(
-              `[Firebase] → Code d'erreur inconnu: ${errorCode} (token conservé)`
+              `[Firebase] [ERROR] Code d'erreur inconnu: ${errorCode} (token conservé)`
             );
           }
         }
@@ -291,7 +291,7 @@ async function firebaseProvider(tokens, notification) {
 
     return response.successCount > 0;
   } catch (error) {
-    console.error('[Firebase] ❌ Erreur envoi:', error.message);
+    console.error('[Firebase] [ERROR] Erreur envoi:', error.message);
     return false;
   }
 }

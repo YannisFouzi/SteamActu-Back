@@ -47,7 +47,7 @@ async function makeApiCall(url, params, context) {
  */
 async function fetchUserGames(steamId) {
   if (SIMULATION_CONFIG.privateProfile) {
-    console.log(`🔒 [SIMULATION] Profil privé simulé — fetchUserGames retourne []`);
+    console.log('[LOCKED] [SIMULATION] Profil prive simule — fetchUserGames retourne []');
     return [];
   }
 
@@ -70,7 +70,7 @@ async function fetchUserGames(steamId) {
  */
 async function fetchRecentlyPlayedGames(steamId) {
   if (SIMULATION_CONFIG.privateProfile) {
-    console.log(`🔒 [SIMULATION] Profil privé simulé — fetchRecentlyPlayedGames retourne []`);
+    console.log('[LOCKED] [SIMULATION] Profil prive simule — fetchRecentlyPlayedGames retourne []');
     return [];
   }
 
@@ -148,7 +148,7 @@ async function fetchUserProfile(steamId) {
   const profile = players.length > 0 ? players[0] : null;
 
   if (profile && SIMULATION_CONFIG.privateProfile) {
-    console.log(`🔒 [SIMULATION] Profil privé simulé — communityvisibilitystate: 1`);
+    console.log('[LOCKED] [SIMULATION] Profil prive simule — communityvisibilitystate: 1');
     return { ...profile, communityvisibilitystate: 1 };
   }
 
@@ -181,7 +181,7 @@ async function fetchGameDetails(appId, language = 'fr') {
         header_image: gameData.data.header_image,
         capsule_image: gameData.data.capsule_image,
         short_description: gameData.data.short_description,
-        // ❌ Date de sortie supprimée
+        // Date de sortie supprimee
       };
     }
     return null;
@@ -200,11 +200,11 @@ async function fetchGameDetails(appId, language = 'fr') {
  */
 async function fetchUserWishlist(steamId) {
   if (SIMULATION_CONFIG.privateProfile) {
-    console.log(`🔒 [SIMULATION] Profil privé simulé — fetchUserWishlist retourne []`);
+    console.log('[LOCKED] [SIMULATION] Profil prive simule — fetchUserWishlist retourne []');
     return [];
   }
 
-  console.log(`📋 Récupération wishlist brute via API officielle Steam...`);
+  console.log('[INFO] Recuperation wishlist brute via API officielle Steam...');
 
   try {
     const params = {
@@ -220,14 +220,14 @@ async function fetchUserWishlist(steamId) {
 
     const wishlistItems = data.response?.items || [];
 
-    console.log(`✅ Wishlist API récupérée : ${wishlistItems.length} jeux (brut)`);
+    console.log(`[OK] Wishlist API recuperee : ${wishlistItems.length} jeux (brut)`);
     return wishlistItems.map((item) => ({
       appid: item.appid,
       date_added: item.date_added,
       priority: item.priority,
     }));
   } catch (error) {
-    console.error(`❌ Erreur récupération wishlist:`, error.message);
+    console.error('[ERROR] Erreur recuperation wishlist:', error.message);
     return [];
   }
 }

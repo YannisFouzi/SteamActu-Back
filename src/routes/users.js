@@ -66,7 +66,7 @@ router.get('/:steamId', validateSteamId, validateUserExists, async (req, res) =>
               console.error('Background wishlist preload failed:', err.message);
             });
           } else {
-            console.log(`🔒 [GET USER] Profil privé pour ${steamId} — wishlist sync ignoré`);
+            console.log(`[LOCKED] [GET USER] Profil privé pour ${steamId} — wishlist sync ignoré`);
           }
         }).catch((err) => {
           console.error('Background visibility check failed:', err.message);
@@ -357,34 +357,34 @@ router.post('/:steamId/follow', validateSteamId, validateUserExists, async (req,
     try {
       const { steamId } = req.params;
       const { appId, name, logoUrl } = req.body;
-      const user = req.user;
 
       if (!isValidAppId(String(appId || ''))) {
         return res.status(400).json({ message: 'AppID invalide' });
       }
 
-      if (!Array.isArray(user.followedGames)) {
-        user.followedGames = [];
-      }
-
       // Vérifier si le jeu est déjà suivi
-      const isAlreadyFollowed = user.followedGames.includes(appId);
-      if (isAlreadyFollowed) {
+      if (Array.isArray(req.user.followedGames) && req.user.followedGames.includes(appId)) {
         return res.status(400).json({ message: 'Ce jeu est déjà suivi' });
       }
 
-      // 1. Ajouter à user.followedGames
-      user.followedGames.push(appId);
+      // Mise à jour atomique : pas de race condition si deux requêtes arrivent en même temps
+      const updatedUser = await User.findOneAndUpdate(
+        { steamId, followedGames: { $ne: appId } },
+        {
+          $addToSet: { followedGames: appId },
+          $set: { gamesVersion: new Date() },
+        },
+        { new: true }
+      );
 
-      // ✨ Bump version pour invalidation cache frontend
-      user.gamesVersion = new Date();
+      if (!updatedUser) {
+        return res.status(400).json({ message: 'Ce jeu est déjà suivi' });
+      }
 
-      await user.save();
-
-      // 2. Mettre à jour GameSubscription avec imageUrl
+      // Mettre à jour GameSubscription avec imageUrl
       await addUserToGameSubscription(appId, steamId, name, logoUrl);
 
-      res.json(user);
+      res.json(updatedUser);
     } catch (error) {
       console.error("Erreur lors de l'ajout du jeu aux suivis:", error);
       res.status(500).json({ message: 'Erreur serveur' });
@@ -401,31 +401,30 @@ router.delete(
   async (req, res) => {
     try {
       const { steamId, appId } = req.params;
-      const user = req.user;
-
-      if (!Array.isArray(user.followedGames)) {
-        user.followedGames = [];
-      }
 
       // Vérifier si l'utilisateur suit ce jeu
-      if (!user.followedGames.includes(appId)) {
+      if (!Array.isArray(req.user.followedGames) || !req.user.followedGames.includes(appId)) {
         return res.status(400).json({ message: "Ce jeu n'est pas suivi" });
       }
 
-      // 1. Retirer de user.followedGames
-      user.followedGames = user.followedGames.filter(
-        (gameId) => gameId !== appId
+      // Mise à jour atomique
+      const updatedUser = await User.findOneAndUpdate(
+        { steamId, followedGames: appId },
+        {
+          $pull: { followedGames: appId },
+          $set: { gamesVersion: new Date() },
+        },
+        { new: true }
       );
 
-      // ✨ Bump version pour invalidation cache frontend
-      user.gamesVersion = new Date();
+      if (!updatedUser) {
+        return res.status(400).json({ message: "Ce jeu n'est pas suivi" });
+      }
 
-      await user.save();
-
-      // 2. Mettre à jour GameSubscription
+      // Mettre à jour GameSubscription
       await removeUserFromGameSubscription(appId, steamId);
 
-      res.json(user);
+      res.json(updatedUser);
     } catch (error) {
       console.error('Erreur lors du retrait du jeu des suivis:', error);
       res.status(500).json({ message: 'Erreur serveur' });
@@ -595,7 +594,7 @@ router.delete('/:steamId', validateSteamId, async (req, res) => {
     // Unfollow tous les jeux (nettoyage automatique des GameSubscriptions)
     if (user.followedGames && user.followedGames.length > 0) {
       console.log(
-        `📋 Nettoyage de ${user.followedGames.length} jeux suivis...`
+        `[INFO] Nettoyage de ${user.followedGames.length} jeux suivis...`
       );
 
       for (const appId of user.followedGames) {
@@ -606,13 +605,13 @@ router.delete('/:steamId', validateSteamId, async (req, res) => {
       }
 
       console.log(
-        `✅ ${stats.gameSubscriptionsRemoved} GameSubscription(s) supprimée(s)`
+        `[OK] ${stats.gameSubscriptionsRemoved} GameSubscription(s) supprimée(s)`
       );
     }
 
     // Supprimer le compte utilisateur
     await User.deleteOne({ steamId });
-    console.log('✅ Compte utilisateur supprimé');
+    console.log('[OK] Compte utilisateur supprimé');
 
     res.json({
       message: 'Compte supprimé avec succès',

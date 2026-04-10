@@ -26,7 +26,7 @@ function canSyncUser(user, force = false) {
   console.log(`  - lastChecked: ${lastSyncTime.toISOString()}`);
   console.log(`  - Cooldown expires at: ${cooldownTime.toISOString()}`);
   console.log(`  - Current time: ${new Date().toISOString()}`);
-  console.log(`  - Can sync: ${canSync ? 'true ✅' : 'false ❌'}`);
+  console.log(`  - Can sync: ${canSync ? 'true' : 'false'}`);
 
   return canSync;
 }
@@ -95,7 +95,7 @@ async function upsertGamesCollection(steamGames) {
 
   if (newGames.length === 0) {
     console.log(
-      `[SYNC] upsertGamesCollection() - Aucun nouvel appId à insérer ✅`
+      `[SYNC] upsertGamesCollection() - Aucun nouvel appId à insérer [OK]`
     );
     return;
   }
@@ -228,7 +228,7 @@ async function processAutoFollow(
       }
 
       console.log(
-        `✅ ${gamesToHandle.length} GameSubscriptions mises à jour via auto-follow`
+        `[OK] ${gamesToHandle.length} GameSubscriptions mises à jour via auto-follow`
       );
     } else if (followMode === 'prompt') {
       for (const entry of gamesToHandle) {
@@ -254,7 +254,7 @@ async function processAutoFollow(
       }
     }
   } catch (error) {
-    console.error('❌ Erreur traitement follow mode:', error.message);
+    console.error('[ERROR] Erreur traitement follow mode:', error.message);
   }
 
   return {
@@ -327,7 +327,7 @@ async function syncUserGames(user, options = {}) {
     console.log(`  - Jeux récemment lancés (2 semaines): ${recentlyPlayedGames.length}`);
 
     await upsertGamesCollection(userGames);
-    console.log(`✅ ${userGames.length} jeux créés/mis à jour dans Games`);
+    console.log(`[OK] ${userGames.length} jeux créés/mis à jour dans Games`);
 
     const cachedGameIds = new Set(
       (user.gameLibrary?.games || []).map((g) => g.gameId)
@@ -336,7 +336,7 @@ async function syncUserGames(user, options = {}) {
     const removedGameIds = detectRemovedGames(user, userGames);
     if (removedGameIds.length > 0) {
       console.log(
-        `🗑️  ${removedGameIds.length} jeu(x) supprimé(s) de la bibliothèque Steam`
+        `[INFO] ${removedGameIds.length} jeu(x) supprimé(s) de la bibliothèque Steam`
       );
       result.removedGames = removedGameIds;
 
@@ -360,7 +360,7 @@ async function syncUserGames(user, options = {}) {
     if (autoFollowResult.hasNewFollowedGames) {
       user.followedGames = Array.from(new Set(autoFollowResult.updatedFollowedGames));
       console.log(
-        `✅ ${result.updatedGames.length} jeux auto-suivis pour un utilisateur`
+        `[OK] ${result.updatedGames.length} jeux auto-suivis pour un utilisateur`
       );
     }
 
@@ -397,12 +397,12 @@ async function syncUserGames(user, options = {}) {
 
     user.lastChecked = new Date();
 
-    // ✨ Bump version pour invalidation cache frontend
+    // Bump version pour invalidation cache frontend
     user.gamesVersion = new Date();
 
     await user.save();
 
-    console.log(`✅ Bibliothèque mise à jour: ${user.gameLibrary.games.length} jeux`);
+    console.log(`[OK] Bibliothèque mise à jour: ${user.gameLibrary.games.length} jeux`);
 
     if (result.followPrompts && result.followPrompts.length > 0) {
       try {
@@ -411,7 +411,7 @@ async function syncUserGames(user, options = {}) {
           result.followPrompts
         );
         console.log(
-          `📬 ${sent}/${result.followPrompts.length} notification(s) follow_prompt envoyée(s)`
+          `[INFO] ${sent}/${result.followPrompts.length} notification(s) follow_prompt envoyée(s)`
         );
       } catch (promptError) {
         console.error(
@@ -425,10 +425,10 @@ async function syncUserGames(user, options = {}) {
     console.log(`\n[SYNC] syncUserGames() - RÉSULTAT`);
     console.log(`  - Résumé pour l'utilisateur synchronisé`);
     console.log(
-      `  - gameLibrary.games: ${user.gameLibrary.games.length} jeux écrits ✅`
+      `  - gameLibrary.games: ${user.gameLibrary.games.length} jeux écrits [OK]`
     );
     console.log(
-      `  - Games collection: ${userGames.length} documents créés/mis à jour ✅`
+      `  - Games collection: ${userGames.length} documents créés/mis à jour [OK]`
     );
     console.log(`  - Nouveaux jeux détectés: ${result.updatedGames.length}`);
     console.log(`  - Auto-followed: ${result.updatedGames.length}`);
