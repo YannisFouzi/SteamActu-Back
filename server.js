@@ -1,5 +1,5 @@
 /**
- * Serveur principal de l'API Steam Notifications
+ * Serveur principal de l'API (backend GameNotif / steam-actu)
  * Architecture modulaire avec separation des responsabilites
  */
 
