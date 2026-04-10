@@ -2,14 +2,16 @@
  * Script pour déclencher une VRAIE notification automatique
  * Simule une nouvelle actualité en resetant le timestamp puis lance la vérification
  *
- * Usage: node trigger-real-notification.js <appId>
- * Exemple: node trigger-real-notification.js 730
+ * Usage: node scripts/trigger-real-notification.js <appId>
+ * (depuis le dossier backend)
+ * Exemple: node scripts/trigger-real-notification.js 730
  */
 
+const path = require('path');
 const mongoose = require('mongoose');
-require('dotenv').config();
-const GameSubscription = require('./src/models/GameSubscription');
-const { checkNewsRotation } = require('./src/services/newsRotationService');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+const GameSubscription = require('../src/models/GameSubscription');
+const { checkNewsRotation } = require('../src/services/newsRotationService');
 
 async function triggerRealNotification() {
   try {

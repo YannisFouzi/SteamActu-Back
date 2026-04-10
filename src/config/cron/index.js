@@ -3,7 +3,7 @@
  * Remplace node-cron + JobLock custom.
  *
  * Trois jobs récurrents :
- *   - news-check       : toutes les heures (HH:00)
+ *   - news-check       : toutes les 30 min
  *   - user-group-sync  : tous les jours 03:00 → 14:00 (12 groupes, 1/h)
  *   - wishlist-sync    : tous les jours 03:30 → 14:30 (12 groupes, +30min d'offset)
  *
@@ -120,7 +120,7 @@ async function initAgenda() {
     JOBS.NEWS_CHECK,
     { lockLifetime: LONG_JOB_LOCK_LIFETIME_MS },
     async () => {
-      await runTask('NEWS_CHECK (hourly)', checkNews);
+      await runTask('NEWS_CHECK (every 30min)', checkNews);
     }
   );
 

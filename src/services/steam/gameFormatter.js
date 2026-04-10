@@ -62,26 +62,7 @@ function getLastUpdateTimestamp(appId, user = null) {
   return lastUpdateTimestamp;
 }
 
-/**
- * Met à jour le cache global avec un nouveau timestamp
- * @param {string} appId - ID de l'application
- * @param {number} timestamp - Nouveau timestamp
- */
-function updateGameCache(appId, timestamp) {
-  if (!global.gameNewsCache) {
-    global.gameNewsCache = {};
-  }
-
-  if (timestamp > 0) {
-    global.gameNewsCache[appId] = {
-      timestamp,
-      updated: Date.now(),
-    };
-  }
-}
-
 module.exports = {
   formatGame,
   getLastUpdateTimestamp,
-  updateGameCache,
 };

@@ -60,21 +60,6 @@ async function registerOrUpdateUser(steamId, language) {
   }
 }
 
-async function updateUserProfile(steamId) {
-  try {
-    const user = await User.findOne({steamId});
-    if (!user) {
-      return null;
-    }
-
-    return user;
-  } catch (error) {
-    console.error(`updateUserProfile error (${steamId}):`, error.message);
-    throw error;
-  }
-}
-
 module.exports = {
   registerOrUpdateUser,
-  updateUserProfile,
 };

@@ -1,18 +1,20 @@
 /**
  * Script de test pour les notifications follow_prompt.
- * Usage: node test-follow-prompt.js <steamId> <appId> <source>
+ * Usage: node scripts/test-follow-prompt.js <steamId> <appId> <source>
+ * (depuis le dossier backend)
  *
  * Exemples:
- *   node test-follow-prompt.js 76561198158439485 2807960 library
- *   node test-follow-prompt.js 76561198158439485 3834090 wishlist
+ *   node scripts/test-follow-prompt.js 76561198158439485 2807960 library
+ *   node scripts/test-follow-prompt.js 76561198158439485 3834090 wishlist
  */
 
+const path = require('path');
 const mongoose = require('mongoose');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const {
   sendFollowPromptNotifications,
-} = require('./src/services/notifications/notificationService');
+} = require('../src/services/notifications/notificationService');
 
 async function testFollowPrompt() {
   try {
@@ -22,10 +24,10 @@ async function testFollowPrompt() {
 
     if (!steamId || !appId || !source) {
       console.error(
-        'Usage: node test-follow-prompt.js <steamId> <appId> <source>',
+        'Usage: node scripts/test-follow-prompt.js <steamId> <appId> <source>',
       );
       console.error(
-        'Exemple: node test-follow-prompt.js 76561198158439485 2807960 library',
+        'Exemple: node scripts/test-follow-prompt.js 76561198158439485 2807960 library',
       );
       console.error('Sources: library, wishlist');
       process.exit(1);

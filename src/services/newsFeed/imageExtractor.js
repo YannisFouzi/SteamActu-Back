@@ -53,54 +53,6 @@ function extractFirstImage(contents) {
   return null;
 }
 
-/**
- * Extrait toutes les images du contenu d'une news
- * Utile pour une future fonctionnalité de galerie
- *
- * @param {string} contents - Contenu brut de la news
- * @returns {string[]} Tableau des URLs d'images trouvées
- */
-function extractAllImages(contents) {
-  if (!contents || typeof contents !== 'string') {
-    return [];
-  }
-
-  const images = [];
-
-  // Remplacer les placeholders
-  const processedContent = contents.replace(
-    /{STEAM_CLAN_IMAGE}/g,
-    STEAM_CLAN_CDN
-  );
-
-  // Extraire toutes les images BBCode
-  const bbcodeMatches = processedContent.matchAll(/\[img\](https?:\/\/[^\]]+)\[\/img\]/gi);
-  for (const match of bbcodeMatches) {
-    if (match[1]) {
-      images.push(match[1].trim());
-    }
-  }
-
-  // Extraire toutes les images HTML
-  const htmlMatches = processedContent.matchAll(/<img[^>]+src=["']([^"']+)["']/gi);
-  for (const match of htmlMatches) {
-    if (match[1] && !images.includes(match[1].trim())) {
-      images.push(match[1].trim());
-    }
-  }
-
-  // Extraire toutes les URLs directes
-  const urlMatches = processedContent.matchAll(/(https?:\/\/[^\s<>"]+\.(jpg|jpeg|png|gif|webp))/gi);
-  for (const match of urlMatches) {
-    if (match[1] && !images.includes(match[1].trim())) {
-      images.push(match[1].trim());
-    }
-  }
-
-  return images;
-}
-
 module.exports = {
   extractFirstImage,
-  extractAllImages,
 };

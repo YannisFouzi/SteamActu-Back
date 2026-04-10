@@ -1,10 +1,5 @@
 /**
  * Routes Steam API
- *
- * ⚠️ MODIFICATION ISSUE DE L'AUDIT 2025-11-04
- * - gameLibrary.games[] → gameLibrary.gameIds[]
- * - Jeux récupérés depuis la collection Games
- * Voir: AUDIT_REPORT.md et ACTIONS.md
  */
 
 const express = require('express');

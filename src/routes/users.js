@@ -1,11 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const Game = require('../models/Game');
-const Wishlist = require('../models/Wishlist');
-const GameSubscription = require('../models/GameSubscription');
 const steamService = require('../services/steamService');
-require('../services/gamesSync/userProcessor');
 const { syncUserWishlist } = require('../services/syncWishlistService');
 const { checkGamesVisibility } = require('../services/steam/visibilityCheck');
 const {
@@ -24,15 +20,15 @@ const {
   removeUserFromGameSubscription,
 } = require('../services/users/subscriptionManager');
 const {
+  buildNotificationSettingsPatch,
+  applyNotificationSettingsPatchToUser,
+} = require('../services/users/userNotificationSettingsService');
+const { getFollowedGamesDetailsBySteamId } = require('../services/users/followedGamesDetailsService');
+const {
   isSupportedAppLanguage,
   normalizeAppLanguage,
   SUPPORTED_LANGUAGES,
 } = require('../utils/language');
-
-const FOLLOW_MODES = ['off', 'auto', 'prompt'];
-
-const isUsableHeaderImage = (imageUrl) =>
-  Boolean(imageUrl && imageUrl !== 'none');
 
 
 // Enregistrer un nouvel utilisateur
@@ -90,124 +86,13 @@ router.put(
   validateUserExists,
   async (req, res) => {
     try {
-      const {
-        enabled, // legacy
-        newsNotifications,
-        followPromptNotifications,
-        pushToken,
-        libraryFollowMode,
-        wishlistFollowMode,
-        autoFollowNewGames,
-        autoFollowWishlistGames,
-      } = req.body;
       const user = req.user;
-
-      if (!user.notificationSettings) {
-        user.notificationSettings = {};
+      const parsed = buildNotificationSettingsPatch(req.body);
+      if (!parsed.ok) {
+        return res.status(400).json({ message: parsed.message });
       }
 
-
-      const parseFollowMode = (fieldName, value) => {
-        if (value === undefined || value === null) {
-          return undefined;
-        }
-
-        if (typeof value === 'string') {
-          const normalized = value.toLowerCase();
-          if (!FOLLOW_MODES.includes(normalized)) {
-            throw new Error(
-              `${fieldName} doit être l'une des valeurs suivantes: ${FOLLOW_MODES.join(', ')}`
-            );
-          }
-          return normalized;
-        }
-
-        if (typeof value === 'boolean') {
-          return value ? 'auto' : 'off';
-        }
-
-        throw new Error(
-          `${fieldName} doit être une chaîne (off|auto|prompt) ou un booléen`
-        );
-      };
-
-      const parseOptionalBoolean = (fieldName, value) => {
-        if (value === undefined || value === null) {
-          return undefined;
-        }
-
-        if (typeof value === 'boolean') {
-          return value;
-        }
-
-        if (typeof value === 'string') {
-          const lowered = value.toLowerCase().trim();
-          if (['true', '1', 'yes'].includes(lowered)) {
-            return true;
-          }
-          if (['false', '0', 'no'].includes(lowered)) {
-            return false;
-          }
-        }
-
-        throw new Error(
-          `${fieldName} doit être un booléen ou une chaîne 'true'/'false'`
-        );
-      };
-
-      // Mettre à jour les paramètres de notification
-      let resolvedNewsNotifications;
-      let resolvedFollowPromptNotifications;
-      try {
-        const legacyEnabled = parseOptionalBoolean('enabled', enabled);
-        resolvedNewsNotifications =
-          parseOptionalBoolean('newsNotifications', newsNotifications) ??
-          legacyEnabled;
-        resolvedFollowPromptNotifications =
-          parseOptionalBoolean(
-            'followPromptNotifications',
-            followPromptNotifications
-          ) ?? legacyEnabled;
-      } catch (validationError) {
-        return res.status(400).json({ message: validationError.message });
-      }
-
-      try {
-        const resolvedLibraryMode = parseFollowMode(
-          'libraryFollowMode',
-          libraryFollowMode !== undefined ? libraryFollowMode : autoFollowNewGames
-        );
-        if (resolvedLibraryMode !== undefined) {
-          user.notificationSettings.libraryFollowMode = resolvedLibraryMode;
-        }
-
-        const resolvedWishlistMode = parseFollowMode(
-          'wishlistFollowMode',
-          wishlistFollowMode !== undefined
-            ? wishlistFollowMode
-            : autoFollowWishlistGames
-        );
-        if (resolvedWishlistMode !== undefined) {
-          user.notificationSettings.wishlistFollowMode = resolvedWishlistMode;
-        }
-      } catch (validationError) {
-        return res.status(400).json({ message: validationError.message });
-      }
-
-      if (resolvedNewsNotifications !== undefined) {
-        user.notificationSettings.newsNotifications =
-          resolvedNewsNotifications;
-      }
-
-      if (resolvedFollowPromptNotifications !== undefined) {
-        user.notificationSettings.followPromptNotifications =
-          resolvedFollowPromptNotifications;
-      }
-
-      if (pushToken) {
-        user.notificationSettings.pushToken = pushToken;
-      }
-
+      applyNotificationSettingsPatchToUser(user, parsed.patch);
       await user.save();
 
       res.json(user);
@@ -499,75 +384,13 @@ router.delete(
 router.get('/:steamId/followed-games-details', validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
+    const result = await getFollowedGamesDetailsBySteamId(steamId);
 
-    const user = await User.findOne({ steamId }).select('followedGames').lean();
-    if (!user) {
+    if (result.type === 'not_found') {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
 
-    if (!user.followedGames || user.followedGames.length === 0) {
-      return res.json({ followedGames: [] });
-    }
-
-    const followedGameIds = user.followedGames.map((gameId) =>
-      gameId.toString()
-    );
-
-    const [subscriptions, games, wishlistGames] = await Promise.all([
-      GameSubscription.find({
-        gameId: { $in: followedGameIds },
-      })
-        .select('gameId name imageUrl')
-        .lean(),
-      Game.find({
-        appId: { $in: followedGameIds },
-      })
-        .select('appId name header_image')
-        .lean(),
-      Wishlist.find({
-        appId: { $in: followedGameIds },
-      })
-        .select('appId name header_image')
-        .lean(),
-    ]);
-
-    const subscriptionsMap = new Map(
-      subscriptions.map((sub) => [sub.gameId.toString(), sub])
-    );
-    const gamesMap = new Map(
-      games.map((game) => [game.appId.toString(), game])
-    );
-    const wishlistMap = new Map(
-      wishlistGames.map((game) => [game.appId.toString(), game])
-    );
-
-    const followedGamesDetails = followedGameIds.map((appId) => {
-      const subscription = subscriptionsMap.get(appId);
-      const game = gamesMap.get(appId);
-      const wishlistGame = wishlistMap.get(appId);
-      const canonicalHeaderImage =
-        (isUsableHeaderImage(wishlistGame?.header_image) &&
-          wishlistGame.header_image) ||
-        (isUsableHeaderImage(game?.header_image) && game.header_image) ||
-        '';
-
-      return {
-        appId,
-        name:
-          wishlistGame?.name ||
-          game?.name ||
-          subscription?.name ||
-          `Game ${appId}`,
-        header_image: canonicalHeaderImage,
-        imageUrl: subscription?.imageUrl || '',
-      };
-    });
-
-    followedGamesDetails.sort((a, b) =>
-      a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })
-    );
-
-    res.json({ followedGames: followedGamesDetails });
+    res.json({ followedGames: result.followedGames });
   } catch (error) {
     console.error('Erreur dans /followed-games-details:', error);
     res.status(500).json({ message: 'Erreur serveur' });

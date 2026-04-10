@@ -96,35 +96,6 @@ async function getGameImage(appId) {
   return null;
 }
 
-// Alias rétrocompatible
-const getGameIcon = getGameImage;
-
-/**
- * Récupère les images pour plusieurs jeux en batch
- * Rate-limité pour respecter les quotas SteamGridDB
- * @param {Array<{gameId: string}>} games - Liste des jeux
- * @param {number} delayMs - Délai entre chaque appel (ms)
- * @returns {Promise<Map<string, string>>} Map gameId → imageUrl
- */
-async function getGameIconsBatch(games, delayMs = 200) {
-  const results = new Map();
-
-  for (const game of games) {
-    const imageUrl = await getGameImage(game.gameId || game.appId);
-    if (imageUrl) {
-      results.set((game.gameId || game.appId).toString(), imageUrl);
-    }
-
-    if (delayMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-  }
-
-  return results;
-}
-
 module.exports = {
-  getGameIcon,
   getGameImage,
-  getGameIconsBatch,
 };

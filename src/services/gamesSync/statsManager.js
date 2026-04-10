@@ -36,28 +36,7 @@ function updateStats(stats, result) {
   }
 }
 
-/**
- * Divise les utilisateurs en groupes
- * @param {Array} users - Liste des utilisateurs
- * @param {number} groupIndex - Index du groupe
- * @param {number} totalGroups - Nombre total de groupes
- * @returns {Object} - Informations sur le groupe
- */
-function createUserGroup(users, groupIndex, totalGroups) {
-  if (users.length === 0) {
-    return { groupUsers: [], startIndex: 0, endIndex: 0 };
-  }
-
-  const groupSize = Math.ceil(users.length / totalGroups);
-  const startIndex = groupIndex * groupSize;
-  const endIndex = Math.min(startIndex + groupSize, users.length);
-  const groupUsers = users.slice(startIndex, endIndex);
-
-  return { groupUsers, startIndex, endIndex };
-}
-
 module.exports = {
   createStats,
   updateStats,
-  createUserGroup,
 };

@@ -1,21 +1,23 @@
 /**
  * Script de test pour les notifications FCM.
- * Usage: node test-notification.js <steamId> [appId]
+ * Usage: node scripts/test-notification.js <steamId> [appId]
+ * (depuis le dossier backend)
  *
  * Exemples:
- *   node test-notification.js 76561198123456789
- *   node test-notification.js 76561198123456789 570
+ *   node scripts/test-notification.js 76561198123456789
+ *   node scripts/test-notification.js 76561198123456789 570
  */
 
+const path = require('path');
 const mongoose = require('mongoose');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const {
   sendNewsNotification,
-} = require('./src/services/notifications/notificationService');
-const steamService = require('./src/services/steamService');
-const { extractFirstImage } = require('./src/services/newsFeed/imageExtractor');
-const User = require('./src/models/User');
+} = require('../src/services/notifications/notificationService');
+const steamService = require('../src/services/steamService');
+const { extractFirstImage } = require('../src/services/newsFeed/imageExtractor');
+const User = require('../src/models/User');
 
 async function testNotification() {
   try {
@@ -23,8 +25,8 @@ async function testNotification() {
     const appId = process.argv[3] || '2807960';
 
     if (!steamId) {
-      console.error('Usage: node test-notification.js <steamId> [appId]');
-      console.error('Exemple: node test-notification.js 76561198123456789 570');
+      console.error('Usage: node scripts/test-notification.js <steamId> [appId]');
+      console.error('Exemple: node scripts/test-notification.js 76561198123456789 570');
       process.exit(1);
     }
 
