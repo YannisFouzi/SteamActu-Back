@@ -156,7 +156,7 @@ async function initAgenda() {
   // met à jour le `repeatInterval`/`repeatTimezone` du document existant au
   // lieu de créer un doublon. Safe à chaque boot.
   // Format 5 champs : min hour day-of-month month day-of-week
-  await agenda.every('0 * * * *', JOBS.NEWS_CHECK, {}, { timezone: TZ });
+  await agenda.every('*/30 * * * *', JOBS.NEWS_CHECK, {}, { timezone: TZ });
   await agenda.every(
     '0 3-14 * * *',
     JOBS.USER_GROUP_SYNC,

@@ -137,7 +137,7 @@ Jobs stockés dans MongoDB (collection `agendaJobs`), survivent aux redémarrage
 
 | Job | Cron | Description |
 |-----|------|-------------|
-| `news-check` | `0 * * * *` | Toutes les heures — polling adaptatif (tiers hot/warm/cold) |
+| `news-check` | `*/30 * * * *` | Toutes les 30 min — polling adaptatif (tiers hot/warm/cold) |
 | `user-group-sync` | `0 3-14 * * *` | 03:00→14:00, 1 des 12 groupes par heure |
 | `wishlist-sync` | `30 3-14 * * *` | 03:30→14:30, mêmes groupes, +30min offset |
 
@@ -373,7 +373,7 @@ Chaque jeu reçoit un **tier** selon l'ancienneté de sa dernière news Steam, q
 
 | Tier | Condition | Cooldown |
 |------|-----------|----------|
-| **Hot** | `lastNewsCheck == null` ou news < 30 jours | 1 h |
+| **Hot** | `lastNewsCheck == null` ou news < 30 jours | 30 min |
 | **Warm** | News entre 30 et 60 jours | 6 h |
 | **Cold** | News > 60 jours ou aucune news connue | 24 h |
 
