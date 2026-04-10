@@ -28,6 +28,10 @@ const GameSubscriptionSchema = new mongoose.Schema({
     type: Date,
     default: null, // Date de la dernière vérification des news (pour rotation)
   },
+  nextNewsCheckAt: {
+    type: Date,
+    default: null, // Prochaine vérification éligible (polling adaptatif par tier)
+  },
   updatedAt: {
     type: Date,
     default: Date.now,
@@ -36,6 +40,8 @@ const GameSubscriptionSchema = new mongoose.Schema({
 
 // Index pour améliorer les performances de la rotation
 GameSubscriptionSchema.index({ lastNewsCheck: 1 });
+// Index polling adaptatif : requête éligibilité par nextNewsCheckAt
+GameSubscriptionSchema.index({ nextNewsCheckAt: 1 });
 
 // Middleware pour mettre à jour updatedAt
 GameSubscriptionSchema.pre('save', function (next) {

@@ -1,6 +1,15 @@
 /**
- * Service de rotation intelligente des vérifications d'actualités
- * Évite la surcharge API Steam en limitant les appels et en effectuant une rotation équitable
+ * Service de rotation intelligente des vérifications d'actualités.
+ *
+ * Polling adaptatif : chaque jeu reçoit un cooldown entre deux checks
+ * selon l'ancienneté de sa dernière news Steam (tier hot/warm/cold).
+ * Le champ `nextNewsCheckAt` sur GameSubscription matérialise l'éligibilité.
+ *
+ * Ordre strict par jeu traité (§4 du plan) :
+ *   1. Appel Steam (getGameNews)
+ *   2. MAJ lastNewsTimestamp si news plus récente
+ *   3. Calcul du tier sur la valeur FRAÎCHE
+ *   4. Écriture lastNewsCheck + nextNewsCheckAt
  */
 
 const GameSubscription = require('../models/GameSubscription');
@@ -9,33 +18,75 @@ const steamService = require('./steamService');
 const notificationService = require('./notifications/notificationService');
 const { extractFirstImage } = require('./newsFeed/imageExtractor');
 
-// Configuration
+// ── Configuration ────────────────────────────────────────────────────────────
+
 const CONFIG = {
-  MAX_GAMES_TO_CHECK: 200, // Limite de jeux à vérifier par exécution
-  MAX_API_CALLS: 150, // Limite stricte d'appels API Steam
-  PAUSE_BETWEEN_CALLS: 100, // Pause en ms entre chaque appel
-  NEWS_COUNT_PER_GAME: 3, // Nombre d'actualités à récupérer par jeu
-  NOTIFICATION_BATCH_SIZE: 50, // Taille des batches pour notifications parallèles
+  // Limite unique : nombre max d'appels Steam GetNewsForApp par exécution
+  MAX_STEAM_NEWS_CALLS_PER_RUN: 200,
+
+  PAUSE_BETWEEN_CALLS: 100,       // ms entre chaque appel Steam
+  NEWS_COUNT_PER_GAME: 3,         // news à récupérer par jeu
+  NOTIFICATION_BATCH_SIZE: 50,    // taille batch notifications parallèles
+
+  // Seuils d'ancienneté de la dernière news (secondes → ms pour comparaison)
+  TIER_HOT_MAX_AGE_DAYS: 30,     // news < 30 j → hot
+  TIER_WARM_MAX_AGE_DAYS: 60,    // news 30–60 j → warm
+
+  // Cooldowns par tier (ms)
+  COOLDOWN_HOT_MS:   1 * 60 * 60 * 1000,   //  1 h
+  COOLDOWN_WARM_MS:  6 * 60 * 60 * 1000,   //  6 h
+  COOLDOWN_COLD_MS: 24 * 60 * 60 * 1000,   // 24 h
+
+  // Retry sur erreur Steam (timeout, 5xx, rate-limit)
+  ERROR_RETRY_MS: 15 * 60 * 1000,          // 15 min
 };
 
-// Lock global pour éviter double exécution
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
 let isRotationRunning = false;
 
-/**
- * Pause asynchrone
- * @param {number} ms - Durée en millisecondes
- * @returns {Promise<void>}
- */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Vérifie les actualités avec rotation intelligente
+ * Détermine le tier d'un jeu et retourne le cooldown associé.
+ *
+ * Règles (§1 + §4 du plan) :
+ *   - lastNewsCheck == null → hot (jamais vérifié, priorité absolue)
+ *   - lastNewsTimestamp === 0 && lastNewsCheck != null → cold (vérifié mais aucune news)
+ *   - Sinon : ancienneté de lastNewsTimestamp vs seuils
+ */
+function getTierCooldown(lastNewsTimestamp, lastNewsCheck) {
+  // Jamais vérifié → hot
+  if (lastNewsCheck == null) {
+    return { tier: 'hot', cooldownMs: CONFIG.COOLDOWN_HOT_MS };
+  }
+
+  // Vérifié mais aucune news connue (timestamp 0) → cold
+  if (!lastNewsTimestamp) {
+    return { tier: 'cold', cooldownMs: CONFIG.COOLDOWN_COLD_MS };
+  }
+
+  const ageMs = Date.now() - lastNewsTimestamp * 1000;
+  const ageDays = ageMs / (24 * 60 * 60 * 1000);
+
+  if (ageDays < CONFIG.TIER_HOT_MAX_AGE_DAYS) {
+    return { tier: 'hot', cooldownMs: CONFIG.COOLDOWN_HOT_MS };
+  }
+  if (ageDays < CONFIG.TIER_WARM_MAX_AGE_DAYS) {
+    return { tier: 'warm', cooldownMs: CONFIG.COOLDOWN_WARM_MS };
+  }
+  return { tier: 'cold', cooldownMs: CONFIG.COOLDOWN_COLD_MS };
+}
+
+// ── Rotation principale ──────────────────────────────────────────────────────
+
+/**
+ * Vérifie les actualités avec rotation adaptative.
  * @returns {Promise<Object>} Statistiques de l'exécution
  */
 async function checkNewsRotation() {
-  // Vérifier le lock (éviter double exécution)
   if (isRotationRunning) {
     console.log('[WARN] Rotation déjà en cours, skip...');
     return {
@@ -51,26 +102,33 @@ async function checkNewsRotation() {
 
   try {
     console.log('\n' + '='.repeat(60));
-    console.log('[NEWS] DÉBUT VÉRIFICATION ACTUALITÉS (ROTATION)');
+    console.log('[NEWS] DÉBUT VÉRIFICATION ACTUALITÉS (ROTATION ADAPTATIVE)');
     console.log('='.repeat(60));
 
     const startTime = Date.now();
+    const now = new Date();
 
-    // Récupérer les jeux à vérifier (rotation par lastNewsCheck)
-    // Les jeux jamais vérifiés (lastNewsCheck: null) sont prioritaires
-    const games = await GameSubscription.find()
-      .sort({ lastNewsCheck: 1 }) // Plus anciens d'abord (null en premier)
-      .limit(CONFIG.MAX_GAMES_TO_CHECK);
+    // Requête éligibilité : nextNewsCheckAt null OU <= now
+    // Tri : null en premier (jamais vérifiés), puis les plus anciennement éligibles
+    const games = await GameSubscription.find({
+      $or: [
+        { nextNewsCheckAt: null },
+        { nextNewsCheckAt: { $lte: now } },
+      ],
+    })
+      .sort({ nextNewsCheckAt: 1, lastNewsCheck: 1 })
+      .limit(CONFIG.MAX_STEAM_NEWS_CALLS_PER_RUN);
 
-    console.log(`[GAMES] ${games.length} jeu(x) à vérifier`);
+    console.log(`[GAMES] ${games.length} jeu(x) éligible(s) à vérifier`);
 
     if (games.length === 0) {
-      console.log('[INFO] Aucun jeu à vérifier');
+      console.log('[INFO] Aucun jeu éligible');
       return {
         gamesChecked: 0,
         apiCalls: 0,
         newNewsFound: 0,
         notificationsSent: 0,
+        tiers: { hot: 0, warm: 0, cold: 0 },
       };
     }
 
@@ -80,21 +138,12 @@ async function checkNewsRotation() {
       newNewsFound: 0,
       notificationsSent: 0,
       errors: [],
+      tiers: { hot: 0, warm: 0, cold: 0 },
     };
 
-    // Tableau pour collecter les mises à jour (bulkWrite à la fin)
     const gamesToUpdate = [];
 
-    // Vérifier chaque jeu
     for (const game of games) {
-      // Vérifier la limite d'appels API
-      if (stats.apiCalls >= CONFIG.MAX_API_CALLS) {
-        console.log(
-          `[WARN] Limite d'appels API atteinte (${CONFIG.MAX_API_CALLS}), arrêt de la rotation`
-        );
-        break;
-      }
-
       try {
         console.log(
           `\n[${stats.gamesChecked + 1}/${games.length}] Vérification : ${
@@ -102,121 +151,32 @@ async function checkNewsRotation() {
           } (${game.gameId})`
         );
 
-        // Récupérer les actualités depuis Steam
+        // §4 étape 1 : appel Steam
         const news = await steamService.getGameNews(
           game.gameId,
           CONFIG.NEWS_COUNT_PER_GAME
         );
         stats.apiCalls++;
 
-        // Vérifier s'il y a de nouvelles actualités
+        // §4 étape 2 : MAJ lastNewsTimestamp si news plus récente
         if (news && news.length > 0) {
           const latestNewsTimestamp = news[0].date || 0;
           const currentTimestamp = game.lastNewsTimestamp || 0;
 
           console.log(
-            `📅 Dernier timestamp connu : ${currentTimestamp} | Dernier timestamp actuel : ${latestNewsTimestamp}`
+            `  timestamp connu: ${currentTimestamp} | steam: ${latestNewsTimestamp}`
           );
 
-          // Si nouvelles actualités détectées
           if (latestNewsTimestamp > currentTimestamp) {
+            game.lastNewsTimestamp = latestNewsTimestamp;
+
             const firstImageUrl = extractFirstImage(news[0].contents);
             console.log(`[NEW] Nouvelles actualités détectées pour ${game.name}!`);
             stats.newNewsFound++;
 
-            // Envoyer des notifications aux abonnés (PARALLÉLISÉ par batch)
-            const subscribers = game.subscribers || [];
-            const newsGid = String(news[0].gid);
+            // Notifications aux abonnés éligibles
+            await sendNotificationsForGame(game, news[0], firstImageUrl, stats);
 
-            // Filtrer les abonnés qui ont déjà vu cette news (inFeedAt ou pushSentAt)
-            const alreadyServed = await UserNewsState.find({
-              steamId: { $in: subscribers },
-              appId: String(game.gameId),
-              newsId: newsGid,
-              $or: [
-                { inFeedAt: { $ne: null } },
-                { pushSentAt: { $ne: null } },
-              ],
-            }).select('steamId').lean();
-
-            const alreadyServedSet = new Set(alreadyServed.map((s) => s.steamId));
-            const eligibleSubscribers = subscribers.filter(
-              (sid) => !alreadyServedSet.has(sid)
-            );
-
-            console.log(
-              `[INFO] ${eligibleSubscribers.length}/${subscribers.length} abonné(s) éligibles (${alreadyServedSet.size} déjà servi(s))`
-            );
-
-            // Envoyer par batches pour éviter surcharge
-            const MS_IN_DAY = 24 * 60 * 60 * 1000;
-            const RETENTION_DAYS = 90;
-
-            for (
-              let i = 0;
-              i < eligibleSubscribers.length;
-              i += CONFIG.NOTIFICATION_BATCH_SIZE
-            ) {
-              const batch = eligibleSubscribers.slice(
-                i,
-                i + CONFIG.NOTIFICATION_BATCH_SIZE
-              );
-              const results = await Promise.allSettled(
-                batch.map((steamId) =>
-                  notificationService.sendNewsNotification(
-                    steamId,
-                    game.gameId,
-                    game.name,
-                    news[0].title,
-                    news[0].url,
-                    news[0].gid,
-                    firstImageUrl
-                  )
-                )
-              );
-
-              // Compter les succès réels et marquer pushSentAt
-              const pushSentOps = [];
-              results.forEach((result, idx) => {
-                if (result.status === 'fulfilled' && result.value === true) {
-                  stats.notificationsSent++;
-                  pushSentOps.push({
-                    updateOne: {
-                      filter: {
-                        steamId: batch[idx],
-                        appId: String(game.gameId),
-                        newsId: newsGid,
-                      },
-                      update: {
-                        $set: { pushSentAt: new Date() },
-                        $setOnInsert: {
-                          steamId: batch[idx],
-                          appId: String(game.gameId),
-                          newsId: newsGid,
-                          expiresAt: new Date(Date.now() + RETENTION_DAYS * MS_IN_DAY),
-                        },
-                      },
-                      upsert: true,
-                    },
-                  });
-                } else {
-                  console.error(
-                    `[ERROR] Erreur envoi notification:`,
-                    result.reason?.message
-                  );
-                }
-              });
-
-              // Enregistrer pushSentAt en bulk
-              if (pushSentOps.length > 0) {
-                await UserNewsState.bulkWrite(pushSentOps, { ordered: false }).catch((err) => {
-                  console.error('UserNewsState pushSentAt bulkWrite error:', err.message);
-                });
-              }
-            }
-
-            // Mettre à jour le timestamp
-            game.lastNewsTimestamp = latestNewsTimestamp;
             console.log(`[OK] Timestamp mis à jour : ${latestNewsTimestamp}`);
           } else {
             console.log(`[INFO] Pas de nouvelles actualités`);
@@ -225,18 +185,25 @@ async function checkNewsRotation() {
           console.log(`[INFO] Aucune actualité disponible`);
         }
 
-        // Collecter les mises à jour (sauvegarde en bulk plus tard)
-        game.lastNewsCheck = new Date();
+        // §4 étape 3 : tier sur valeur FRAÎCHE
+        const updateNow = new Date();
+        const { tier, cooldownMs } = getTierCooldown(
+          game.lastNewsTimestamp,
+          updateNow // lastNewsCheck = now (on vient de vérifier)
+        );
+        stats.tiers[tier]++;
+
+        // §4 étape 4 : écriture
         gamesToUpdate.push({
           _id: game._id,
-          lastNewsCheck: game.lastNewsCheck,
+          lastNewsCheck: updateNow,
           lastNewsTimestamp: game.lastNewsTimestamp,
+          nextNewsCheckAt: new Date(updateNow.getTime() + cooldownMs),
         });
 
         stats.gamesChecked++;
 
-        // Pause entre les appels pour respecter les limites API
-        if (stats.apiCalls < CONFIG.MAX_API_CALLS) {
+        if (stats.apiCalls < CONFIG.MAX_STEAM_NEWS_CALLS_PER_RUN) {
           await sleep(CONFIG.PAUSE_BETWEEN_CALLS);
         }
       } catch (error) {
@@ -250,28 +217,30 @@ async function checkNewsRotation() {
           error: error.message,
         });
 
-        // Collecter même en cas d'erreur pour ne pas bloquer
-        game.lastNewsCheck = new Date();
+        // §3 : erreur Steam → retry dans 15 min, on avance lastNewsCheck
+        const errorNow = new Date();
         gamesToUpdate.push({
           _id: game._id,
-          lastNewsCheck: game.lastNewsCheck,
+          lastNewsCheck: errorNow,
           lastNewsTimestamp: game.lastNewsTimestamp,
+          nextNewsCheckAt: new Date(errorNow.getTime() + CONFIG.ERROR_RETRY_MS),
         });
 
         stats.gamesChecked++;
       }
     }
 
-    // Sauvegarder toutes les mises à jour en BULK (1 seul appel DB)
+    // Bulk write toutes les MAJ en un seul appel
     if (gamesToUpdate.length > 0) {
       try {
-        const bulkOps = gamesToUpdate.map((game) => ({
+        const bulkOps = gamesToUpdate.map((g) => ({
           updateOne: {
-            filter: { _id: game._id },
+            filter: { _id: g._id },
             update: {
               $set: {
-                lastNewsCheck: game.lastNewsCheck,
-                lastNewsTimestamp: game.lastNewsTimestamp,
+                lastNewsCheck: g.lastNewsCheck,
+                lastNewsTimestamp: g.lastNewsTimestamp,
+                nextNewsCheckAt: g.nextNewsCheckAt,
               },
             },
           },
@@ -279,7 +248,7 @@ async function checkNewsRotation() {
 
         await GameSubscription.bulkWrite(bulkOps);
         console.log(
-          `[INFO] ${gamesToUpdate.length} jeu(x) mis à jour en bulk dans MongoDB`
+          `[INFO] ${gamesToUpdate.length} jeu(x) mis à jour en bulk`
         );
       } catch (bulkError) {
         console.error(`[ERROR] Erreur bulkWrite:`, bulkError.message);
@@ -294,6 +263,7 @@ async function checkNewsRotation() {
     console.log(`[TIMER] Durée : ${duration}s`);
     console.log(`[GAMES] Jeux vérifiés : ${stats.gamesChecked}`);
     console.log(`[SYNC] Appels API Steam : ${stats.apiCalls}`);
+    console.log(`[TIER] hot=${stats.tiers.hot} warm=${stats.tiers.warm} cold=${stats.tiers.cold}`);
     console.log(`[NEW] Nouvelles actualités trouvées : ${stats.newNewsFound}`);
     console.log(`[INFO] Notifications envoyées : ${stats.notificationsSent}`);
     console.log(`[ERROR] Erreurs : ${stats.errors.length}`);
@@ -315,28 +285,128 @@ async function checkNewsRotation() {
     );
     throw error;
   } finally {
-    // Libérer le lock dans tous les cas
     isRotationRunning = false;
   }
 }
 
+// ── Notifications ────────────────────────────────────────────────────────────
+
 /**
- * Obtient des statistiques sur l'état de la rotation
- * @returns {Promise<Object>} Statistiques de rotation
+ * Envoie les notifications pour un jeu ayant une nouvelle news.
+ * Extrait de la boucle principale pour lisibilité — même logique qu'avant.
+ */
+async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
+  const subscribers = game.subscribers || [];
+  const newsGid = String(newsItem.gid);
+
+  // Filtrer les abonnés déjà servis (inFeedAt ou pushSentAt)
+  const alreadyServed = await UserNewsState.find({
+    steamId: { $in: subscribers },
+    appId: String(game.gameId),
+    newsId: newsGid,
+    $or: [
+      { inFeedAt: { $ne: null } },
+      { pushSentAt: { $ne: null } },
+    ],
+  }).select('steamId').lean();
+
+  const alreadyServedSet = new Set(alreadyServed.map((s) => s.steamId));
+  const eligibleSubscribers = subscribers.filter(
+    (sid) => !alreadyServedSet.has(sid)
+  );
+
+  console.log(
+    `[INFO] ${eligibleSubscribers.length}/${subscribers.length} abonné(s) éligibles (${alreadyServedSet.size} déjà servi(s))`
+  );
+
+  const MS_IN_DAY = 24 * 60 * 60 * 1000;
+  const RETENTION_DAYS = 90;
+
+  for (
+    let i = 0;
+    i < eligibleSubscribers.length;
+    i += CONFIG.NOTIFICATION_BATCH_SIZE
+  ) {
+    const batch = eligibleSubscribers.slice(
+      i,
+      i + CONFIG.NOTIFICATION_BATCH_SIZE
+    );
+    const results = await Promise.allSettled(
+      batch.map((steamId) =>
+        notificationService.sendNewsNotification(
+          steamId,
+          game.gameId,
+          game.name,
+          newsItem.title,
+          newsItem.url,
+          newsItem.gid,
+          firstImageUrl
+        )
+      )
+    );
+
+    const pushSentOps = [];
+    results.forEach((result, idx) => {
+      if (result.status === 'fulfilled' && result.value === true) {
+        stats.notificationsSent++;
+        pushSentOps.push({
+          updateOne: {
+            filter: {
+              steamId: batch[idx],
+              appId: String(game.gameId),
+              newsId: newsGid,
+            },
+            update: {
+              $set: { pushSentAt: new Date() },
+              $setOnInsert: {
+                steamId: batch[idx],
+                appId: String(game.gameId),
+                newsId: newsGid,
+                expiresAt: new Date(Date.now() + RETENTION_DAYS * MS_IN_DAY),
+              },
+            },
+            upsert: true,
+          },
+        });
+      } else {
+        console.error(
+          `[ERROR] Erreur envoi notification:`,
+          result.reason?.message
+        );
+      }
+    });
+
+    if (pushSentOps.length > 0) {
+      await UserNewsState.bulkWrite(pushSentOps, { ordered: false }).catch((err) => {
+        console.error('UserNewsState pushSentAt bulkWrite error:', err.message);
+      });
+    }
+  }
+}
+
+// ── Stats ────────────────────────────────────────────────────────────────────
+
+/**
+ * Statistiques sur l'état de la rotation et la répartition par tier.
  */
 async function getRotationStats() {
   try {
+    const now = new Date();
     const totalGames = await GameSubscription.countDocuments();
     const neverChecked = await GameSubscription.countDocuments({
       lastNewsCheck: null,
     });
+    const eligible = await GameSubscription.countDocuments({
+      $or: [
+        { nextNewsCheckAt: null },
+        { nextNewsCheckAt: { $lte: now } },
+      ],
+    });
 
-    // Trouver le plus ancien check
     const oldestCheck = await GameSubscription.findOne({
       lastNewsCheck: { $ne: null },
     }).sort({ lastNewsCheck: 1 });
 
-    // Trouver le plus récent check
     const newestCheck = await GameSubscription.findOne({
       lastNewsCheck: { $ne: null },
     }).sort({ lastNewsCheck: -1 });
@@ -345,6 +415,7 @@ async function getRotationStats() {
       totalGames,
       neverChecked,
       checked: totalGames - neverChecked,
+      eligible,
       oldestCheckDate: oldestCheck?.lastNewsCheck || null,
       newestCheckDate: newestCheck?.lastNewsCheck || null,
     };
@@ -360,5 +431,6 @@ async function getRotationStats() {
 module.exports = {
   checkNewsRotation,
   getRotationStats,
-  CONFIG, // Exporter la config pour tests/debug
+  getTierCooldown,
+  CONFIG,
 };

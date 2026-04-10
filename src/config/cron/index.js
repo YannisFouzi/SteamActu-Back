@@ -116,9 +116,13 @@ async function initAgenda() {
 
   // --- Définition des jobs ---
 
-  agenda.define(JOBS.NEWS_CHECK, async () => {
-    await runTask('NEWS_CHECK (hourly)', checkNews);
-  });
+  agenda.define(
+    JOBS.NEWS_CHECK,
+    { lockLifetime: LONG_JOB_LOCK_LIFETIME_MS },
+    async () => {
+      await runTask('NEWS_CHECK (hourly)', checkNews);
+    }
+  );
 
   agenda.define(
     JOBS.USER_GROUP_SYNC,
