@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "lint": "eslint . --ext .js,.cjs,.mjs",
     "lint:ci": "eslint . --ext .js,.cjs,.mjs --max-warnings=0",
+    "build": "npm run lint:ci",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
