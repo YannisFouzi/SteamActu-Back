@@ -20,14 +20,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "agenda": "^5.0.0",
     "axios": "^1.13.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-rate-limit": "^8.3.1",
     "firebase-admin": "^13.6.0",
-    "mongoose": "^8.12.1",
-    "node-cron": "^3.0.3"
+    "mongoose": "^8.12.1"
   },
   "devDependencies": {
     "eslint": "^8.57.1",

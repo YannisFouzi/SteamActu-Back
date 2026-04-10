@@ -6,6 +6,7 @@
 const mongoose = require('mongoose');
 const { DATABASE_CONFIG, SUCCESS_MESSAGES } = require('../config/app');
 const UserNewsState = require('../models/UserNewsState');
+const { stopAgenda } = require('../config/cron');
 
 /**
  * Initialise la connexion a MongoDB
@@ -47,6 +48,10 @@ async function disconnectDatabase() {
 function setupGracefulShutdown() {
   const gracefulShutdown = async (signal) => {
     console.log(`Signal ${signal} recu, arret en cours...`);
+    // Arrêter Agenda AVANT Mongo : les jobs en cours doivent pouvoir libérer
+    // leurs locks (`lockedAt`) et marquer `lastFinishedAt`, ce qui nécessite
+    // une connexion MongoDB active.
+    await stopAgenda();
     await disconnectDatabase();
     process.exit(0);
   };

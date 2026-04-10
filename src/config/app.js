@@ -98,10 +98,6 @@ if (CRON_GROUPS_TOTAL !== 12) {
 
 const CRON_CONFIG = {
   GROUPS_TOTAL: 12,
-  LOCK_TTL_MS: toNumber(
-    process.env.CRON_LOCK_TTL_MS,
-    2 * 60 * 60 * 1000 // 2 heures par défaut
-  ),
   TIMEZONE: process.env.CRON_TIMEZONE || 'Europe/Paris',
 };
 

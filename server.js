@@ -16,7 +16,7 @@ const {
   connectDatabase,
   setupGracefulShutdown,
 } = require("./src/database/connection");
-const { initCronJobs } = require("./src/config/cron");
+const { initAgenda } = require("./src/config/cron");
 
 // Import des routes
 const userRoutes = require("./src/routes/users");
@@ -68,7 +68,7 @@ app.use(errorHandler);
 async function startServer() {
   try {
     await connectDatabase();
-    initCronJobs();
+    await initAgenda();
     setupGracefulShutdown();
 
     app.listen(SERVER_CONFIG.PORT, () => {
