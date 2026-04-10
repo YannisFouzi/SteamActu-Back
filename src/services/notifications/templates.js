@@ -4,18 +4,26 @@ const TEMPLATES = {
   newsFallbackTitle: {
     fr: 'Nouvelle actualite jeu',
     en: 'New game update',
+    de: 'Neues Spiel-Update',
+    es: 'Nueva actualización del juego',
   },
   autoFollowTitle: {
     fr: 'Nouveau jeu suivi automatiquement',
     en: 'New game automatically followed',
+    de: 'Neues Spiel automatisch gefolgt',
+    es: 'Nuevo juego seguido automáticamente',
   },
   autoFollowBody: {
     fr: gameName => `${gameName} a ete ajoute a vos jeux suivis`,
     en: gameName => `${gameName} was added to your followed games`,
+    de: gameName => `${gameName} wurde zu Ihren gefolgten Spielen hinzugefügt`,
+    es: gameName => `${gameName} se añadió a tus juegos seguidos`,
   },
   followPromptTitle: {
     fr: 'Voulez-vous suivre ce jeu ?',
     en: 'Do you want to follow this game?',
+    de: 'Möchten Sie diesem Spiel folgen?',
+    es: '¿Quieres seguir este juego?',
   },
   followPromptContext: {
     fr: {
@@ -26,12 +34,24 @@ const TEMPLATES = {
       library: 'your Steam library',
       wishlist: 'your Steam wishlist',
     },
+    de: {
+      library: 'Ihrer Steam-Bibliothek',
+      wishlist: 'Ihrer Steam-Wunschliste',
+    },
+    es: {
+      library: 'tu biblioteca de Steam',
+      wishlist: 'tu lista de deseos de Steam',
+    },
   },
   followPromptBody: {
     fr: (gameName, contextLabel, appId) =>
       `${gameName || `Jeu ${appId}`} a ete detecte dans ${contextLabel}.`,
     en: (gameName, contextLabel, appId) =>
       `${gameName || `Game ${appId}`} was detected in ${contextLabel}.`,
+    de: (gameName, contextLabel, appId) =>
+      `${gameName || `Spiel ${appId}`} wurde in ${contextLabel} erkannt.`,
+    es: (gameName, contextLabel, appId) =>
+      `${gameName || `Juego ${appId}`} se detectó en ${contextLabel}.`,
   },
 };
 

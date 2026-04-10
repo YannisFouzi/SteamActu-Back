@@ -1,4 +1,4 @@
-const SUPPORTED_LANGUAGES = ['fr', 'en'];
+const SUPPORTED_LANGUAGES = ['fr', 'en', 'de', 'es'];
 const DEFAULT_LANGUAGE = 'fr';
 
 function isSupportedAppLanguage(language) {
@@ -32,12 +32,27 @@ function normalizeAppLanguage(language) {
     return 'fr';
   }
 
+  if (normalized.startsWith('de')) {
+    return 'de';
+  }
+
+  if (normalized.startsWith('es')) {
+    return 'es';
+  }
+
   return DEFAULT_LANGUAGE;
 }
 
+const STEAM_STORE_LANG = {
+  en: 'english',
+  fr: 'french',
+  de: 'german',
+  es: 'spanish',
+};
+
 function toSteamStoreLanguage(language) {
   const normalized = normalizeAppLanguage(language);
-  return normalized === 'en' ? 'english' : 'french';
+  return STEAM_STORE_LANG[normalized] || 'english';
 }
 
 function toSteamNewsLanguage(language) {
