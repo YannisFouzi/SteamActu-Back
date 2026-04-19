@@ -6,24 +6,32 @@ const TEMPLATES = {
     en: 'New game update',
     de: 'Neues Spiel-Update',
     es: 'Nueva actualización del juego',
+    ru: 'Новости об игре',
+    zh: '游戏新动态',
   },
   autoFollowTitle: {
     fr: 'Nouveau jeu suivi automatiquement',
     en: 'New game automatically followed',
     de: 'Neues Spiel automatisch gefolgt',
     es: 'Nuevo juego seguido automáticamente',
+    ru: 'Новая игра добавлена в отслеживаемые',
+    zh: '已自动关注新游戏',
   },
   autoFollowBody: {
     fr: gameName => `${gameName} a ete ajoute a vos jeux suivis`,
     en: gameName => `${gameName} was added to your followed games`,
     de: gameName => `${gameName} wurde zu Ihren gefolgten Spielen hinzugefügt`,
     es: gameName => `${gameName} se añadió a tus juegos seguidos`,
+    ru: gameName => `${gameName} добавлена в отслеживаемые игры`,
+    zh: gameName => `${gameName} 已加入您的关注列表`,
   },
   followPromptTitle: {
     fr: 'Voulez-vous suivre ce jeu ?',
     en: 'Do you want to follow this game?',
     de: 'Möchten Sie diesem Spiel folgen?',
     es: '¿Quieres seguir este juego?',
+    ru: 'Подписаться на эту игру?',
+    zh: '要关注这款游戏吗？',
   },
   followPromptContext: {
     fr: {
@@ -42,6 +50,14 @@ const TEMPLATES = {
       library: 'tu biblioteca de Steam',
       wishlist: 'tu lista de deseos de Steam',
     },
+    ru: {
+      library: 'вашей библиотеке Steam',
+      wishlist: 'вашем списке желаемого Steam',
+    },
+    zh: {
+      library: '您的 Steam 游戏库',
+      wishlist: '您的 Steam 愿望单',
+    },
   },
   followPromptBody: {
     fr: (gameName, contextLabel, appId) =>
@@ -52,6 +68,10 @@ const TEMPLATES = {
       `${gameName || `Spiel ${appId}`} wurde in ${contextLabel} erkannt.`,
     es: (gameName, contextLabel, appId) =>
       `${gameName || `Juego ${appId}`} se detectó en ${contextLabel}.`,
+    ru: (gameName, contextLabel, appId) =>
+      `${gameName || `Игра ${appId}`} обнаружена в ${contextLabel}.`,
+    zh: (gameName, contextLabel, appId) =>
+      `${gameName || `游戏 ${appId}`} 在${contextLabel}中被检测到。`,
   },
 };
 

@@ -1,4 +1,4 @@
-const SUPPORTED_LANGUAGES = ['fr', 'en', 'de', 'es'];
+const SUPPORTED_LANGUAGES = ['fr', 'en', 'de', 'es', 'ru', 'zh'];
 const DEFAULT_LANGUAGE = 'fr';
 
 function isSupportedAppLanguage(language) {
@@ -8,8 +8,16 @@ function isSupportedAppLanguage(language) {
 
   const normalized = language.toLowerCase().trim();
 
+  if (normalized.startsWith('zh')) {
+    return true;
+  }
+
+  if (normalized.startsWith('ru')) {
+    return true;
+  }
+
   return SUPPORTED_LANGUAGES.some(
-    code => normalized === code || normalized.startsWith(`${code}-`)
+    code => normalized === code || normalized.startsWith(`${code}-`),
   );
 }
 
@@ -19,6 +27,14 @@ function normalizeAppLanguage(language) {
   }
 
   const normalized = language.toLowerCase().trim();
+
+  if (normalized.startsWith('zh')) {
+    return 'zh';
+  }
+
+  if (normalized.startsWith('ru')) {
+    return 'ru';
+  }
 
   if (SUPPORTED_LANGUAGES.includes(normalized)) {
     return normalized;
@@ -48,6 +64,18 @@ const STEAM_STORE_LANG = {
   fr: 'french',
   de: 'german',
   es: 'spanish',
+  ru: 'russian',
+  zh: 'schinese',
+};
+
+/** Codes attendus par l'API Steam GetNewsForApp (noms complets). */
+const STEAM_NEWS_LANG = {
+  en: 'english',
+  fr: 'french',
+  de: 'german',
+  es: 'spanish',
+  ru: 'russian',
+  zh: 'schinese',
 };
 
 function toSteamStoreLanguage(language) {
@@ -56,7 +84,8 @@ function toSteamStoreLanguage(language) {
 }
 
 function toSteamNewsLanguage(language) {
-  return normalizeAppLanguage(language);
+  const normalized = normalizeAppLanguage(language);
+  return STEAM_NEWS_LANG[normalized] || 'english';
 }
 
 module.exports = {

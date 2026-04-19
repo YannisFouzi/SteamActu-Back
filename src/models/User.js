@@ -8,7 +8,7 @@ const UserSchema = new mongoose.Schema({
   },
   language: {
     type: String,
-    enum: ['fr', 'en', 'de', 'es'],
+    enum: ['fr', 'en', 'de', 'es', 'ru', 'zh'],
     default: 'fr',
   },
   lastChecked: {
