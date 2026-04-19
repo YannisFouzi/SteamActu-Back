@@ -45,7 +45,6 @@ async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
             url: item.url,
             author: item.author,
             date: newsDate,
-            contents: item.contents,
             firstImageUrl: extractFirstImage(item.contents),
             feedLabel: item.feedlabel,
           },

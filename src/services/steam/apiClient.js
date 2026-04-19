@@ -102,10 +102,11 @@ async function fetchGameNews(appId, options = {}) {
     language = 'fr',
     steamOnly = true,
   } = options;
+  const safeCount = Math.min(Math.max(Number(count) || 5, 1), 100);
 
   const params = {
     appid: appId,
-    count: 100, // Récupérer plus de news pour filtrer ensuite
+    count: safeCount,
     maxlength: maxLength,
     format: 'json',
     language: toSteamNewsLanguage(language),
@@ -124,7 +125,7 @@ async function fetchGameNews(appId, options = {}) {
 
   const allNews = data.appnews.newsitems || [];
 
-  return allNews.slice(0, count);
+  return allNews.slice(0, safeCount);
 }
 
 /**
