@@ -88,6 +88,11 @@ const UserSchema = new mongoose.Schema({
       enum: ['off', 'auto', 'prompt'],
       default: 'off',
     },
+    /** Si true : dialog de confirmation avant désuivi manuel (cloche). */
+    confirmUnfollowGames: {
+      type: Boolean,
+      default: true,
+    },
   },
 
   gameLibrary: {

@@ -74,6 +74,7 @@ function buildNotificationSettingsPatch(body) {
     enabled,
     newsNotifications,
     followPromptNotifications,
+    confirmUnfollowGames,
     libraryFollowMode,
     wishlistFollowMode,
     autoFollowNewGames,
@@ -126,6 +127,19 @@ function buildNotificationSettingsPatch(body) {
 
   if (resolvedFollowPromptNotifications !== undefined) {
     patch.followPromptNotifications = resolvedFollowPromptNotifications;
+  }
+
+  let resolvedConfirmUnfollow;
+  try {
+    resolvedConfirmUnfollow = parseOptionalBoolean(
+      'confirmUnfollowGames',
+      confirmUnfollowGames
+    );
+  } catch (validationError) {
+    return { ok: false, message: validationError.message };
+  }
+  if (resolvedConfirmUnfollow !== undefined) {
+    patch.confirmUnfollowGames = resolvedConfirmUnfollow;
   }
 
   return { ok: true, patch };
