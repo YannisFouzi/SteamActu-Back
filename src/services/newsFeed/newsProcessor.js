@@ -5,6 +5,36 @@
 const steamService = require('../steamService');
 const { extractFirstImage } = require('./imageExtractor');
 
+// Cap la concurrence des appels Steam par requête /api/news/feed :
+// - trop bas -> latence cumulée sur les gros followings
+// - trop haut -> pics de 429 côté Steam et explosion du rate-limit quotidien
+// 10 est un compromis validé sur les observations Railway (p95 16 s séquentiel
+// -> ~max(timeout) en parallèle).
+const STEAM_NEWS_CONCURRENCY = 10;
+
+/**
+ * Applique `mapper` sur `items` avec une limite de `concurrency` tâches
+ * en vol simultanément. Ne rejette jamais : c'est au mapper de capturer
+ * ses propres erreurs (on conserve la sémantique "erreur par jeu = skip").
+ */
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const workerCount = Math.min(concurrency, items.length);
+
+  const runWorker = async () => {
+    let current = cursor++;
+    while (current < items.length) {
+      results[current] = await mapper(items[current], current);
+      current = cursor++;
+    }
+  };
+
+  const workers = Array.from({ length: workerCount }, runWorker);
+  await Promise.all(workers);
+  return results;
+}
+
 /**
  * Traite les actualités pour une liste de jeux
  * @param {Array} gamesToProcess - Liste des jeux à traiter
@@ -15,49 +45,63 @@ const { extractFirstImage } = require('./imageExtractor');
 async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
   const { perGameLimit = 3, language = 'fr' } = options;
 
+  const perGameResults = await mapWithConcurrency(
+    gamesToProcess,
+    STEAM_NEWS_CONCURRENCY,
+    async (game) => {
+      try {
+        const newsItems = await steamService.getGameNews(
+          game.appId,
+          perGameLimit,
+          undefined, // Utilise la valeur par défaut (5000)
+          language
+        );
+
+        if (!Array.isArray(newsItems) || newsItems.length === 0) {
+          return null;
+        }
+
+        let latestDate = 0;
+        const items = newsItems.map((item) => {
+          const newsDate = item.date * 1000;
+          if (newsDate > latestDate) {
+            latestDate = newsDate;
+          }
+          return {
+            appId: game.appId,
+            gameName: game.name,
+            gameLogoUrl: game.imageUrl || null,
+            isFollowed: followedSet.has(game.appId),
+            news: {
+              id: item.gid,
+              title: item.title,
+              url: item.url,
+              author: item.author,
+              date: newsDate,
+              firstImageUrl: extractFirstImage(item.contents),
+              feedLabel: item.feedlabel,
+            },
+          };
+        });
+
+        return { appId: game.appId, items, latestDate };
+      } catch (error) {
+        console.error(`Failed to fetch news for ${game.appId}:`, error.message);
+        return null;
+      }
+    }
+  );
+
   const feedItems = [];
   const latestNewsByGame = new Map();
 
-  for (const game of gamesToProcess) {
-    try {
-      const newsItems = await steamService.getGameNews(
-        game.appId,
-        perGameLimit,
-        undefined, // Utilise la valeur par défaut (5000)
-        language
-      );
-
-      if (!Array.isArray(newsItems) || newsItems.length === 0) {
-        continue;
-      }
-
-      newsItems.forEach((item) => {
-        const newsDate = item.date * 1000;
-
-        feedItems.push({
-          appId: game.appId,
-          gameName: game.name,
-          gameLogoUrl: game.imageUrl || null,
-          isFollowed: followedSet.has(game.appId),
-          news: {
-            id: item.gid,
-            title: item.title,
-            url: item.url,
-            author: item.author,
-            date: newsDate,
-            firstImageUrl: extractFirstImage(item.contents),
-            feedLabel: item.feedlabel,
-          },
-        });
-
-        // Suivre la date de la dernière actualité par jeu
-        const currentLatest = latestNewsByGame.get(game.appId) || 0;
-        if (newsDate > currentLatest) {
-          latestNewsByGame.set(game.appId, newsDate);
-        }
-      });
-    } catch (error) {
-      console.error(`Failed to fetch news for ${game.appId}:`, error.message);
+  for (const result of perGameResults) {
+    if (!result) {
+      continue;
+    }
+    feedItems.push(...result.items);
+    if (result.latestDate > 0) {
+      latestNewsByGame.set(result.appId, result.latestDate);
     }
   }
 

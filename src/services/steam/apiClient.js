@@ -23,16 +23,24 @@ const ENDPOINTS = {
   WISHLIST: `${STEAM_BASE_URL}/IWishlistService/GetWishlist/v1/`,
 };
 
+// Axios n'applique aucun timeout par défaut : sans cap, un appel Steam peut
+// bloquer le handler HTTP indéfiniment. 10 s couvre même les gros
+// GetOwnedGames ; les endpoints sensibles (news) passent une valeur plus basse.
+const DEFAULT_STEAM_API_TIMEOUT_MS = 10000;
+
 /**
  * Effectue un appel API Steam avec gestion d'erreurs standardisée
  * @param {string} url - URL de l'endpoint
  * @param {Object} params - Paramètres de la requête
  * @param {string} context - Contexte pour les logs d'erreur
+ * @param {Object} [options]
+ * @param {number} [options.timeout] - Timeout en ms (défaut 10 s)
  * @returns {Promise<Object>} - Réponse de l'API
  */
-async function makeApiCall(url, params, context) {
+async function makeApiCall(url, params, context, options = {}) {
+  const { timeout = DEFAULT_STEAM_API_TIMEOUT_MS } = options;
   try {
-    const response = await axios.get(url, { params });
+    const response = await axios.get(url, { params, timeout });
     return response.data;
   } catch (error) {
     console.error(`Erreur Steam API ${context}:`, error.message);
@@ -117,10 +125,13 @@ async function fetchGameNews(appId, options = {}) {
     params.feeds = 'steam_community_announcements,steam_updates';
   }
 
+  // 5 s par appel : /api/news/feed parallélise N jeux et le mobile coupe à
+  // 10 s — on veut échouer vite sur un jeu lent plutôt que bloquer le feed.
   const data = await makeApiCall(
     ENDPOINTS.GAME_NEWS,
     params,
-    `getGameNews (${appId})`
+    `getGameNews (${appId})`,
+    { timeout: 5000 }
   );
 
   const allNews = data.appnews.newsitems || [];
