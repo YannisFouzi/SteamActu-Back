@@ -32,7 +32,6 @@ function isInBucket(user, groupIndex, groupsTotal) {
 }
 
 module.exports = {
-  stableHash,
   userBucket,
   isInBucket,
 };

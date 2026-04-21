@@ -199,5 +199,4 @@ async function stopAgenda() {
 module.exports = {
   initAgenda,
   stopAgenda,
-  JOBS,
 };

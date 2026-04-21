@@ -72,5 +72,4 @@ module.exports = {
   createAttempt,
   getAttempt,
   markSucceeded,
-  AUTH_TTL_MS,
 };

@@ -384,53 +384,6 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
   }
 }
 
-// ── Stats ────────────────────────────────────────────────────────────────────
-
-/**
- * Statistiques sur l'état de la rotation et la répartition par tier.
- */
-async function getRotationStats() {
-  try {
-    const now = new Date();
-    const totalGames = await GameSubscription.countDocuments();
-    const neverChecked = await GameSubscription.countDocuments({
-      lastNewsCheck: null,
-    });
-    const eligible = await GameSubscription.countDocuments({
-      $or: [
-        { nextNewsCheckAt: null },
-        { nextNewsCheckAt: { $lte: now } },
-      ],
-    });
-
-    const oldestCheck = await GameSubscription.findOne({
-      lastNewsCheck: { $ne: null },
-    }).sort({ lastNewsCheck: 1 });
-
-    const newestCheck = await GameSubscription.findOne({
-      lastNewsCheck: { $ne: null },
-    }).sort({ lastNewsCheck: -1 });
-
-    return {
-      totalGames,
-      neverChecked,
-      checked: totalGames - neverChecked,
-      eligible,
-      oldestCheckDate: oldestCheck?.lastNewsCheck || null,
-      newestCheckDate: newestCheck?.lastNewsCheck || null,
-    };
-  } catch (error) {
-    console.error(
-      'Erreur lors de la récupération des stats de rotation:',
-      error
-    );
-    throw error;
-  }
-}
-
 module.exports = {
   checkNewsRotation,
-  getRotationStats,
-  getTierCooldown,
-  CONFIG,
 };

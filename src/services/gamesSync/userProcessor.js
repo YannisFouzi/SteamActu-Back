@@ -448,9 +448,4 @@ async function syncUserGames(user, options = {}) {
 
 module.exports = {
   syncUserGames,
-  canSyncUser,
-  normalizeFollowedGames,
-  processAutoFollow,
-  upsertGamesCollection,
-  detectRemovedGames,
 };
