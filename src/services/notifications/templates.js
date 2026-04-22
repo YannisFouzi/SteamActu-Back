@@ -18,7 +18,7 @@ const TEMPLATES = {
     zh: '已自动关注新游戏',
   },
   autoFollowBody: {
-    fr: gameName => `${gameName} a ete ajoute a vos jeux suivis`,
+    fr: gameName => `${gameName} a été ajouté à vos jeux suivis`,
     en: gameName => `${gameName} was added to your followed games`,
     de: gameName => `${gameName} wurde zu Ihren gefolgten Spielen hinzugefügt`,
     es: gameName => `${gameName} se añadió a tus juegos seguidos`,
@@ -26,52 +26,58 @@ const TEMPLATES = {
     zh: gameName => `${gameName} 已加入您的关注列表`,
   },
   followPromptTitle: {
-    fr: 'Voulez-vous suivre ce jeu ?',
-    en: 'Do you want to follow this game?',
-    de: 'Möchten Sie diesem Spiel folgen?',
-    es: '¿Quieres seguir este juego?',
-    ru: 'Подписаться на эту игру?',
-    zh: '要关注这款游戏吗？',
+    fr: (gameName, contextLabel, appId) =>
+      `${gameName || `Jeu ${appId}`} a été détecté dans ${contextLabel}`,
+    en: (gameName, contextLabel, appId) =>
+      `${gameName || `Game ${appId}`} was detected in ${contextLabel}`,
+    de: (gameName, contextLabel, appId) =>
+      `${gameName || `Spiel ${appId}`} wurde in ${contextLabel} erkannt`,
+    es: (gameName, contextLabel, appId) =>
+      `${gameName || `Juego ${appId}`} se detectó en ${contextLabel}`,
+    ru: (gameName, contextLabel, appId) =>
+      `${gameName || `Игра ${appId}`} обнаружена в ${contextLabel}`,
+    zh: (gameName, contextLabel, appId) =>
+      `${gameName || `游戏 ${appId}`} 在${contextLabel}中被检测到`,
   },
   followPromptContext: {
     fr: {
-      library: 'votre bibliotheque Steam',
+      library: 'votre bibliothèque Steam',
       wishlist: 'votre wishlist Steam',
+      family: 'votre Steam Famille',
     },
     en: {
       library: 'your Steam library',
       wishlist: 'your Steam wishlist',
+      family: 'your Steam Family',
     },
     de: {
       library: 'Ihrer Steam-Bibliothek',
       wishlist: 'Ihrer Steam-Wunschliste',
+      family: 'Ihrer Steam Family',
     },
     es: {
       library: 'tu biblioteca de Steam',
       wishlist: 'tu lista de deseos de Steam',
+      family: 'tu Steam Family',
     },
     ru: {
       library: 'вашей библиотеке Steam',
       wishlist: 'вашем списке желаемого Steam',
+      family: 'вашей Steam Family',
     },
     zh: {
       library: '您的 Steam 游戏库',
       wishlist: '您的 Steam 愿望单',
+      family: '您的 Steam 家庭',
     },
   },
   followPromptBody: {
-    fr: (gameName, contextLabel, appId) =>
-      `${gameName || `Jeu ${appId}`} a ete detecte dans ${contextLabel}.`,
-    en: (gameName, contextLabel, appId) =>
-      `${gameName || `Game ${appId}`} was detected in ${contextLabel}.`,
-    de: (gameName, contextLabel, appId) =>
-      `${gameName || `Spiel ${appId}`} wurde in ${contextLabel} erkannt.`,
-    es: (gameName, contextLabel, appId) =>
-      `${gameName || `Juego ${appId}`} se detectó en ${contextLabel}.`,
-    ru: (gameName, contextLabel, appId) =>
-      `${gameName || `Игра ${appId}`} обнаружена в ${contextLabel}.`,
-    zh: (gameName, contextLabel, appId) =>
-      `${gameName || `游戏 ${appId}`} 在${contextLabel}中被检测到。`,
+    fr: 'Cliquez pour suivre ce jeu',
+    en: 'Tap to follow this game',
+    de: 'Tippen Sie, um diesem Spiel zu folgen',
+    es: 'Toca para seguir este juego',
+    ru: 'Нажмите, чтобы подписаться на эту игру',
+    zh: '点击关注此游戏',
   },
 };
 
@@ -131,12 +137,12 @@ function createFollowPromptNotification(
     TEMPLATES.followPromptContext[resolvedLanguage].library;
 
   return {
-    title: TEMPLATES.followPromptTitle[resolvedLanguage],
-    body: TEMPLATES.followPromptBody[resolvedLanguage](
+    title: TEMPLATES.followPromptTitle[resolvedLanguage](
       gameName,
       contextLabel,
       appId
     ),
+    body: TEMPLATES.followPromptBody[resolvedLanguage],
     data: {
       type: 'follow_prompt',
       appId,

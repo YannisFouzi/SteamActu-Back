@@ -194,7 +194,11 @@ async function processAutoFollow(
     const appId = game.appid.toString();
 
     if (!cachedGameIds.has(appId) && !followedGamesSet.has(appId)) {
-      gamesToHandle.push({ appId, name: game.name });
+      gamesToHandle.push({
+        appId,
+        name: game.name,
+        source: game.source || 'library',
+      });
     }
   }
 
@@ -237,7 +241,7 @@ async function processAutoFollow(
       );
     } else if (followMode === 'prompt') {
       for (const entry of gamesToHandle) {
-        const { appId } = entry;
+        const { appId, source } = entry;
         const gameDoc = gamesMap.get(appId);
         const gameName = gameDoc?.name || entry.name || `Jeu ${appId}`;
         const imageUrl = gameDoc?.img_icon_url
@@ -254,7 +258,7 @@ async function processAutoFollow(
           appId,
           name: gameName,
           imageUrl,
-          source: 'library',
+          source: source || 'library',
         });
       }
     }
@@ -389,12 +393,16 @@ async function syncUserGames(user, options = {}) {
     const followedGamesSet = normalizeFollowedGames(user);
 
     // Les Family games passent par le même pipeline de follow-prompt que
-    // les jeux owned : si libraryFollowMode='prompt' et que le jeu n'est
-    // pas encore en cache/suivi, il déclenche une notif "Voulez-vous
-    // suivre ce jeu ?" (avec la source 'library').
+    // les jeux owned (même setting `libraryFollowMode`), mais on les tague
+    // `source: 'family'` pour que la notif utilise un contextLabel dédié
+    // ("votre Steam Famille") au lieu de "votre bibliothèque Steam".
     const gamesForAutoFollow = [
-      ...userGames,
-      ...familyGames.map((fg) => ({ appid: fg.appid, name: fg.name })),
+      ...userGames.map((g) => ({ ...g, source: 'library' })),
+      ...familyGames.map((fg) => ({
+        appid: fg.appid,
+        name: fg.name,
+        source: 'family',
+      })),
     ];
 
     const autoFollowResult = await processAutoFollow(
