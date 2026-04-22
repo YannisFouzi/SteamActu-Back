@@ -8,8 +8,10 @@
 
 const steamService = require('../steamService');
 const Game = require('../../models/Game');
+const GameSubscription = require('../../models/GameSubscription');
 const { addUserToGameSubscription } = require('../users/subscriptionManager');
 const { sendFollowPromptNotifications } = require('../notifications/notificationService');
+const { getGameImage } = require('../steamGridDbService');
 
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
@@ -240,13 +242,26 @@ async function processAutoFollow(
         `[OK] ${gamesToHandle.length} GameSubscriptions mises à jour via auto-follow`
       );
     } else if (followMode === 'prompt') {
+      // Batch-fetch des imageUrl déjà connues via GameSubscription
+      // (même source que NewsTab — cohérence visuelle avec le fil d'actu)
+      const subs = await GameSubscription.find({
+        gameId: { $in: gamesToHandle.map((g) => g.appId) },
+      })
+        .select('gameId imageUrl')
+        .lean();
+      const subsImageMap = new Map(
+        subs.map((s) => [s.gameId, s.imageUrl]).filter(([, url]) => Boolean(url))
+      );
+
       for (const entry of gamesToHandle) {
         const { appId, source } = entry;
         const gameDoc = gamesMap.get(appId);
         const gameName = gameDoc?.name || entry.name || `Jeu ${appId}`;
-        const imageUrl = gameDoc?.img_icon_url
-          ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`
-          : '';
+
+        let imageUrl = subsImageMap.get(appId) || '';
+        if (!imageUrl) {
+          imageUrl = (await getGameImage(appId).catch(() => null)) || '';
+        }
 
         newGames.push({
           appId,

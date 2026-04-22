@@ -14,12 +14,14 @@
 
 const User = require('../models/User');
 const Wishlist = require('../models/Wishlist');
+const GameSubscription = require('../models/GameSubscription');
 const steamService = require('./steamService');
 const { fetchGameDetails } = require('./steam/apiClient');
 const { isInBucket } = require('../utils/userBucket');
 const { CRON_CONFIG } = require('../config/app');
 const { addUserToGameSubscription } = require('./users/subscriptionManager');
 const { sendFollowPromptNotifications } = require('./notifications/notificationService');
+const { getGameImage } = require('./steamGridDbService');
 const { checkGamesVisibility } = require('./steam/visibilityCheck');
 
 /**
@@ -321,11 +323,32 @@ async function syncUserWishlist(steamId, wishlistData = null) {
           }
         }
       } else if (wishlistFollowMode === 'prompt') {
+        // Batch-fetch des imageUrl déjà connues via GameSubscription
+        // (même source que NewsTab — cohérence visuelle avec le fil d'actu)
+        const subs = await GameSubscription.find({
+          gameId: { $in: gamesToConsider.map((g) => g.appId) },
+        })
+          .select('gameId imageUrl')
+          .lean();
+        const subsImageMap = new Map(
+          subs
+            .map((s) => [s.gameId, s.imageUrl])
+            .filter(([, url]) => Boolean(url))
+        );
+
         for (const game of gamesToConsider) {
+          let imageUrl = subsImageMap.get(game.appId) || '';
+          if (!imageUrl) {
+            imageUrl = (await getGameImage(game.appId).catch(() => null)) || '';
+          }
+          if (!imageUrl) {
+            imageUrl = game.imageUrl || '';
+          }
+
           followPrompts.push({
             appId: game.appId,
             name: game.name,
-            imageUrl: game.imageUrl,
+            imageUrl,
             source: 'wishlist',
           });
         }

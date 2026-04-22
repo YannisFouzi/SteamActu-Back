@@ -6,6 +6,7 @@
 const { getActiveProvider } = require('./providers');
 const { createNewsNotification, createFollowPromptNotification } = require('./templates');
 const User = require('../../models/User');
+const GameSubscription = require('../../models/GameSubscription');
 
 /**
  * Envoie une notification a un utilisateur
@@ -79,6 +80,17 @@ async function sendNewsNotification(
     const tokens = fcmTokens.map((t) => t.token);
     const language = user.language || 'fr';
 
+    // Logo du jeu (fallback largeIcon côté frontend quand la news n'a pas d'image)
+    let gameLogoUrl = null;
+    try {
+      const sub = await GameSubscription.findOne({ gameId: String(appId) })
+        .select('imageUrl')
+        .lean();
+      gameLogoUrl = sub?.imageUrl || null;
+    } catch (_) {
+      // pas bloquant
+    }
+
     // Creer la notification avec le template
     const notification = createNewsNotification(
       appId,
@@ -87,6 +99,7 @@ async function sendNewsNotification(
         url: newsUrl,
         gid: newsGid,
         firstImageUrl,
+        gameLogoUrl,
       },
       gameName,
       steamId,

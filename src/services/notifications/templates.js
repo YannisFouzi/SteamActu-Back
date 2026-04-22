@@ -104,6 +104,7 @@ function createNewsNotification(
       ...(steamId ? { steamId } : {}),
       newsId: newsItem.gid,
       ...(newsItem.firstImageUrl ? { imageUrl: newsItem.firstImageUrl } : {}),
+      ...(newsItem.gameLogoUrl ? { gameLogoUrl: newsItem.gameLogoUrl } : {}),
       context: newsItem.context || 'news',
       allowUnfollow: true,
     },
