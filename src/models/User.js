@@ -114,6 +114,13 @@ const UserSchema = new mongoose.Schema({
           type: Number,
           default: 0,
         },
+        // Jeu accessible via Steam Family (non possédé), détecté via le diff
+        // GetRecentlyPlayedGames ∖ GetOwnedGames. Persistant : conservé entre
+        // syncs même si le jeu sort de la fenêtre 2 semaines.
+        isFamilyShared: {
+          type: Boolean,
+          default: false,
+        },
       },
     ],
     lastFullSync: {

@@ -35,6 +35,7 @@ function formatGame(game, lastUpdateTimestamp = 0) {
     },
     lastUpdateTimestamp,
     rtime_last_played: normalizedLastPlayed,
+    isFamilyShared: Boolean(game.isFamilyShared),
   };
 }
 

@@ -146,6 +146,7 @@ router.get('/games/:steamId', validateSteamId, async (req, res) => {
         playtime_forever: userGame.playtime_forever || 0,
         rtime_last_played: normalizedLastPlayed,
         playtime_2weeks: userGame.playtime_2weeks || 0,
+        isFamilyShared: Boolean(userGame.isFamilyShared),
       };
     });
 

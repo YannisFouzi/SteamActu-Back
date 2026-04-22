@@ -123,19 +123,24 @@ async function upsertGamesCollection(steamGames) {
 }
 
 /**
- * Détecte les jeux supprimés de la bibliothèque Steam
+ * Détecte les jeux supprimés de la bibliothèque Steam.
+ * Ignore les entrées `isFamilyShared: true` : elles ne sont pas dans
+ * GetOwnedGames par construction, donc absentes de `steamGames` — les
+ * traiter comme "supprimées" les ferait osciller à chaque sync.
  * @param {Object} user - Utilisateur
- * @param {Array} steamGames - Jeux actuels depuis Steam
+ * @param {Array} steamGames - Jeux actuels depuis Steam (owned)
  * @returns {Array} - Liste des appIds supprimés
  */
 function detectRemovedGames(user, steamGames) {
-  const cachedGameIds = new Set(
-    (user.gameLibrary?.games || []).map((g) => g.gameId)
+  const cachedOwnedGameIds = new Set(
+    (user.gameLibrary?.games || [])
+      .filter((g) => !g.isFamilyShared)
+      .map((g) => g.gameId)
   );
   const steamAppIds = new Set(steamGames.map((g) => g.appid.toString()));
 
   const removedGameIds = [];
-  for (const cachedId of cachedGameIds) {
+  for (const cachedId of cachedOwnedGameIds) {
     if (!steamAppIds.has(cachedId)) {
       removedGameIds.push(cachedId);
     }
@@ -326,11 +331,47 @@ async function syncUserGames(user, options = {}) {
     console.log(`  - Jeux récupérés: ${userGames.length}`);
     console.log(`  - Jeux récemment lancés (2 semaines): ${recentlyPlayedGames.length}`);
 
-    await upsertGamesCollection(userGames);
-    console.log(`[OK] ${userGames.length} jeux créés/mis à jour dans Games`);
+    // ---- Détection Steam Family ---------------------------------------
+    // L'API GetRecentlyPlayedGames renvoie aussi les jeux lancés depuis
+    // une Family Library Sharing (non possédés par l'user). On isole ces
+    // appIds par diff avec GetOwnedGames.
+    const ownedAppIds = new Set(userGames.map((g) => g.appid.toString()));
+    const familyGames = (recentlyPlayedGames || []).filter(
+      (g) => !ownedAppIds.has(g.appid?.toString())
+    );
+
+    const previousLibraryGames = user.gameLibrary?.games || [];
+    const previousFamilyIds = new Set(
+      previousLibraryGames
+        .filter((g) => g.isFamilyShared)
+        .map((g) => g.gameId)
+    );
+    const currentFamilyIds = new Set(
+      familyGames.map((g) => g.appid.toString())
+    );
+
+    console.log(`[FAMILY] Analyse diff recentlyPlayed \\ owned`);
+    console.log(`  - Owned: ${userGames.length} | RecentlyPlayed: ${recentlyPlayedGames.length}`);
+    console.log(`  - Family détectés ce run: ${familyGames.length}`);
+    if (familyGames.length > 0) {
+      for (const fg of familyGames) {
+        const wasKnown = previousFamilyIds.has(fg.appid?.toString());
+        console.log(
+          `  - [FAMILY]${wasKnown ? ' (déjà connu)' : ' (NOUVEAU)'} appId=${fg.appid} name="${fg.name}" playtime_2weeks=${fg.playtime_2weeks || 0}min rtime_last_played=${fg.rtime_last_played || 'n/a'}`
+        );
+      }
+    }
+
+    // ---- Upsert Games (owned + family) --------------------------------
+    // Les Family games ont aussi besoin d'un document Game pour que le
+    // frontend puisse résoudre name + header_image via le lazy-loading.
+    await upsertGamesCollection([...userGames, ...familyGames]);
+    console.log(
+      `[OK] ${userGames.length + familyGames.length} jeux créés/mis à jour dans Games (dont ${familyGames.length} Family)`
+    );
 
     const cachedGameIds = new Set(
-      (user.gameLibrary?.games || []).map((g) => g.gameId)
+      previousLibraryGames.map((g) => g.gameId)
     );
 
     const removedGameIds = detectRemovedGames(user, userGames);
@@ -347,12 +388,30 @@ async function syncUserGames(user, options = {}) {
 
     const followedGamesSet = normalizeFollowedGames(user);
 
+    // Les Family games passent par le même pipeline de follow-prompt que
+    // les jeux owned : si libraryFollowMode='prompt' et que le jeu n'est
+    // pas encore en cache/suivi, il déclenche une notif "Voulez-vous
+    // suivre ce jeu ?" (avec la source 'library').
+    const gamesForAutoFollow = [
+      ...userGames,
+      ...familyGames.map((fg) => ({ appid: fg.appid, name: fg.name })),
+    ];
+
     const autoFollowResult = await processAutoFollow(
       user,
-      userGames,
+      gamesForAutoFollow,
       followedGamesSet,
       cachedGameIds
     );
+
+    const newFamilyIds = [...currentFamilyIds].filter(
+      (id) => !previousFamilyIds.has(id)
+    );
+    if (newFamilyIds.length > 0) {
+      console.log(
+        `[FAMILY] ${newFamilyIds.length} nouveau(x) jeu(x) Family déclenchent le pipeline follow_prompt (si mode=prompt)`
+      );
+    }
 
     result.updatedGames = autoFollowResult.newGames;
     result.followPrompts = autoFollowResult.followPrompts || [];
@@ -365,33 +424,68 @@ async function syncUserGames(user, options = {}) {
     }
 
     const previousLibraryMap = new Map(
-      (user.gameLibrary?.games || []).map((g) => [g.gameId, g])
+      previousLibraryGames.map((g) => [g.gameId, g])
     );
 
     const recentlyPlayedMap = new Map(
       (recentlyPlayedGames || []).map((g) => [g.appid?.toString(), g])
     );
 
+    // Construction gameLibrary = owned + Family sticky.
+    // Family sticky = on conserve les entrées Family déjà connues même
+    // absentes du recentlyPlayed actuel (fenêtre 2 semaines), pour qu'un
+    // jeu Family ne disparaisse pas de l'onglet "Récents" dès que l'user
+    // cesse d'y jouer.
+    const libraryGames = userGames.map((g) => {
+      const gameId = g.appid.toString();
+      const previousGame = previousLibraryMap.get(gameId);
+      const recentGame = recentlyPlayedMap.get(gameId);
+
+      const lastPlayed = resolveLastPlayedTimestamp(g, recentGame, previousGame);
+      const recentPlaytime = Math.max(
+        Number(g.playtime_2weeks) || 0,
+        Number(recentGame?.playtime_2weeks) || 0
+      );
+
+      return {
+        gameId,
+        playtime_forever: Number(g.playtime_forever) || 0,
+        rtime_last_played: lastPlayed,
+        playtime_2weeks: recentPlaytime,
+        isFamilyShared: false,
+      };
+    });
+
+    const familyUnionIds = new Set([...previousFamilyIds, ...currentFamilyIds]);
+    for (const familyId of familyUnionIds) {
+      const previousGame = previousLibraryMap.get(familyId);
+      const recentGame = recentlyPlayedMap.get(familyId);
+
+      const lastPlayed = resolveLastPlayedTimestamp(null, recentGame, previousGame);
+      const recentPlaytime = Math.max(
+        Number(previousGame?.playtime_2weeks) || 0,
+        Number(recentGame?.playtime_2weeks) || 0
+      );
+      const foreverPlaytime = Math.max(
+        Number(previousGame?.playtime_forever) || 0,
+        Number(recentGame?.playtime_forever) || 0
+      );
+
+      libraryGames.push({
+        gameId: familyId,
+        playtime_forever: foreverPlaytime,
+        rtime_last_played: lastPlayed,
+        playtime_2weeks: recentPlaytime,
+        isFamilyShared: true,
+      });
+    }
+
+    console.log(
+      `[FAMILY] gameLibrary final: ${libraryGames.length} entrées (${userGames.length} owned + ${familyUnionIds.size} Family sticky)`
+    );
+
     user.gameLibrary = {
-      games: userGames.map((g) => {
-        const gameId = g.appid.toString();
-        const previousGame = previousLibraryMap.get(gameId);
-        const recentGame = recentlyPlayedMap.get(gameId);
-
-        const lastPlayed = resolveLastPlayedTimestamp(g, recentGame, previousGame);
-        const recentPlaytime = Math.max(
-          Number(g.playtime_2weeks) || 0,
-          Number(recentGame?.playtime_2weeks) || 0
-        );
-
-        return {
-          gameId,
-          playtime_forever: Number(g.playtime_forever) || 0,
-          // Null = "inconnu/non fourni" (ne pas écraser artificiellement avec 0)
-          rtime_last_played: lastPlayed,
-          playtime_2weeks: recentPlaytime,
-        };
-      }),
+      games: libraryGames,
       lastFullSync: new Date(),
     };
 
