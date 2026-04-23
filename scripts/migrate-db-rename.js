@@ -73,7 +73,9 @@ async function main() {
     let indexesCopied = 0;
     for (const idx of indexes) {
       if (idx.name === '_id_') continue;
-      const { key, name: idxName, v, ns, ...options } = idx;
+      // On retire `v` (version) et `ns` (namespace) : ces champs sont gérés
+      // automatiquement par MongoDB lors du createIndex et ne doivent pas être passés.
+      const { key, name: idxName, v: _v, ns: _ns, ...options } = idx;
       try {
         await tgtCol.createIndex(key, { name: idxName, ...options });
         indexesCopied++;
