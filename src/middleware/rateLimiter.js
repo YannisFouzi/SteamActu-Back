@@ -29,4 +29,14 @@ const apiLimiter = rateLimit({
   message: {message: 'Too many requests. Try again later.'},
 });
 
-module.exports = {steamLimiter, authLimiter, apiLimiter};
+// Routes /admin : usage ponctuel (1 dev qui consulte), strict pour
+// contenir un brute-force de ADMIN_TOKEN côté proxy avant middleware auth.
+const adminLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {message: 'Too many admin requests. Try again later.'},
+});
+
+module.exports = {steamLimiter, authLimiter, apiLimiter, adminLimiter};

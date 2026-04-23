@@ -27,10 +27,13 @@ const userRoutes = require("./src/routes/users");
 const newsRoutes = require("./src/routes/news");
 const steamRoutes = require("./src/routes/steam");
 const authRoutes = require("./src/routes/auth");
+const adminRoutes = require("./src/routes/admin");
+const adminAuth = require("./src/middleware/adminAuth");
 const {
   steamLimiter,
   authLimiter,
   apiLimiter,
+  adminLimiter,
 } = require("./src/middleware/rateLimiter");
 
 const app = express();
@@ -54,6 +57,9 @@ app.use("/auth", authLimiter, authRoutes);
 app.use("/api/users", apiLimiter, userRoutes);
 app.use("/api/news", apiLimiter, newsRoutes);
 app.use("/api/steam", steamLimiter, steamRoutes);
+
+// Routes admin (protegees par Bearer token via ADMIN_TOKEN)
+app.use("/admin", adminLimiter, adminAuth, adminRoutes);
 
 // Routes debug (dev uniquement)
 if (SERVER_CONFIG.NODE_ENV === "development") {

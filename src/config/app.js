@@ -31,6 +31,8 @@ const SECURITY_CONFIG = {
   API_AUTH_KEY: process.env.API_AUTH_KEY || process.env.STEAM_API_KEY,
   MOBILE_REDIRECT_SCHEME: process.env.MOBILE_REDIRECT_SCHEME || 'steamnotif',
   CORS_ORIGINS: process.env.CORS_ORIGINS?.split(',') || ['*'],
+  // Token Bearer pour GET /admin/stats. Si vide -> routes admin repondent 503.
+  ADMIN_TOKEN: process.env.ADMIN_TOKEN || '',
 };
 
 // Configuration CORS

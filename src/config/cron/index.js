@@ -196,7 +196,19 @@ async function stopAgenda() {
   }
 }
 
+/**
+ * Retourne l'instance Agenda initialisee, ou `null` si `initAgenda()` n'a pas
+ * encore ete appele (typiquement en phase de boot avant `startServer`).
+ * Utilise par le service admin pour introspecter `nextRunAt` / `lastRunAt` /
+ * `lockedAt` sans recreer de connexion Mongo.
+ */
+function getAgenda() {
+  return agenda;
+}
+
 module.exports = {
   initAgenda,
   stopAgenda,
+  getAgenda,
+  JOBS,
 };
