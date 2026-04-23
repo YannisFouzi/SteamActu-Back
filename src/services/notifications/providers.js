@@ -4,6 +4,7 @@
  */
 
 const { NOTIFICATION_CONFIG } = require('../../config/app');
+const logger = require('../../utils/logger');
 const path = require('path');
 const fs = require('fs');
 
@@ -27,52 +28,47 @@ function initializeFirebase() {
 
     // MODE 1 : Charger depuis variable d'environnement (PRODUCTION - Railway)
     if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-      console.log('[Firebase] Chargement credentials depuis FIREBASE_SERVICE_ACCOUNT_JSON...');
+      logger.info({ source: 'env' }, 'firebase_credentials_loading');
       try {
         serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
-        console.log('[Firebase] [OK] Credentials chargés depuis variable d\'env');
+        logger.info({ source: 'env' }, 'firebase_credentials_loaded');
       } catch (parseError) {
-        console.error('[Firebase] [ERROR] Erreur parsing JSON depuis env:', parseError.message);
+        logger.error(
+          { err: parseError, source: 'env' },
+          'firebase_credentials_parse_failed'
+        );
         isFirebaseInitialized = true;
         return false;
       }
     }
     // MODE 2 : Charger depuis fichier local (DEVELOPMENT - Local)
     else if (NOTIFICATION_CONFIG.firebaseServiceAccountPath) {
-      console.log('[Firebase] Chargement credentials depuis fichier...');
+      logger.info({ source: 'file' }, 'firebase_credentials_loading');
 
-      // Résoudre le chemin absolu depuis la racine du projet
       const serviceAccountPath = path.resolve(
         process.cwd(),
         NOTIFICATION_CONFIG.firebaseServiceAccountPath
       );
 
-      // Vérifier que le fichier existe
       if (!fs.existsSync(serviceAccountPath)) {
-        console.error(
-          `[Firebase] [ERROR] Fichier service account introuvable: ${serviceAccountPath}`
-        );
-        console.error(
-          `[Firebase] Vérifiez que FIREBASE_SERVICE_ACCOUNT_PATH pointe vers le bon fichier`
+        logger.error(
+          { path: serviceAccountPath },
+          'firebase_service_account_not_found'
         );
         isFirebaseInitialized = true;
         return false;
       }
 
-      // Charger le service account avec chemin absolu
       serviceAccount = require(serviceAccountPath);
-      console.log('[Firebase] [OK] Credentials chargés depuis fichier');
+      logger.info({ source: 'file' }, 'firebase_credentials_loaded');
     }
     // Aucune méthode disponible
     else {
-      console.warn(
-        '[Firebase] Aucune credential configurée (ni FIREBASE_SERVICE_ACCOUNT_JSON ni FIREBASE_SERVICE_ACCOUNT_PATH). Provider désactivé.'
-      );
+      logger.warn('firebase_no_credentials_configured');
       isFirebaseInitialized = true;
       return false;
     }
 
-    // Initialiser Firebase Admin avec les credentials
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
@@ -80,10 +76,10 @@ function initializeFirebase() {
     firebaseAdmin = admin;
     isFirebaseInitialized = true;
 
-    console.log('[Firebase] [OK] Firebase Admin SDK initialisé avec succès');
+    logger.info('firebase_initialized');
     return true;
   } catch (error) {
-    console.error('[Firebase] [ERROR] Erreur initialisation:', error.message);
+    logger.error({ err: error }, 'firebase_init_failed');
     isFirebaseInitialized = true;
     return false;
   }
@@ -97,14 +93,16 @@ function initializeFirebase() {
  */
 async function simulationProvider(_token, notification) {
   try {
-    console.log('[Notification] Simulation envoyée:', notification.title);
+    logger.info(
+      { title: notification.title },
+      'notification_simulated'
+    );
 
-    // Simulation d'un delai reseau
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     return true;
   } catch (error) {
-    console.error('Erreur simulation notification:', error);
+    logger.error({ err: error }, 'notification_simulation_failed');
     return false;
   }
 }
@@ -117,23 +115,6 @@ async function simulationProvider(_token, notification) {
  */
 async function oneSignalProvider(token, notification) {
   // TODO: Implementer OneSignal en utilisant NOTIFICATION_CONFIG.oneSignalAppId et NOTIFICATION_CONFIG.oneSignalApiKey
-  /*
-  const response = await axios.post('https://onesignal.com/api/v1/notifications', {
-    app_id: NOTIFICATION_CONFIG.oneSignalAppId,
-    include_player_ids: [token],
-    headings: { fr: notification.title, en: notification.title },
-    contents: { fr: notification.body, en: notification.body },
-    data: notification.data
-  }, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Basic ${NOTIFICATION_CONFIG.oneSignalApiKey}`
-    }
-  });
-
-  return response.status === 200;
-  */
-
   // Fallback vers simulation en attendant l'implementation
   return simulationProvider(token, notification);
 }
@@ -149,23 +130,21 @@ async function oneSignalProvider(token, notification) {
  */
 async function firebaseProvider(tokens, notification) {
   try {
-    // Initialiser Firebase si nécessaire
     if (!initializeFirebase()) {
-      console.warn('[Firebase] Non initialisé, fallback vers simulation');
+      logger.warn('firebase_fallback_to_simulation');
       return simulationProvider(tokens, notification);
     }
 
-    // Normaliser tokens en tableau
     const tokenList = Array.isArray(tokens) ? tokens : [tokens];
 
     if (tokenList.length === 0) {
-      console.warn('[Firebase] Aucun token fourni');
+      logger.warn('firebase_no_tokens_provided');
       return false;
     }
 
-    // Construire le payload de donnees pour FCM
     // allowUnfollow est converti en string 'true'/'false' pour la transmission FCM
-    const allowUnfollowValue = notification.data?.allowUnfollow === true ? 'true' : 'false';
+    const allowUnfollowValue =
+      notification.data?.allowUnfollow === true ? 'true' : 'false';
 
     const payloadData = {
       allowUnfollow: allowUnfollowValue,
@@ -218,43 +197,46 @@ async function firebaseProvider(tokens, notification) {
       };
     }
 
-    // LOGS DETAILLES
-    console.log('[Firebase] [INFO] Préparation envoi notification:');
-    console.log('  Mode:', needsNotifeeHandling ? 'data-only (Notifee + boutons)' : 'notification+data (FCM natif)');
-    console.log('  Tokens:', tokenList.length, 'devices');
-    console.log('  Title:', notification.title || '');
-    console.log('  Body:', notification.body || '');
-    console.log('  Type:', payloadData.type || 'N/A');
-    console.log('  AppId:', payloadData.appId || 'N/A');
-    console.log('  AllowUnfollow:', payloadData.allowUnfollow);
-    console.log('  Data:', JSON.stringify(message.data));
+    logger.debug(
+      {
+        mode: needsNotifeeHandling
+          ? 'data-only (Notifee + boutons)'
+          : 'notification+data (FCM natif)',
+        tokensCount: tokenList.length,
+        title: notification.title,
+        type: payloadData.type,
+        appId: payloadData.appId,
+        allowUnfollow: payloadData.allowUnfollow,
+      },
+      'firebase_send_preparing'
+    );
 
-    // Envoyer à tous les tokens (multicast)
     const response = await firebaseAdmin.messaging().sendEachForMulticast({
       tokens: tokenList,
       ...message,
     });
 
-    console.log(
-      `[Firebase] [OK] ${response.successCount}/${tokenList.length} notifications envoyées`
+    logger.info(
+      {
+        successCount: response.successCount,
+        failureCount: response.failureCount,
+        tokensTotal: tokenList.length,
+      },
+      'firebase_send_completed'
     );
 
-    // Logger les tokens invalides pour nettoyage
     if (response.failureCount > 0) {
       const failedTokens = [];
       response.responses.forEach((resp, idx) => {
         if (!resp.success) {
           const errorCode = resp.error?.code;
-          console.warn(
-            `[Firebase] [WARN] Échec envoi token [${idx}]: ${errorCode}`
-          );
 
           // Liste des erreurs FCM indiquant un token définitivement invalide
           // À SUPPRIMER de la DB (app désinstallée, token expiré, etc.)
           const PERMANENT_ERROR_CODES = [
             'messaging/invalid-registration-token',
             'messaging/registration-token-not-registered',
-            'messaging/invalid-argument', // Token malformé
+            'messaging/invalid-argument',
           ];
 
           // Erreurs TEMPORAIRES à NE PAS supprimer (quota, réseau, etc.)
@@ -266,32 +248,36 @@ async function firebaseProvider(tokens, notification) {
           ];
 
           if (PERMANENT_ERROR_CODES.includes(errorCode)) {
-            console.warn(
-              `[Firebase] [WARN] Token marqué pour suppression (erreur permanente)`
+            logger.warn(
+              { tokenIndex: idx, errorCode, action: 'mark_for_deletion' },
+              'firebase_token_invalid_permanent'
             );
             failedTokens.push(tokenList[idx]);
           } else if (TEMPORARY_ERROR_CODES.includes(errorCode)) {
-            console.warn(
-              `[Firebase] [WARN] Token conservé (erreur temporaire, réessayer plus tard)`
+            logger.warn(
+              { tokenIndex: idx, errorCode, action: 'keep_for_retry' },
+              'firebase_token_invalid_temporary'
             );
           } else {
-            // Erreur inconnue : logger mais ne pas supprimer par précaution
-            console.error(
-              `[Firebase] [ERROR] Code d'erreur inconnu: ${errorCode} (token conservé)`
+            logger.error(
+              { tokenIndex: idx, errorCode, action: 'keep_unknown' },
+              'firebase_token_unknown_error'
             );
           }
         }
       });
 
-      // Retourner les tokens invalides pour cleanup
       if (failedTokens.length > 0) {
-        return { success: response.successCount > 0, invalidTokens: failedTokens };
+        return {
+          success: response.successCount > 0,
+          invalidTokens: failedTokens,
+        };
       }
     }
 
     return response.successCount > 0;
   } catch (error) {
-    console.error('[Firebase] [ERROR] Erreur envoi:', error.message);
+    logger.error({ err: error }, 'firebase_send_failed');
     return false;
   }
 }

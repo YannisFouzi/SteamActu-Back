@@ -17,6 +17,7 @@ const UserNewsState = require('../models/UserNewsState');
 const steamService = require('./steamService');
 const notificationService = require('./notifications/notificationService');
 const { extractFirstImage } = require('./newsFeed/imageExtractor');
+const logger = require('../utils/logger');
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -88,7 +89,7 @@ function getTierCooldown(lastNewsTimestamp, lastNewsCheck) {
  */
 async function checkNewsRotation() {
   if (isRotationRunning) {
-    console.log('[WARN] Rotation déjà en cours, skip...');
+    logger.warn('news_rotation_already_running');
     return {
       gamesChecked: 0,
       apiCalls: 0,
@@ -101,9 +102,7 @@ async function checkNewsRotation() {
   isRotationRunning = true;
 
   try {
-    console.log('\n' + '='.repeat(60));
-    console.log('[NEWS] DÉBUT VÉRIFICATION ACTUALITÉS (ROTATION ADAPTATIVE)');
-    console.log('='.repeat(60));
+    logger.info('news_rotation_start');
 
     const startTime = Date.now();
     const now = new Date();
@@ -119,10 +118,9 @@ async function checkNewsRotation() {
       .sort({ nextNewsCheckAt: 1, lastNewsCheck: 1 })
       .limit(CONFIG.MAX_STEAM_NEWS_CALLS_PER_RUN);
 
-    console.log(`[GAMES] ${games.length} jeu(x) éligible(s) à vérifier`);
+    logger.info({ eligibleGames: games.length }, 'news_rotation_eligible');
 
     if (games.length === 0) {
-      console.log('[INFO] Aucun jeu éligible');
       return {
         gamesChecked: 0,
         apiCalls: 0,
@@ -145,12 +143,6 @@ async function checkNewsRotation() {
 
     for (const game of games) {
       try {
-        console.log(
-          `\n[${stats.gamesChecked + 1}/${games.length}] Vérification : ${
-            game.name
-          } (${game.gameId})`
-        );
-
         // §4 étape 1 : appel Steam
         const news = await steamService.getGameNews(
           game.gameId,
@@ -163,26 +155,23 @@ async function checkNewsRotation() {
           const latestNewsTimestamp = news[0].date || 0;
           const currentTimestamp = game.lastNewsTimestamp || 0;
 
-          console.log(
-            `  timestamp connu: ${currentTimestamp} | steam: ${latestNewsTimestamp}`
-          );
-
           if (latestNewsTimestamp > currentTimestamp) {
             game.lastNewsTimestamp = latestNewsTimestamp;
 
             const firstImageUrl = extractFirstImage(news[0].contents);
-            console.log(`[NEW] Nouvelles actualités détectées pour ${game.name}!`);
+            logger.info(
+              {
+                gameId: game.gameId,
+                gameName: game.name,
+                newTimestamp: latestNewsTimestamp,
+                previousTimestamp: currentTimestamp,
+              },
+              'news_new_detected'
+            );
             stats.newNewsFound++;
 
-            // Notifications aux abonnés éligibles
             await sendNotificationsForGame(game, news[0], firstImageUrl, stats);
-
-            console.log(`[OK] Timestamp mis à jour : ${latestNewsTimestamp}`);
-          } else {
-            console.log(`[INFO] Pas de nouvelles actualités`);
           }
-        } else {
-          console.log(`[INFO] Aucune actualité disponible`);
         }
 
         // §4 étape 3 : tier sur valeur FRAÎCHE
@@ -207,9 +196,9 @@ async function checkNewsRotation() {
           await sleep(CONFIG.PAUSE_BETWEEN_CALLS);
         }
       } catch (error) {
-        console.error(
-          `[ERROR] Erreur lors de la vérification de ${game.name}:`,
-          error.message
+        logger.error(
+          { err: error, gameId: game.gameId, gameName: game.name },
+          'news_rotation_game_failed'
         );
         stats.errors.push({
           gameId: game.gameId,
@@ -247,42 +236,36 @@ async function checkNewsRotation() {
         }));
 
         await GameSubscription.bulkWrite(bulkOps);
-        console.log(
-          `[INFO] ${gamesToUpdate.length} jeu(x) mis à jour en bulk`
-        );
       } catch (bulkError) {
-        console.error(`[ERROR] Erreur bulkWrite:`, bulkError.message);
+        logger.error({ err: bulkError }, 'news_rotation_bulk_write_failed');
       }
     }
 
-    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    const durationMs = Date.now() - startTime;
 
-    console.log('\n' + '='.repeat(60));
-    console.log('[INFO] RÉSUMÉ VÉRIFICATION ACTUALITÉS');
-    console.log('='.repeat(60));
-    console.log(`[TIMER] Durée : ${duration}s`);
-    console.log(`[GAMES] Jeux vérifiés : ${stats.gamesChecked}`);
-    console.log(`[SYNC] Appels API Steam : ${stats.apiCalls}`);
-    console.log(`[TIER] hot=${stats.tiers.hot} warm=${stats.tiers.warm} cold=${stats.tiers.cold}`);
-    console.log(`[NEW] Nouvelles actualités trouvées : ${stats.newNewsFound}`);
-    console.log(`[INFO] Notifications envoyées : ${stats.notificationsSent}`);
-    console.log(`[ERROR] Erreurs : ${stats.errors.length}`);
+    logger.info(
+      {
+        durationMs,
+        gamesChecked: stats.gamesChecked,
+        apiCalls: stats.apiCalls,
+        tiers: stats.tiers,
+        newNewsFound: stats.newNewsFound,
+        notificationsSent: stats.notificationsSent,
+        errorsCount: stats.errors.length,
+      },
+      'news_rotation_done'
+    );
 
     if (stats.errors.length > 0) {
-      console.log('\n[ERROR] Erreurs détaillées :');
-      stats.errors.forEach((err) => {
-        console.log(`  - ${err.gameName} (${err.gameId}): ${err.error}`);
-      });
+      logger.warn(
+        { errors: stats.errors.slice(0, 20) },
+        'news_rotation_errors_detail'
+      );
     }
-
-    console.log('='.repeat(60) + '\n');
 
     return stats;
   } catch (error) {
-    console.error(
-      '[ERROR] Erreur globale lors de la vérification des actualités:',
-      error
-    );
+    logger.error({ err: error }, 'news_rotation_fatal');
     throw error;
   } finally {
     isRotationRunning = false;
@@ -315,8 +298,14 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
     (sid) => !alreadyServedSet.has(sid)
   );
 
-  console.log(
-    `[INFO] ${eligibleSubscribers.length}/${subscribers.length} abonné(s) éligibles (${alreadyServedSet.size} déjà servi(s))`
+  logger.debug(
+    {
+      gameId: game.gameId,
+      eligible: eligibleSubscribers.length,
+      total: subscribers.length,
+      alreadyServed: alreadyServedSet.size,
+    },
+    'news_notification_subscribers_filtered'
   );
 
   const MS_IN_DAY = 24 * 60 * 60 * 1000;
@@ -368,18 +357,23 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
             upsert: true,
           },
         });
-      } else {
-        console.error(
-          `[ERROR] Erreur envoi notification:`,
-          result.reason?.message
+      } else if (result.status === 'rejected') {
+        logger.error(
+          { err: result.reason, steamId: batch[idx], gameId: game.gameId },
+          'news_notification_send_rejected'
         );
       }
     });
 
     if (pushSentOps.length > 0) {
-      await UserNewsState.bulkWrite(pushSentOps, { ordered: false }).catch((err) => {
-        console.error('UserNewsState pushSentAt bulkWrite error:', err.message);
-      });
+      await UserNewsState.bulkWrite(pushSentOps, { ordered: false }).catch(
+        (err) => {
+          logger.error(
+            { err },
+            'news_rotation_push_sent_bulk_failed'
+          );
+        }
+      );
     }
   }
 }

@@ -4,10 +4,11 @@
  */
 
 const mongoose = require('mongoose');
-const { DATABASE_CONFIG, SUCCESS_MESSAGES } = require('../config/app');
+const { DATABASE_CONFIG } = require('../config/app');
 const UserNewsState = require('../models/UserNewsState');
 const GameSubscription = require('../models/GameSubscription');
 const { stopAgenda } = require('../config/cron');
+const logger = require('../utils/logger');
 
 /**
  * Initialise la connexion a MongoDB
@@ -15,7 +16,7 @@ const { stopAgenda } = require('../config/cron');
 async function connectDatabase() {
   try {
     await mongoose.connect(DATABASE_CONFIG.uri, DATABASE_CONFIG.options);
-    console.log(SUCCESS_MESSAGES.MONGODB_CONNECTED);
+    logger.info('mongodb_connected');
 
     // Sync indexes pour les modèles dont les contraintes ont évolué
     // (ajout de `unique` ou TTL qu'il faut appliquer sur la collection existante).
@@ -24,9 +25,7 @@ async function connectDatabase() {
 
     return true;
   } catch (error) {
-    const safeMessage =
-      error && error.message ? error.message : 'MongoDB connection failed';
-    console.error('Erreur connexion MongoDB:', safeMessage);
+    logger.error({ err: error }, 'mongodb_connection_failed');
     throw error;
   }
 }
@@ -37,11 +36,9 @@ async function connectDatabase() {
 async function disconnectDatabase() {
   try {
     await mongoose.disconnect();
-    console.log('Connexion MongoDB fermee');
+    logger.info('mongodb_disconnected');
   } catch (error) {
-    const safeMessage =
-      error && error.message ? error.message : 'MongoDB disconnect failed';
-    console.error('Erreur fermeture MongoDB:', safeMessage);
+    logger.error({ err: error }, 'mongodb_disconnect_failed');
   }
 }
 
@@ -50,7 +47,7 @@ async function disconnectDatabase() {
  */
 function setupGracefulShutdown() {
   const gracefulShutdown = async (signal) => {
-    console.log(`Signal ${signal} recu, arret en cours...`);
+    logger.info({ signal }, 'shutdown_signal_received');
     // Arrêter Agenda AVANT Mongo : les jobs en cours doivent pouvoir libérer
     // leurs locks (`lockedAt`) et marquer `lastFinishedAt`, ce qui nécessite
     // une connexion MongoDB active.

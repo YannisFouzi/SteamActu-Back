@@ -14,6 +14,7 @@
 const { Agenda } = require('agenda');
 const { checkNews, syncUserGroup, syncWishlists } = require('./tasks');
 const { CRON_CONFIG, SERVER_CONFIG } = require('../app');
+const logger = require('../../utils/logger');
 
 const TZ = CRON_CONFIG.TIMEZONE;
 const GROUPS_TOTAL = Math.max(Number(CRON_CONFIG.GROUPS_TOTAL) || 1, 1);
@@ -49,41 +50,43 @@ function hourToGroupIndex(hour /* 0..23 */) {
 
 /**
  * Wrapper standardisé pour exécuter une tâche cron.
- * Reproduit le comportement de l'ancien taskExecutor :
- * logs [CRON][START] / [CRON][DONE] / [CRON][ERROR] + durée + result.message.
+ * Logs structurés via pino :
+ *   - `cron_start` : au démarrage du job
+ *   - `cron_done`  : à la fin avec durée + result
+ *   - `cron_error` : si exception, capturée et convertie en log (pas re-thrown)
  *
- * Les erreurs sont capturées et converties en log plutôt que remontées à
- * Agenda : on garde la sémantique historique "un échec ne re-queue pas".
+ * Les erreurs sont capturées plutôt que remontées à Agenda : on garde la
+ * sémantique historique "un échec ne re-queue pas".
  */
 async function runTask(label, taskFunction) {
   const started = Date.now();
-  console.log(`[CRON][START] ${label}`);
+  logger.info({ task: label }, 'cron_start');
 
   try {
     const result = await taskFunction();
-    const ms = Date.now() - started;
-    const sec = Math.round(ms / 1000);
-    const msg =
-      result && typeof result === 'object' && result.message
-        ? ` → ${result.message}`
-        : '';
-    console.log(`[CRON][DONE] ${label} in ${sec}s${msg}`);
+    const durationMs = Date.now() - started;
+    const resultSummary =
+      result && typeof result === 'object' ? result : undefined;
 
-    if (result && typeof result === 'object') {
-      console.log(
-        JSON.stringify({
-          level: 'info',
-          tag: 'cron_done',
-          task: label,
-          durationMs: ms,
-          ...result,
-        })
-      );
-    }
+    logger.info(
+      {
+        task: label,
+        durationMs,
+        ...(resultSummary || {}),
+      },
+      'cron_done'
+    );
 
     return result;
   } catch (error) {
-    console.error(`[CRON][ERROR] ${label}:`, error?.stack || error);
+    logger.error(
+      {
+        err: error,
+        task: label,
+        durationMs: Date.now() - started,
+      },
+      'cron_error'
+    );
     return null;
   }
 }
@@ -109,9 +112,8 @@ async function initAgenda() {
     defaultLockLifetime: 10 * 60 * 1000,
   });
 
-  // Erreurs opérationnelles (connexion, driver, etc.)
   agenda.on('error', (err) => {
-    console.error('[CRON][AGENDA_ERROR]', err?.stack || err);
+    logger.error({ err }, 'agenda_internal_error');
   });
 
   // --- Définition des jobs ---
@@ -170,8 +172,9 @@ async function initAgenda() {
     { timezone: TZ }
   );
 
-  console.log(
-    '[CRON] Agenda démarré — jobs persistants dans MongoDB (collection: agendaJobs)'
+  logger.info(
+    { collection: 'agendaJobs' },
+    'agenda_started'
   );
   return agenda;
 }
@@ -185,12 +188,9 @@ async function stopAgenda() {
   if (!agenda) return;
   try {
     await agenda.stop();
-    console.log('[CRON] Agenda arrêté');
+    logger.info('agenda_stopped');
   } catch (error) {
-    console.error(
-      '[CRON] Erreur arrêt Agenda:',
-      error?.message || error
-    );
+    logger.error({ err: error }, 'agenda_stop_failed');
   } finally {
     agenda = null;
   }

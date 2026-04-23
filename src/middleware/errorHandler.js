@@ -3,17 +3,24 @@
  * Capture toutes les erreurs non gérées et standardise les réponses
  */
 
-const errorHandler = (err, _req, res, _next) => {
-  console.error('Erreur serveur:', err);
+const logger = require('../utils/logger');
 
-  // Erreurs MongoDB (duplicate key, etc.)
+const errorHandler = (err, req, res, _next) => {
+  logger.error(
+    {
+      err,
+      method: req.method,
+      path: req.originalUrl,
+    },
+    'unhandled_request_error'
+  );
+
   if (err.code === 11000) {
     return res.status(409).json({
       message: 'Ressource déjà existante',
     });
   }
 
-  // Erreurs de validation Mongoose
   if (err.name === 'ValidationError') {
     return res.status(400).json({
       message: 'Données invalides',
@@ -21,7 +28,6 @@ const errorHandler = (err, _req, res, _next) => {
     });
   }
 
-  // Erreur par défaut
   res.status(err.status || 500).json({
     message: err.message || 'Erreur serveur interne',
   });

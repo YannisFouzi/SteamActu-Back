@@ -23,6 +23,7 @@ const {
   setupGracefulShutdown,
 } = require("./src/database/connection");
 const { initAgenda } = require("./src/config/cron");
+const logger = require("./src/utils/logger");
 
 // Import des routes
 const userRoutes = require("./src/routes/users");
@@ -72,7 +73,7 @@ app.use("/admin", adminLimiter, adminRoutes);
 if (SERVER_CONFIG.NODE_ENV === "development") {
   const debugRoutes = require("./src/routes/debug");
   app.use("/api/debug", debugRoutes);
-  console.log("[DEBUG] Routes /api/debug activées (dev only)");
+  logger.info("debug_routes_enabled");
 }
 
 // Sentry error handler DOIT etre avant le errorHandler custom
@@ -92,12 +93,10 @@ async function startServer() {
     setupGracefulShutdown();
 
     app.listen(SERVER_CONFIG.PORT, () => {
-      console.log(SUCCESS_MESSAGES.SERVER_STARTED(SERVER_CONFIG.PORT));
+      logger.info({ port: SERVER_CONFIG.PORT }, "server_started");
     });
   } catch (error) {
-    const safeMessage =
-      error && error.message ? error.message : "Server start failed";
-    console.error("Erreur demarrage serveur:", safeMessage);
+    logger.fatal({ err: error }, "server_start_failed");
     process.exit(1);
   }
 }

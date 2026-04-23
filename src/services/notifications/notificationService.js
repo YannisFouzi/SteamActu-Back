@@ -7,6 +7,7 @@ const { getActiveProvider } = require('./providers');
 const { createNewsNotification, createFollowPromptNotification } = require('./templates');
 const User = require('../../models/User');
 const GameSubscription = require('../../models/GameSubscription');
+const logger = require('../../utils/logger');
 
 /**
  * Envoie une notification a un utilisateur
@@ -26,7 +27,7 @@ async function sendNotification(token, notification) {
     const provider = getActiveProvider();
     return await provider(token, notification);
   } catch (error) {
-    console.error("Erreur lors de l'envoi de la notification:", error);
+    logger.error({ err: error }, 'notification_send_failed');
     return false;
   }
 }
@@ -52,31 +53,27 @@ async function sendNewsNotification(
   firstImageUrl = null
 ) {
   try {
-    // Recuperer l'utilisateur depuis MongoDB
     const user = await User.findOne({ steamId }).lean();
 
     if (!user) {
-      console.warn(`[Notification] User ${steamId} introuvable`);
+      logger.warn({ steamId }, 'news_notification_user_not_found');
       return false;
     }
 
-    // Verifier que les notifications sont activees
     // Note: undefined ou true = enabled, seul false = disabled
     // Cela permet aux anciens users (sans notificationSettings) de recevoir des notifs
     if (!user.notificationSettings?.newsNotifications) {
-      console.log(`[Notification] Notifications news desactivees pour ${steamId}`);
+      logger.debug({ steamId }, 'news_notification_disabled');
       return false;
     }
 
-    // Recuperer les tokens FCM
     const fcmTokens = user.notificationSettings?.fcmTokens || [];
 
     if (fcmTokens.length === 0) {
-      console.log(`[Notification] Aucun token FCM pour ${steamId}`);
+      logger.debug({ steamId }, 'news_notification_no_fcm_token');
       return false;
     }
 
-    // Extraire uniquement les tokens (string[])
     const tokens = fcmTokens.map((t) => t.token);
     const language = user.language || 'fr';
 
@@ -91,7 +88,6 @@ async function sendNewsNotification(
       // pas bloquant
     }
 
-    // Creer la notification avec le template
     const notification = createNewsNotification(
       appId,
       {
@@ -106,17 +102,16 @@ async function sendNewsNotification(
       language
     );
 
-    // Envoyer via le provider actif
     const provider = getActiveProvider();
     const result = await provider(tokens, notification);
 
     // Gerer les tokens invalides (auto-cleanup)
     if (result && typeof result === 'object' && result.invalidTokens) {
-      console.log(
-        `[Notification] Nettoyage de ${result.invalidTokens.length} token(s) invalide(s)`
+      logger.info(
+        { steamId, count: result.invalidTokens.length },
+        'fcm_invalid_tokens_cleanup'
       );
 
-      // Supprimer les tokens invalides de la DB
       await User.updateOne(
         { steamId },
         {
@@ -133,9 +128,9 @@ async function sendNewsNotification(
 
     return Boolean(result);
   } catch (error) {
-    console.error(
-      `[Notification] Erreur envoi news a ${steamId}:`,
-      error.message
+    logger.error(
+      { err: error, steamId, appId },
+      'news_notification_failed'
     );
     return false;
   }
@@ -156,21 +151,19 @@ async function sendFollowPromptNotifications(steamId, prompts = []) {
     const user = await User.findOne({ steamId }).lean();
 
     if (!user) {
-      console.warn(`[Notification] User ${steamId} introuvable pour follow_prompt`);
+      logger.warn({ steamId }, 'follow_prompt_user_not_found');
       return 0;
     }
 
     if (!user.notificationSettings?.followPromptNotifications) {
-      console.log(
-        `[Notification] Notifications follow_prompt desactivees pour ${steamId}`
-      );
+      logger.debug({ steamId }, 'follow_prompt_disabled');
       return 0;
     }
 
     const fcmTokens = user.notificationSettings?.fcmTokens || [];
 
     if (fcmTokens.length === 0) {
-      console.log(`[Notification] Aucun token FCM pour ${steamId} (follow_prompt)`);
+      logger.debug({ steamId }, 'follow_prompt_no_fcm_token');
       return 0;
     }
 
@@ -204,8 +197,9 @@ async function sendFollowPromptNotifications(steamId, prompts = []) {
         const invalidTokens = result.invalidTokens;
 
         if (invalidTokens.length > 0) {
-          console.log(
-            `[Notification] Nettoyage de ${invalidTokens.length} token(s) invalide(s) (follow_prompt)`
+          logger.info(
+            { steamId, count: invalidTokens.length, kind: 'follow_prompt' },
+            'fcm_invalid_tokens_cleanup'
           );
 
           await User.updateOne(
@@ -233,9 +227,9 @@ async function sendFollowPromptNotifications(steamId, prompts = []) {
 
     return sentCount;
   } catch (error) {
-    console.error(
-      `[Notification] Erreur envoi follow_prompt a ${steamId}:`,
-      error.message
+    logger.error(
+      { err: error, steamId },
+      'follow_prompt_notification_failed'
     );
     return 0;
   }
