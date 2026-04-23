@@ -385,10 +385,6 @@ Chaque jeu reçoit un **tier** selon l'ancienneté de sa dernière news Steam, q
 - Après chaque check, `nextNewsCheckAt` est recalculé selon le tier **frais** (post-appel Steam)
 - Erreur Steam → retry dans 15 min
 
-### Migration
-
-Script `scripts/migrate-next-news-check-at.js` : backfill étalé sur 1h pour les jeux déjà vérifiés, `null` pour les jamais vérifiés (éligibles immédiatement).
-
 ## 🛡️ Sécurité et Validation
 
 ### Middlewares de Sécurité
