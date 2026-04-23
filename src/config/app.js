@@ -31,8 +31,14 @@ const SECURITY_CONFIG = {
   API_AUTH_KEY: process.env.API_AUTH_KEY || process.env.STEAM_API_KEY,
   MOBILE_REDIRECT_SCHEME: process.env.MOBILE_REDIRECT_SCHEME || 'steamnotif',
   CORS_ORIGINS: process.env.CORS_ORIGINS?.split(',') || ['*'],
-  // Token Bearer pour GET /admin/stats. Si vide -> routes admin repondent 503.
+  // Dashboard /admin — auth dual : cookie signe (UI) OU Bearer token (API).
+  // Si ADMIN_PASSWORD_HASH vide -> formulaire login desactive.
+  // Si ADMIN_TOKEN vide -> header Bearer refuse.
+  // Si les 2 vides -> routes /admin repondent 503.
   ADMIN_TOKEN: process.env.ADMIN_TOKEN || '',
+  ADMIN_PASSWORD_HASH: process.env.ADMIN_PASSWORD_HASH || '',
+  ADMIN_SESSION_SECRET: process.env.ADMIN_SESSION_SECRET || '',
+  ADMIN_SESSION_MAX_AGE_MS: 24 * 60 * 60 * 1000, // 24h
 };
 
 // Configuration CORS

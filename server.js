@@ -9,10 +9,12 @@ require("./instrument");
 const Sentry = require("@sentry/node");
 const express = require("express");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 
 // Configuration et utilitaires
 const {
   SERVER_CONFIG,
+  SECURITY_CONFIG,
   CORS_OPTIONS,
   SUCCESS_MESSAGES,
 } = require("./src/config/app");
@@ -28,7 +30,6 @@ const newsRoutes = require("./src/routes/news");
 const steamRoutes = require("./src/routes/steam");
 const authRoutes = require("./src/routes/auth");
 const adminRoutes = require("./src/routes/admin");
-const adminAuth = require("./src/middleware/adminAuth");
 const {
   steamLimiter,
   authLimiter,
@@ -44,6 +45,11 @@ app.set("trust proxy", 1);
 // Middleware globaux
 app.use(cors(CORS_OPTIONS));
 app.use(express.json());
+// cookie-parser pour les routes /admin (session signee). Pas global pour
+// limiter la surface d'attaque ; monte juste avant le router admin.
+if (SECURITY_CONFIG.ADMIN_SESSION_SECRET) {
+  app.use("/admin", cookieParser(SECURITY_CONFIG.ADMIN_SESSION_SECRET));
+}
 
 // Route racine
 app.get("/", (req, res) => {
@@ -58,8 +64,9 @@ app.use("/api/users", apiLimiter, userRoutes);
 app.use("/api/news", apiLimiter, newsRoutes);
 app.use("/api/steam", steamLimiter, steamRoutes);
 
-// Routes admin (protegees par Bearer token via ADMIN_TOKEN)
-app.use("/admin", adminLimiter, adminAuth, adminRoutes);
+// Routes admin (dashboard UI + API JSON). L'auth est appliquee par route
+// dans le router (certaines sont publiques : GET /, POST /login, POST /logout).
+app.use("/admin", adminLimiter, adminRoutes);
 
 // Routes debug (dev uniquement)
 if (SERVER_CONFIG.NODE_ENV === "development") {
