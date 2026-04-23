@@ -95,12 +95,13 @@ async function getOverview() {
 }
 
 /**
- * Polling : repartition des GameSubscription par tier (hot/warm/cold) +
- * compte des jeux en cooldown erreur (nextNewsCheckAt > now + 10min mais
- * pas cold — heuristique : on flag ceux avec ancienne erreur potentielle).
+ * Polling : repartition des GameSubscription par tier (hot/warm/cold) avec
+ * le detail eligible/pending pour chacun. Une seule aggregation Mongo :
+ *   project (tier + eligible) -> group (tier, eligible) -> pivot cote JS.
  *
- * La logique de tier reproduit exactement celle de newsRotationService
- * pour rester coherent avec ce que le cron voit.
+ * La logique de tier reproduit exactement celle de newsRotationService pour
+ * rester coherent avec ce que le cron voit. Les cooldowns (hot 30min, warm
+ * 6h, cold 24h) sont definis dans `newsRotationService.js`.
  */
 async function getPolling() {
   const now = new Date();
@@ -111,52 +112,78 @@ async function getPolling() {
   const hotTs = Math.floor(hotCutoff.getTime() / 1000);
   const warmTs = Math.floor(warmCutoff.getTime() / 1000);
 
-  const [tierAgg, eligibleNow, pending] = await Promise.all([
-    GameSubscription.aggregate([
-      {
-        $group: {
-          _id: {
-            $switch: {
-              branches: [
-                { case: { $eq: ['$lastNewsCheck', null] }, then: 'never_checked' },
-                {
-                  case: {
-                    $and: [
-                      { $eq: ['$lastNewsTimestamp', 0] },
-                      { $ne: ['$lastNewsCheck', null] },
-                    ],
-                  },
-                  then: 'cold_no_news',
+  const rows = await GameSubscription.aggregate([
+    {
+      $project: {
+        tier: {
+          $switch: {
+            branches: [
+              { case: { $eq: ['$lastNewsCheck', null] }, then: 'never_checked' },
+              {
+                case: {
+                  $and: [
+                    { $eq: ['$lastNewsTimestamp', 0] },
+                    { $ne: ['$lastNewsCheck', null] },
+                  ],
                 },
-                { case: { $gte: ['$lastNewsTimestamp', hotTs] }, then: 'hot' },
-                { case: { $gte: ['$lastNewsTimestamp', warmTs] }, then: 'warm' },
-              ],
-              default: 'cold',
-            },
+                then: 'cold_no_news',
+              },
+              { case: { $gte: ['$lastNewsTimestamp', hotTs] }, then: 'hot' },
+              { case: { $gte: ['$lastNewsTimestamp', warmTs] }, then: 'warm' },
+            ],
+            default: 'cold',
           },
-          count: { $sum: 1 },
+        },
+        eligible: {
+          $or: [
+            { $eq: ['$nextNewsCheckAt', null] },
+            { $lte: ['$nextNewsCheckAt', now] },
+          ],
         },
       },
-    ]),
-
-    // Eligibles maintenant : nextNewsCheckAt <= now OR null
-    GameSubscription.countDocuments({
-      $or: [{ nextNewsCheckAt: { $lte: now } }, { nextNewsCheckAt: null }],
-    }).exec(),
-
-    // En attente : nextNewsCheckAt > now
-    GameSubscription.countDocuments({
-      nextNewsCheckAt: { $gt: now },
-    }).exec(),
+    },
+    {
+      $group: {
+        _id: { tier: '$tier', eligible: '$eligible' },
+        count: { $sum: 1 },
+      },
+    },
   ]);
 
+  // Pivot : construit { tier: { total, eligible, pending } } en une passe
+  const byTier = {};
+  let eligibleNow = 0;
+  let pending = 0;
+
+  for (const row of rows) {
+    const tier = row._id.tier || 'unset';
+    const isEligible = Boolean(row._id.eligible);
+    const count = row.count;
+
+    if (!byTier[tier]) byTier[tier] = { total: 0, eligible: 0, pending: 0 };
+    byTier[tier].total += count;
+    if (isEligible) {
+      byTier[tier].eligible += count;
+      eligibleNow += count;
+    } else {
+      byTier[tier].pending += count;
+      pending += count;
+    }
+  }
+
   return {
-    tiers: aggregationToMap(tierAgg),
+    // Retour retro-compat : `tiers` flat (total par tier)
+    tiers: Object.fromEntries(Object.entries(byTier).map(([k, v]) => [k, v.total])),
+    // Detail par tier : ce qui va etre checke au prochain cron vs. en attente
+    byTier,
     eligibleNow,
     pending,
     cutoffs: {
       hotMaxAgeDays: TIER_HOT_MAX_AGE_DAYS,
       warmMaxAgeDays: TIER_WARM_MAX_AGE_DAYS,
+      cooldownHotMinutes: 30,
+      cooldownWarmHours: 6,
+      cooldownColdHours: 24,
     },
   };
 }

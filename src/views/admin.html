@@ -211,43 +211,69 @@ section h2 {
   color: var(--accent);
   font-weight: 500;
 }
-.tiers {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.tier {
-  display: grid;
-  grid-template-columns: 100px 1fr 60px;
-  align-items: center;
-  gap: 12px;
-}
-.tier .name {
-  font-size: 13px;
-  color: var(--text-dim);
-  text-transform: capitalize;
-}
-.tier .bar {
-  height: 8px;
-  background: var(--bg-elev-2);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.tier .bar > span {
-  display: block;
-  height: 100%;
-  transition: width .4s ease;
-}
-.tier .bar > span.hot { background: var(--hot); }
-.tier .bar > span.warm { background: var(--warm); }
-.tier .bar > span.cold,
-.tier .bar > span.cold_no_news { background: var(--cold); }
-.tier .bar > span.never_checked { background: var(--never); }
-.tier .count {
+.tier-table {
+  width: 100%;
+  border-collapse: collapse;
   font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: var(--text);
+}
+.tier-table th, .tier-table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
   font-size: 13px;
+}
+.tier-table th {
+  color: var(--text-faint);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-size: 11px;
+}
+.tier-table tr:last-child td { border-bottom: none; }
+.tier-table tfoot td {
+  font-weight: 600;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+  padding-top: 12px;
+}
+.tier-table td.num { text-align: right; }
+.tier-table .tier-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: capitalize;
+  color: var(--text);
+}
+.tier-table .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot.hot { background: var(--hot); }
+.dot.warm { background: var(--warm); }
+.dot.cold, .dot.cold_no_news { background: var(--cold); }
+.dot.never_checked { background: var(--never); }
+.tier-table .cooldown {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+}
+.tier-table td.ready {
+  color: var(--success);
+}
+.tier-table td.ready.zero {
+  color: var(--text-faint);
+}
+.help {
+  color: var(--text-faint);
+  font-size: 12px;
+  margin: -4px 0 12px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .crons { display: grid; gap: 12px; }
@@ -550,17 +576,35 @@ section h2 {
     return c;
   }
 
-  function tierRow(name, count, total) {
-    var pct = total > 0 ? (count / total) * 100 : 0;
-    var row = el('div', { class: 'tier' });
-    row.appendChild(el('div', { class: 'name', text: name.replace(/_/g, ' ') }));
-    var bar = el('div', { class: 'bar' });
-    var fill = el('span', { class: name });
-    fill.style.width = pct.toFixed(1) + '%';
-    bar.appendChild(fill);
-    row.appendChild(bar);
-    row.appendChild(el('div', { class: 'count', text: fmt(count) }));
-    return row;
+  var TIER_COOLDOWN = {
+    hot: '30 min',
+    warm: '6 h',
+    cold: '24 h',
+    cold_no_news: '24 h',
+    never_checked: 'immediat',
+  };
+
+  function tierTableRow(name, stats) {
+    var tr = document.createElement('tr');
+
+    var tdName = document.createElement('td');
+    var label = el('span', { class: 'tier-name' });
+    label.appendChild(el('span', { class: 'dot ' + name }));
+    label.appendChild(el('span', { text: name.replace(/_/g, ' ') }));
+    tdName.appendChild(label);
+    tr.appendChild(tdName);
+
+    tr.appendChild(el('td', { class: 'cooldown', text: TIER_COOLDOWN[name] || '—' }));
+    tr.appendChild(el('td', { class: 'num', text: fmt(stats.total) }));
+
+    var tdReady = el('td', {
+      class: 'num ready' + (stats.eligible === 0 ? ' zero' : ''),
+      text: fmt(stats.eligible),
+    });
+    tr.appendChild(tdReady);
+
+    tr.appendChild(el('td', { class: 'num', text: fmt(stats.pending) }));
+    return tr;
   }
 
   function cronCard(job) {
@@ -636,16 +680,46 @@ section h2 {
 
     // Polling
     var pol = data.polling || {};
-    var tiers = pol.tiers || {};
-    var total = Object.values(tiers).reduce(function (a, b) { return a + (b || 0); }, 0);
+    var byTier = pol.byTier || {};
     var s3 = el('section');
-    s3.appendChild(el('h2', { text: 'Polling des news (' + fmt(pol.eligibleNow) + ' eligibles · ' + fmt(pol.pending) + ' en attente)' }));
+    s3.appendChild(el('h2', { text: 'Polling des news' }));
+    s3.appendChild(el('p', {
+      class: 'help',
+      text: 'Polling adaptatif : chaque jeu est recheque avec un cooldown different selon l’age de sa derniere news. Le prochain cron news-check traitera uniquement les jeux eligibles.',
+    }));
+
     var box = el('div', { class: 'card' });
-    var tiersWrap = el('div', { class: 'tiers' });
-    ['hot', 'warm', 'cold', 'cold_no_news', 'never_checked'].forEach(function (name) {
-      if (tiers[name] != null) tiersWrap.appendChild(tierRow(name, tiers[name], total));
+    var table = document.createElement('table');
+    table.className = 'tier-table';
+
+    var thead = document.createElement('thead');
+    var htr = document.createElement('tr');
+    ['Tier', 'Cooldown', 'Total', 'Prets', 'En attente'].forEach(function (h, i) {
+      var th = el('th', { text: h });
+      if (i >= 2) th.style.textAlign = 'right';
+      htr.appendChild(th);
     });
-    box.appendChild(tiersWrap);
+    thead.appendChild(htr);
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    ['hot', 'warm', 'cold', 'cold_no_news', 'never_checked'].forEach(function (name) {
+      if (byTier[name]) tbody.appendChild(tierTableRow(name, byTier[name]));
+    });
+    table.appendChild(tbody);
+
+    var tfoot = document.createElement('tfoot');
+    var ftr = document.createElement('tr');
+    ftr.appendChild(el('td', { text: 'Total' }));
+    ftr.appendChild(el('td'));
+    var footerTotal = Object.values(byTier).reduce(function (s, t) { return s + (t.total || 0); }, 0);
+    ftr.appendChild(el('td', { class: 'num', text: fmt(footerTotal) }));
+    ftr.appendChild(el('td', { class: 'num ready' + (pol.eligibleNow === 0 ? ' zero' : ''), text: fmt(pol.eligibleNow) }));
+    ftr.appendChild(el('td', { class: 'num', text: fmt(pol.pending) }));
+    tfoot.appendChild(ftr);
+    table.appendChild(tfoot);
+
+    box.appendChild(table);
     s3.appendChild(box);
     dashboard.appendChild(s3);
 
