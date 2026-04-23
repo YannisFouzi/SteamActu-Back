@@ -1,10 +1,10 @@
-# Steam Notifications API - Backend
+# Game News API - Backend
 
 API REST moderne et robuste pour la gestion des notifications et actualités Steam, construite avec Node.js, Express et MongoDB.
 
 ## 🚀 Vue d'Ensemble
 
-**Steam Notifications API** est un backend complet qui fournit :
+**Game News API** est un backend complet qui fournit :
 
 - 🔐 **Authentification Steam OpenID** sécurisée
 - 📰 **Agrégation d'actualités** multi-jeux intelligente

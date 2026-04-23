@@ -1,7 +1,7 @@
 {
-  "name": "steam-notifications-api",
+  "name": "game-news-api",
   "version": "1.0.0",
-  "description": "Service de notifications pour les actualités Steam",
+  "description": "Game News — service de notifications pour les actualités Steam",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
