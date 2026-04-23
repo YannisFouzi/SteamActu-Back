@@ -3,6 +3,18 @@ const router = express.Router();
 const { sendNewsNotification } = require('../services/notifications/notificationService');
 const { syncUserWishlist } = require('../services/syncWishlistService');
 const { isValidSteamId } = require('../middleware/steamValidators');
+const GameSubscription = require('../models/GameSubscription');
+const Game = require('../models/Game');
+
+async function resolveGameName(appId) {
+  const sub = await GameSubscription.findOne({ gameId: String(appId) })
+    .select('name')
+    .lean();
+  if (sub?.name) return sub.name;
+  const game = await Game.findOne({ appId: String(appId) }).select('name').lean();
+  if (game?.name) return game.name;
+  return `Jeu ${appId}`;
+}
 
 /**
  * POST /api/debug/simulate-news-notification
@@ -24,7 +36,7 @@ router.post('/simulate-news-notification', async (req, res) => {
   }
 
   const fakeNewsGid = `debug-${Date.now()}`;
-  const resolvedGameName = gameName || `Test Game ${appId}`;
+  const resolvedGameName = gameName || (await resolveGameName(appId));
 
   const success = await sendNewsNotification(
     steamId,

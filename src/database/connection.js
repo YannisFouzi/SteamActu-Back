@@ -6,6 +6,7 @@
 const mongoose = require('mongoose');
 const { DATABASE_CONFIG, SUCCESS_MESSAGES } = require('../config/app');
 const UserNewsState = require('../models/UserNewsState');
+const GameSubscription = require('../models/GameSubscription');
 const { stopAgenda } = require('../config/cron');
 
 /**
@@ -16,8 +17,10 @@ async function connectDatabase() {
     await mongoose.connect(DATABASE_CONFIG.uri, DATABASE_CONFIG.options);
     console.log(SUCCESS_MESSAGES.MONGODB_CONNECTED);
 
-    // Sync indexes uniquement pour UserNewsState (nouveau modèle)
+    // Sync indexes pour les modèles dont les contraintes ont évolué
+    // (ajout de `unique` ou TTL qu'il faut appliquer sur la collection existante).
     await UserNewsState.syncIndexes();
+    await GameSubscription.syncIndexes();
 
     return true;
   } catch (error) {

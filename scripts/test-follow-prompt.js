@@ -15,21 +15,37 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const {
   sendFollowPromptNotifications,
 } = require('../src/services/notifications/notificationService');
+const GameSubscription = require('../src/models/GameSubscription');
+const Game = require('../src/models/Game');
+
+async function resolveGameName(appId) {
+  const sub = await GameSubscription.findOne({ gameId: String(appId) })
+    .select('name')
+    .lean();
+  if (sub?.name) return sub.name;
+  const game = await Game.findOne({ appId: String(appId) }).select('name').lean();
+  if (game?.name) return game.name;
+  return `Jeu ${appId}`;
+}
 
 async function testFollowPrompt() {
   try {
     const steamId = process.argv[2];
     const appId = process.argv[3];
     const source = process.argv[4];
+    const nameArg = process.argv[5];
 
     if (!steamId || !appId || !source) {
       console.error(
-        'Usage: node scripts/test-follow-prompt.js <steamId> <appId> <source>',
+        'Usage: node scripts/test-follow-prompt.js <steamId> <appId> <source> [name]',
       );
       console.error(
         'Exemple: node scripts/test-follow-prompt.js 76561198158439485 2807960 library',
       );
       console.error('Sources: library, wishlist');
+      console.error(
+        'Si [name] est omis, le script le resout depuis GameSubscription / Game.',
+      );
       process.exit(1);
     }
 
@@ -42,15 +58,18 @@ async function testFollowPrompt() {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('Connected to MongoDB');
 
+    const gameName = nameArg || (await resolveGameName(appId));
+
     console.log('\nSending follow_prompt notification...');
     console.log(`  Steam ID: ${steamId}`);
     console.log(`  App ID: ${appId}`);
     console.log(`  Source: ${source}`);
+    console.log(`  Name: ${gameName}`);
 
     const sentCount = await sendFollowPromptNotifications(steamId, [
       {
         appId: String(appId),
-        name: `Test Game ${appId}`,
+        name: gameName,
         source,
       },
     ]);

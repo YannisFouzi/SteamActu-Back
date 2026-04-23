@@ -5,6 +5,15 @@
 const GameSubscription = require('../../models/GameSubscription');
 const { getGameImage } = require('../steamGridDbService');
 
+// Noms génériques injectés par d'anciens scripts de test ou quand Steam ne renvoie
+// pas le vrai titre. Détectés pour permettre l'auto-correction au prochain follow.
+const PLACEHOLDER_NAME_PATTERN = /^(Test Game|Jeu)\s+\d+$/i;
+
+function isPlaceholderName(name) {
+  if (!name || typeof name !== 'string') return true;
+  return PLACEHOLDER_NAME_PATTERN.test(name.trim());
+}
+
 /**
  * Ajoute un utilisateur à la subscription d'un jeu
  * @param {string} appId - ID de l'application
@@ -14,32 +23,45 @@ const { getGameImage } = require('../steamGridDbService');
  * @returns {Promise<void>}
  */
 async function addUserToGameSubscription(appId, steamId, name, imageUrl) {
-  let gameSubscription = await GameSubscription.findOne({ gameId: appId });
-
-  // Tenter de récupérer une image haute qualité via SteamGridDB (cascade icons → logos → grids)
   const gridDbIcon = await getGameImage(appId).catch(() => null);
   const bestImageUrl = gridDbIcon || imageUrl || '';
+  const firstFollowTimestamp = Math.floor(Date.now() / 1000);
 
-  if (!gameSubscription) {
-    const firstFollowTimestamp = Math.floor(Date.now() / 1000);
-    gameSubscription = new GameSubscription({
-      gameId: appId,
-      name: name || `Jeu ${appId}`,
-      imageUrl: bestImageUrl,
-      subscribers: [steamId],
-      lastNewsTimestamp: firstFollowTimestamp,
-    });
-  } else {
-    if (!gameSubscription.subscribers.includes(steamId)) {
-      gameSubscription.subscribers.push(steamId);
-    }
-    // Mettre à jour l'image si on a une meilleure source
-    if (gridDbIcon || (imageUrl && !gameSubscription.imageUrl)) {
-      gameSubscription.imageUrl = bestImageUrl;
-    }
+  // Upsert atomique : crée le doc s'il n'existe pas, sinon ajoute juste le subscriber.
+  // Garantit qu'il est impossible de créer deux documents en parallèle pour le même jeu
+  // (race condition si deux users cliquent "follow" exactement au même moment).
+  const gameSubscription = await GameSubscription.findOneAndUpdate(
+    { gameId: appId },
+    {
+      $setOnInsert: {
+        gameId: appId,
+        name: name || `Jeu ${appId}`,
+        imageUrl: bestImageUrl,
+        lastNewsTimestamp: firstFollowTimestamp,
+      },
+      $addToSet: { subscribers: steamId },
+    },
+    { upsert: true, new: true }
+  );
+
+  // Corrections conditionnelles pour un doc pré-existant (l'upsert ne met pas à jour
+  // ces champs via $setOnInsert). On fait un second update ciblé uniquement si utile.
+  const updates = {};
+  if (gridDbIcon && gameSubscription.imageUrl !== bestImageUrl) {
+    updates.imageUrl = bestImageUrl;
+  } else if (imageUrl && !gameSubscription.imageUrl) {
+    updates.imageUrl = bestImageUrl;
+  }
+  // Auto-correction du nom : si l'actuel est un placeholder générique
+  // (ex. "Test Game 3834090" injecté par d'anciens scripts) et que le nouveau
+  // est un titre propre, on remplace. Les noms custom valides ne sont jamais écrasés.
+  if (name && !isPlaceholderName(name) && isPlaceholderName(gameSubscription.name)) {
+    updates.name = name.trim();
   }
 
-  await gameSubscription.save();
+  if (Object.keys(updates).length > 0) {
+    await GameSubscription.updateOne({ gameId: appId }, { $set: updates });
+  }
 }
 
 /**

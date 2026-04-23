@@ -4,7 +4,7 @@ const GameSubscriptionSchema = new mongoose.Schema({
   gameId: {
     type: String,
     required: true,
-    index: true, // Index pour performances
+    unique: true, // Un seul document par jeu (évite les doublons en cas de race condition)
   },
   name: {
     type: String,
