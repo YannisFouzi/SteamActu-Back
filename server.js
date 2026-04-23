@@ -3,6 +3,10 @@
  * Architecture modulaire avec separation des responsabilites
  */
 
+// Sentry DOIT etre require() en premier (auto-instrumentation OpenTelemetry)
+require("./instrument");
+
+const Sentry = require("@sentry/node");
 const express = require("express");
 const cors = require("cors");
 
@@ -57,6 +61,9 @@ if (SERVER_CONFIG.NODE_ENV === "development") {
   app.use("/api/debug", debugRoutes);
   console.log("[DEBUG] Routes /api/debug activées (dev only)");
 }
+
+// Sentry error handler DOIT etre avant le errorHandler custom
+Sentry.setupExpressErrorHandler(app);
 
 // Middleware global de gestion des erreurs (doit rester en dernier)
 const errorHandler = require("./src/middleware/errorHandler");
