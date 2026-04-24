@@ -10,9 +10,53 @@ const {
   toSteamNewsLanguage,
   toSteamStoreLanguage,
 } = require('../../utils/language');
+const logger = require('../../utils/logger');
 
 const STEAM_API_KEY = STEAM_CONFIG.apiKey;
 const STEAM_BASE_URL = STEAM_CONFIG.baseUrl;
+
+/**
+ * Erreur custom levée par `makeApiCall` quand l'API Steam répond avec un
+ * code HTTP d'erreur. Permet aux callers de distinguer :
+ *   - `isExpected`     : erreurs "normales" côté Steam (jeu privé/NDA, retiré,
+ *                        région) → ne doivent pas spammer Sentry, cooldown long.
+ *   - `isRateLimited`  : 429 → silencieux, cooldown modéré.
+ *   - autres           : vraies pannes (5xx, timeout, réseau) → event Sentry.
+ *
+ * Usage côté caller :
+ *   try { await fetchGameNews(...) }
+ *   catch (err) {
+ *     if (err instanceof SteamApiError && err.isExpected) { ... }
+ *   }
+ */
+class SteamApiError extends Error {
+  constructor(message, { status = null, code = null, context = null, cause = null } = {}) {
+    super(message);
+    this.name = 'SteamApiError';
+    this.status = status;       // code HTTP (403, 404, 429, 500...) ou null si pas de réponse
+    this.code = code;           // code Axios (ECONNABORTED, ETIMEDOUT...) ou null
+    this.context = context;     // ex. "getGameNews (123456)" pour les logs
+    if (cause) this.cause = cause;
+  }
+
+  /**
+   * Erreur "attendue" : le jeu est inaccessible côté Steam (privé, NDA, retiré,
+   * restriction régionale). Pas une panne, on ne veut pas alerter là-dessus.
+   */
+  get isExpected() {
+    return this.status === 403 || this.status === 404;
+  }
+
+  /** Rate limit Steam : ralentir, pas alerter. */
+  get isRateLimited() {
+    return this.status === 429;
+  }
+
+  /** Vraie panne serveur : Steam en rade. */
+  get isServerError() {
+    return this.status != null && this.status >= 500 && this.status < 600;
+  }
+}
 
 // URLs des endpoints Steam
 const ENDPOINTS = {
@@ -43,8 +87,25 @@ async function makeApiCall(url, params, context, options = {}) {
     const response = await axios.get(url, { params, timeout });
     return response.data;
   } catch (error) {
-    console.error(`Erreur Steam API ${context}:`, error.message);
-    throw error;
+    // Normaliser en SteamApiError pour que les callers puissent différencier
+    // les erreurs "attendues" (403/404/429) des vraies pannes (5xx, timeout).
+    const status = error.response?.status ?? null;
+    const code = error.code ?? null;
+    const steamError = new SteamApiError(error.message, {
+      status,
+      code,
+      context,
+      cause: error,
+    });
+
+    // Log léger ici (debug-only) : le caller loguera avec le bon niveau
+    // (warn pour expected, error pour vraie panne) en fonction du contexte métier.
+    logger.debug(
+      { status, code, context, message: error.message },
+      'steam_api_call_failed'
+    );
+
+    throw steamError;
   }
 }
 
@@ -279,4 +340,5 @@ module.exports = {
   fetchUserWishlist,
   fetchGameDetails,
   searchGames,
+  SteamApiError,
 };

@@ -15,6 +15,7 @@
 const GameSubscription = require('../models/GameSubscription');
 const UserNewsState = require('../models/UserNewsState');
 const steamService = require('./steamService');
+const { SteamApiError } = steamService;
 const notificationService = require('./notifications/notificationService');
 const { extractFirstImage } = require('./newsFeed/imageExtractor');
 const logger = require('../utils/logger');
@@ -38,8 +39,15 @@ const CONFIG = {
   COOLDOWN_WARM_MS:  6 * 60 * 60 * 1000,   //  6 h
   COOLDOWN_COLD_MS: 24 * 60 * 60 * 1000,   // 24 h
 
-  // Retry sur erreur Steam (timeout, 5xx, rate-limit)
-  ERROR_RETRY_MS: 15 * 60 * 1000,          // 15 min
+  // Retry sur erreur Steam (timeout, 5xx, réseau) : courte pour récupérer vite
+  ERROR_RETRY_MS: 15 * 60 * 1000,           // 15 min
+
+  // Jeu inaccessible côté Steam (403 NDA/privé, 404 retiré) : cooldown long
+  // pour ne pas spammer l'API ni Sentry.
+  UNAVAILABLE_RETRY_MS: 24 * 60 * 60 * 1000, // 24 h
+
+  // Rate limit (429) : cooldown intermédiaire, silencieux.
+  RATE_LIMIT_RETRY_MS: 60 * 60 * 1000,       //  1 h
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -196,23 +204,55 @@ async function checkNewsRotation() {
           await sleep(CONFIG.PAUSE_BETWEEN_CALLS);
         }
       } catch (error) {
-        logger.error(
-          { err: error, gameId: game.gameId, gameName: game.name },
-          'news_rotation_game_failed'
-        );
-        stats.errors.push({
-          gameId: game.gameId,
-          gameName: game.name,
-          error: error.message,
-        });
+        // On différencie 3 cas :
+        //   - 403/404 : jeu privé / NDA / retiré → attendu, warn + cooldown long
+        //   - 429     : rate limit Steam → silencieux (debug), cooldown moyen
+        //   - autres  : vraie panne (5xx, timeout, réseau) → error + retry court
+        let retryDelay;
+        if (error instanceof SteamApiError && error.isExpected) {
+          retryDelay = CONFIG.UNAVAILABLE_RETRY_MS;
+          logger.warn(
+            {
+              gameId: game.gameId,
+              gameName: game.name,
+              status: error.status,
+            },
+            'steam_game_unavailable'
+          );
+        } else if (error instanceof SteamApiError && error.isRateLimited) {
+          retryDelay = CONFIG.RATE_LIMIT_RETRY_MS;
+          logger.debug(
+            {
+              gameId: game.gameId,
+              gameName: game.name,
+              status: error.status,
+            },
+            'steam_rate_limited'
+          );
+        } else {
+          retryDelay = CONFIG.ERROR_RETRY_MS;
+          logger.error(
+            {
+              err: error,
+              gameId: game.gameId,
+              gameName: game.name,
+              status: error instanceof SteamApiError ? error.status : null,
+            },
+            'news_rotation_game_failed'
+          );
+          stats.errors.push({
+            gameId: game.gameId,
+            gameName: game.name,
+            error: error.message,
+          });
+        }
 
-        // §3 : erreur Steam → retry dans 15 min, on avance lastNewsCheck
         const errorNow = new Date();
         gamesToUpdate.push({
           _id: game._id,
           lastNewsCheck: errorNow,
           lastNewsTimestamp: game.lastNewsTimestamp,
-          nextNewsCheckAt: new Date(errorNow.getTime() + CONFIG.ERROR_RETRY_MS),
+          nextNewsCheckAt: new Date(errorNow.getTime() + retryDelay),
         });
 
         stats.gamesChecked++;

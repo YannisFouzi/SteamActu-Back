@@ -10,6 +10,7 @@ const {
   fetchUserProfile,
   fetchUserWishlist,
   searchGames: fetchSearchGames,
+  SteamApiError,
 } = require('./steam/apiClient');
 const { registerOrUpdateUser } = require('./steam/steamUserManager');
 
@@ -80,4 +81,5 @@ module.exports = {
   registerOrUpdateUser,
   getUserWishlist,
   searchGames,
+  SteamApiError,
 };
