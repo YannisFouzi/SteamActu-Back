@@ -1,6 +1,10 @@
 /**
  * Détails des jeux suivis pour l'app (GET /followed-games-details).
  * Résolution nom + images (wishlist Game > Game > subscription).
+ *
+ * Expose followedAt dans chaque item pour permettre le tri "Récents" côté UI
+ * (onglet Jeux suivis). Le tri serveur reste A-Z pour préserver le comportement
+ * par défaut — le client re-trie si l'utilisateur sélectionne "Récents".
  */
 
 const User = require('../../models/User');
@@ -12,10 +16,27 @@ const isUsableHeaderImage = (imageUrl) =>
   Boolean(imageUrl && imageUrl !== 'none');
 
 /**
+ * Normalise une entrée followedGames (string legacy ou { appId, followedAt }).
+ */
+function normalizeEntry(entry) {
+  if (!entry) return null;
+  if (typeof entry === 'string') {
+    return { appId: entry, followedAt: null };
+  }
+  if (entry.appId) {
+    return {
+      appId: String(entry.appId),
+      followedAt: entry.followedAt || null,
+    };
+  }
+  return null;
+}
+
+/**
  * @param {string} steamId
  * @returns {Promise<
  *   | { type: 'not_found' }
- *   | { type: 'ok'; followedGames: Array<{ appId: string; name: string; header_image: string; imageUrl: string }> }
+ *   | { type: 'ok'; followedGames: Array<{ appId: string; name: string; header_image: string; imageUrl: string; followedAt: string | null }> }
  * >}
  */
 async function getFollowedGamesDetailsBySteamId(steamId) {
@@ -24,11 +45,18 @@ async function getFollowedGamesDetailsBySteamId(steamId) {
     return { type: 'not_found' };
   }
 
-  if (!user.followedGames || user.followedGames.length === 0) {
+  const normalizedEntries = (user.followedGames || [])
+    .map(normalizeEntry)
+    .filter(Boolean);
+
+  if (normalizedEntries.length === 0) {
     return { type: 'ok', followedGames: [] };
   }
 
-  const followedGameIds = user.followedGames.map((gameId) => gameId.toString());
+  const followedAtByAppId = new Map(
+    normalizedEntries.map((entry) => [entry.appId, entry.followedAt])
+  );
+  const followedGameIds = normalizedEntries.map((entry) => entry.appId);
 
   const [subscriptions, games, wishlistGames] = await Promise.all([
     GameSubscription.find({
@@ -65,6 +93,7 @@ async function getFollowedGamesDetailsBySteamId(steamId) {
         wishlistGame.header_image) ||
       (isUsableHeaderImage(game?.header_image) && game.header_image) ||
       '';
+    const followedAtRaw = followedAtByAppId.get(appId);
 
     return {
       appId,
@@ -75,6 +104,7 @@ async function getFollowedGamesDetailsBySteamId(steamId) {
         `Game ${appId}`,
       header_image: canonicalHeaderImage,
       imageUrl: subscription?.imageUrl || '',
+      followedAt: followedAtRaw ? new Date(followedAtRaw).toISOString() : null,
     };
   });
 

@@ -25,6 +25,10 @@ const {
 } = require('../services/users/userNotificationSettingsService');
 const { getFollowedGamesDetailsBySteamId } = require('../services/users/followedGamesDetailsService');
 const {
+  getFollowedAppIds,
+  buildFollowedGamesEntry,
+} = require('../utils/followedGamesHelpers');
+const {
   isSupportedAppLanguage,
   normalizeAppLanguage,
   SUPPORTED_LANGUAGES,
@@ -248,15 +252,17 @@ router.post('/:steamId/follow', validateSteamId, validateUserExists, async (req,
       }
 
       // Vérifier si le jeu est déjà suivi
-      if (Array.isArray(req.user.followedGames) && req.user.followedGames.includes(appId)) {
+      if (getFollowedAppIds(req.user).includes(appId)) {
         return res.status(400).json({ message: 'Ce jeu est déjà suivi' });
       }
 
-      // Mise à jour atomique : pas de race condition si deux requêtes arrivent en même temps
+      // Mise à jour atomique : pas de race condition si deux requêtes arrivent en même temps.
+      // Le filtre `followedGames.appId` garantit qu'on n'insère pas de doublon même si
+      // deux requêtes concurrentes arrivent pour le même jeu.
       const updatedUser = await User.findOneAndUpdate(
-        { steamId, followedGames: { $ne: appId } },
+        { steamId, 'followedGames.appId': { $ne: appId } },
         {
-          $addToSet: { followedGames: appId },
+          $push: { followedGames: buildFollowedGamesEntry(appId) },
           $set: { gamesVersion: new Date() },
         },
         { new: true }
@@ -288,15 +294,15 @@ router.delete(
       const { steamId, appId } = req.params;
 
       // Vérifier si l'utilisateur suit ce jeu
-      if (!Array.isArray(req.user.followedGames) || !req.user.followedGames.includes(appId)) {
+      if (!getFollowedAppIds(req.user).includes(appId)) {
         return res.status(400).json({ message: "Ce jeu n'est pas suivi" });
       }
 
       // Mise à jour atomique
       const updatedUser = await User.findOneAndUpdate(
-        { steamId, followedGames: appId },
+        { steamId, 'followedGames.appId': appId },
         {
-          $pull: { followedGames: appId },
+          $pull: { followedGames: { appId } },
           $set: { gamesVersion: new Date() },
         },
         { new: true }
@@ -409,18 +415,19 @@ router.delete('/:steamId', validateSteamId, async (req, res) => {
     }
 
     // Statistiques de nettoyage
+    const followedAppIds = getFollowedAppIds(user);
     const stats = {
-      followedGames: user.followedGames?.length || 0,
+      followedGames: followedAppIds.length,
       gameSubscriptionsRemoved: 0,
     };
 
     // Unfollow tous les jeux (nettoyage automatique des GameSubscriptions)
-    if (user.followedGames && user.followedGames.length > 0) {
+    if (followedAppIds.length > 0) {
       console.log(
-        `[INFO] Nettoyage de ${user.followedGames.length} jeux suivis...`
+        `[INFO] Nettoyage de ${followedAppIds.length} jeux suivis...`
       );
 
-      for (const appId of user.followedGames) {
+      for (const appId of followedAppIds) {
         const wasDeleted = await removeUserFromGameSubscription(appId, steamId);
         if (wasDeleted) {
           stats.gameSubscriptionsRemoved++;

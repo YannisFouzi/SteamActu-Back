@@ -12,6 +12,10 @@ const GameSubscription = require('../../models/GameSubscription');
 const { addUserToGameSubscription } = require('../users/subscriptionManager');
 const { sendFollowPromptNotifications } = require('../notifications/notificationService');
 const { getGameImage } = require('../steamGridDbService');
+const {
+  getFollowedAppIds,
+  buildFollowedGamesEntry,
+} = require('../../utils/followedGamesHelpers');
 
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
@@ -56,15 +60,7 @@ function resolveLastPlayedTimestamp(ownedGame, recentlyPlayedGame, previousGame)
 }
 
 function normalizeFollowedGames(user) {
-  if (!Array.isArray(user.followedGames)) {
-    return new Set();
-  }
-
-  return new Set(
-    user.followedGames
-      .filter((game) => typeof game === 'string')
-      .map((appId) => appId)
-  );
+  return new Set(getFollowedAppIds(user));
 }
 
 /**
@@ -400,9 +396,16 @@ async function syncUserGames(user, options = {}) {
       );
       result.removedGames = removedGameIds;
 
-      user.followedGames = user.followedGames.filter(
-        (appId) => !removedGameIds.includes(appId)
-      );
+      const removedSet = new Set(removedGameIds);
+      user.followedGames = (user.followedGames || []).filter((entry) => {
+        const appId =
+          typeof entry === 'string'
+            ? entry
+            : entry?.appId
+            ? String(entry.appId)
+            : null;
+        return appId && !removedSet.has(appId);
+      });
     }
 
     const followedGamesSet = normalizeFollowedGames(user);
@@ -440,7 +443,31 @@ async function syncUserGames(user, options = {}) {
     result.followPrompts = autoFollowResult.followPrompts || [];
 
     if (autoFollowResult.hasNewFollowedGames) {
-      user.followedGames = Array.from(new Set(autoFollowResult.updatedFollowedGames));
+      // On part de l'existant pour préserver les followedAt des anciens follows,
+      // et on ajoute uniquement les nouveaux appIds avec leur timestamp actuel.
+      const existingByAppId = new Map();
+      for (const entry of user.followedGames || []) {
+        const appId =
+          typeof entry === 'string'
+            ? entry
+            : entry?.appId
+            ? String(entry.appId)
+            : null;
+        if (!appId || existingByAppId.has(appId)) continue;
+        existingByAppId.set(
+          appId,
+          typeof entry === 'string' ? buildFollowedGamesEntry(appId) : entry
+        );
+      }
+
+      for (const appId of autoFollowResult.updatedFollowedGames) {
+        const normalized = String(appId);
+        if (!existingByAppId.has(normalized)) {
+          existingByAppId.set(normalized, buildFollowedGamesEntry(normalized));
+        }
+      }
+
+      user.followedGames = Array.from(existingByAppId.values());
       console.log(
         `[OK] ${result.updatedGames.length} jeux auto-suivis pour un utilisateur`
       );

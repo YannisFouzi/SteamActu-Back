@@ -23,6 +23,10 @@ const { addUserToGameSubscription } = require('./users/subscriptionManager');
 const { sendFollowPromptNotifications } = require('./notifications/notificationService');
 const { getGameImage } = require('./steamGridDbService');
 const { checkGamesVisibility } = require('./steam/visibilityCheck');
+const {
+  getFollowedAppIds,
+  buildFollowedGamesEntry,
+} = require('../utils/followedGamesHelpers');
 
 /**
  * Sleep utilitaire (ms)
@@ -297,7 +301,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
     }
 
     if (newGames.length > 0 && wishlistFollowMode !== 'off') {
-      const existingFollowed = new Set(user.followedGames);
+      const existingFollowed = new Set(getFollowedAppIds(user));
       const gamesToConsider = newGames.filter(
         (game) => !existingFollowed.has(game.appId)
       );
@@ -312,10 +316,10 @@ async function syncUserWishlist(steamId, wishlistData = null) {
                 game.name,
                 game.imageUrl
               );
+              user.followedGames.push(buildFollowedGamesEntry(game.appId));
               existingFollowed.add(game.appId);
             }
 
-            user.followedGames = Array.from(existingFollowed);
             autoFollowedCount = gamesToConsider.length;
             console.log(`[OK] ${autoFollowedCount} jeu(x) auto-suivi(s)`);
           } catch (error) {
@@ -355,8 +359,20 @@ async function syncUserWishlist(steamId, wishlistData = null) {
       }
     }
 
-    // Toujours s'assurer qu'aucun doublon ne subsiste
-    user.followedGames = Array.from(new Set(user.followedGames));
+    // Toujours s'assurer qu'aucun doublon ne subsiste — dedup sur appId en
+    // gardant la plus ancienne followedAt (la date d'ajout réelle).
+    const seenAppIds = new Set();
+    user.followedGames = user.followedGames.filter((entry) => {
+      const appId =
+        typeof entry === 'string'
+          ? entry
+          : entry?.appId
+          ? String(entry.appId)
+          : null;
+      if (!appId || seenAppIds.has(appId)) return false;
+      seenAppIds.add(appId);
+      return true;
+    });
 
     // Mettre à jour User.wishlist avec games[] (date_added user-specific)
     user.wishlist = {

@@ -16,7 +16,18 @@ const UserSchema = new mongoose.Schema({
     default: null, // null permet sync immédiate pour nouveaux users
   },
   followedGames: {
-    type: [String], // Juste les appIds (structure ultra-simplifiée)
+    type: [
+      {
+        appId: {
+          type: String,
+          required: true,
+        },
+        followedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     validate: {
       validator: function (v) {
         return v.length <= 500;
@@ -194,5 +205,26 @@ const UserSchema = new mongoose.Schema({
 });
 
 // Note: Index sur steamId déjà créé automatiquement par l'option "unique: true"
+
+// Serialisation API : followedGames est exposé en array d'appIds (strings) pour
+// conserver le contrat frontend historique. Le champ followedAt reste interne
+// à Mongo ; il est explicitement ré-exposé par getFollowedGamesDetailsBySteamId
+// quand l'UI en a besoin (tri "Récents" dans l'onglet Jeux suivis).
+UserSchema.set('toJSON', {
+  transform(doc, ret) {
+    if (Array.isArray(ret.followedGames)) {
+      ret.followedGames = ret.followedGames
+        .map((entry) =>
+          entry && typeof entry === 'object' && entry.appId
+            ? String(entry.appId)
+            : typeof entry === 'string'
+            ? entry
+            : null
+        )
+        .filter(Boolean);
+    }
+    return ret;
+  },
+});
 
 module.exports = mongoose.model('User', UserSchema);

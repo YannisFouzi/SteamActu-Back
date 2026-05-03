@@ -17,6 +17,7 @@ const {
   getLastUpdateTimestamp,
 } = require('../services/steam/gameFormatter');
 const { SIMULATION_CONFIG } = require('../config/app');
+const { getFollowedAppIds } = require('../utils/followedGamesHelpers');
 
 /**
  * Endpoint léger pour vérifier les versions de données
@@ -204,7 +205,7 @@ router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
       appId: { $in: gameIds },
     }).lean();
 
-    const followedSet = new Set(user.followedGames || []);
+    const followedSet = new Set(getFollowedAppIds(user));
 
     const result = user.wishlist.games
       .map((userGame) => {

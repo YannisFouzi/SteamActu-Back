@@ -3,6 +3,7 @@
  */
 
 const User = require('../../models/User');
+const { getFollowedAppIds } = require('../../utils/followedGamesHelpers');
 
 /**
  * Récupère et normalise les jeux suivis par un utilisateur
@@ -15,14 +16,7 @@ async function getUserAndFollowedGames(steamId) {
 
   if (steamId) {
     user = await User.findOne({ steamId });
-
-    if (user && Array.isArray(user.followedGames)) {
-      user.followedGames.forEach((appId) => {
-        if (typeof appId === 'string') {
-          followedSet.add(appId);
-        }
-      });
-    }
+    getFollowedAppIds(user).forEach((appId) => followedSet.add(appId));
   }
 
   return { user, followedSet };
