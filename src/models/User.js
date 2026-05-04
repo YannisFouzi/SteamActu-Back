@@ -202,6 +202,10 @@ const UserSchema = new mongoose.Schema({
       },
     },
   ],
+  lastNewsFeedSeenAt: {
+    type: Date,
+    default: null,
+  },
 });
 
 // Note: Index sur steamId déjà créé automatiquement par l'option "unique: true"

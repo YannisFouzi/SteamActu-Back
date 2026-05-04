@@ -453,6 +453,55 @@ router.delete('/:steamId', validateSteamId, async (req, res) => {
   }
 });
 
+// Marquer le fil d'actu comme vu (curseur high-water-mark, multi-device)
+// Update atomique conditionnel: ne recule jamais, pas de full-doc load,
+// safe vs writes concurrentes multi-device.
+router.put(
+  '/:steamId/news/seen',
+  validateSteamId,
+  async (req, res) => {
+    try {
+      const { steamId } = req.params;
+      const { seenAt } = req.body || {};
+      const ts = seenAt ? new Date(seenAt) : new Date();
+
+      if (Number.isNaN(ts.getTime())) {
+        return res.status(400).json({ message: 'seenAt invalide' });
+      }
+
+      const result = await User.findOneAndUpdate(
+        {
+          steamId,
+          $or: [
+            { lastNewsFeedSeenAt: null },
+            { lastNewsFeedSeenAt: { $lt: ts } },
+          ],
+        },
+        { $set: { lastNewsFeedSeenAt: ts } },
+        { new: true, projection: { lastNewsFeedSeenAt: 1, _id: 0 } }
+      );
+
+      if (result) {
+        return res.json({ lastNewsFeedSeenAt: result.lastNewsFeedSeenAt });
+      }
+
+      const existing = await User.findOne(
+        { steamId },
+        { lastNewsFeedSeenAt: 1, _id: 0 }
+      ).lean();
+
+      if (!existing) {
+        return res.status(404).json({ message: 'Utilisateur non trouvé' });
+      }
+
+      res.json({ lastNewsFeedSeenAt: existing.lastNewsFeedSeenAt });
+    } catch (error) {
+      console.error('Erreur lors du marquage du fil comme vu:', error);
+      res.status(500).json({ message: 'Erreur serveur' });
+    }
+  }
+);
+
 router.put('/:steamId/language', validateSteamId, validateUserExists, async (req, res) => {
   try {
     const { language } = req.body || {};
