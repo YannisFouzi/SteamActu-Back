@@ -59,6 +59,20 @@ function resolveLastPlayedTimestamp(ownedGame, recentlyPlayedGame, previousGame)
   return Math.max(...candidates);
 }
 
+function hasSteamPlaytimeFields(...games) {
+  return games.some((game) => {
+    if (!game || typeof game !== 'object') {
+      return false;
+    }
+
+    return (
+      Object.prototype.hasOwnProperty.call(game, 'playtime_forever') ||
+      Object.prototype.hasOwnProperty.call(game, 'playtime_2weeks') ||
+      Object.prototype.hasOwnProperty.call(game, 'rtime_last_played')
+    );
+  });
+}
+
 function normalizeFollowedGames(user) {
   return new Set(getFollowedAppIds(user));
 }
@@ -496,12 +510,14 @@ async function syncUserGames(user, options = {}) {
         Number(g.playtime_2weeks) || 0,
         Number(recentGame?.playtime_2weeks) || 0
       );
+      const hasPlaytimeData = hasSteamPlaytimeFields(g, recentGame);
 
       return {
         gameId,
         playtime_forever: Number(g.playtime_forever) || 0,
         rtime_last_played: lastPlayed,
         playtime_2weeks: recentPlaytime,
+        hasPlaytimeData,
         isFamilyShared: false,
       };
     });
@@ -520,12 +536,16 @@ async function syncUserGames(user, options = {}) {
         Number(previousGame?.playtime_forever) || 0,
         Number(recentGame?.playtime_forever) || 0
       );
+      const hasPlaytimeData =
+        hasSteamPlaytimeFields(recentGame) ||
+        Boolean(previousGame?.hasPlaytimeData);
 
       libraryGames.push({
         gameId: familyId,
         playtime_forever: foreverPlaytime,
         rtime_last_played: lastPlayed,
         playtime_2weeks: recentPlaytime,
+        hasPlaytimeData,
         isFamilyShared: true,
       });
     }

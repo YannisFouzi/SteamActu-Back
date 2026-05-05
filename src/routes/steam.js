@@ -10,7 +10,11 @@ const Game = require('../models/Game');
 const Wishlist = require('../models/Wishlist');
 const { validateSteamId, clampQueryInt } = require('../middleware/steamValidators');
 const { apiLimiter } = require('../middleware/rateLimiter');
-const { fetchGameDetails, fetchUserGames } = require('../services/steam/apiClient');
+const {
+  fetchGameDetails,
+  fetchUserGames,
+  fetchUserWishlist,
+} = require('../services/steam/apiClient');
 const { syncUserGames } = require('../services/gamesSync/userProcessor');
 const { syncUserWishlist } = require('../services/syncWishlistService');
 const {
@@ -19,6 +23,39 @@ const {
 } = require('../services/steam/gameFormatter');
 const { SIMULATION_CONFIG } = require('../config/app');
 const { getFollowedAppIds } = require('../utils/followedGamesHelpers');
+
+function hasSteamPlaytimeFields(game) {
+  if (!game || typeof game !== 'object') {
+    return false;
+  }
+
+  return (
+    Object.prototype.hasOwnProperty.call(game, 'playtime_forever') ||
+    Object.prototype.hasOwnProperty.call(game, 'playtime_2weeks') ||
+    Object.prototype.hasOwnProperty.call(game, 'rtime_last_played')
+  );
+}
+
+async function getWishlistVisibilityState(steamId) {
+  try {
+    const items = await fetchUserWishlist(steamId);
+    return {
+      visible: Array.isArray(items) && items.length > 0,
+      count: Array.isArray(items) ? items.length : 0,
+      items: Array.isArray(items) ? items : [],
+    };
+  } catch (error) {
+    console.warn(
+      `[VISIBILITY] Wishlist inaccessible pour ${steamId}:`,
+      error?.message || error
+    );
+    return {
+      visible: false,
+      count: 0,
+      items: [],
+    };
+  }
+}
 
 /**
  * Endpoint léger pour vérifier les versions de données.
@@ -51,7 +88,7 @@ router.get('/status/:steamId', apiLimiter, validateSteamId, async (req, res) => 
   }
 });
 
-router.get('/games/:steamId', validateSteamId, async (req, res) => {
+router.get('/games/:steamId', apiLimiter, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -150,6 +187,7 @@ router.get('/games/:steamId', validateSteamId, async (req, res) => {
         playtime_forever: userGame.playtime_forever || 0,
         rtime_last_played: normalizedLastPlayed,
         playtime_2weeks: userGame.playtime_2weeks || 0,
+        hasPlaytimeData: Boolean(userGame.hasPlaytimeData),
         isFamilyShared: Boolean(userGame.isFamilyShared),
       };
     });
@@ -185,7 +223,7 @@ router.get('/profile/:steamId', validateSteamId, async (req, res) => {
 });
 
 // Récupérer la wishlist d'un utilisateur Steam (depuis BDD uniquement)
-router.get('/wishlist/:steamId', validateSteamId, async (req, res) => {
+router.get('/wishlist/:steamId', apiLimiter, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -273,8 +311,24 @@ router.post('/check-visibility/:steamId', validateSteamId, async (req, res) => {
     const games = await fetchUserGames(steamId);
 
     if (!games || games.length === 0) {
-      return res.json({ visible: false });
+      const wishlistState = await getWishlistVisibilityState(steamId);
+
+      if (wishlistState.visible) {
+        await syncUserWishlist(steamId, wishlistState.items);
+      }
+
+      return res.json({
+        visible: false,
+        gamesVisible: false,
+        gameDetailsVisible: wishlistState.visible,
+        wishlistVisible: wishlistState.visible,
+        playtimeVisible: false,
+        gamesCount: 0,
+        wishlistCount: wishlistState.count,
+      });
     }
+
+    const playtimeVisible = games.some(hasSteamPlaytimeFields);
 
     // Profil public — sync complet games + wishlist
     const user = await User.findOne({ steamId });
@@ -287,9 +341,83 @@ router.post('/check-visibility/:steamId', validateSteamId, async (req, res) => {
 
     console.log(`[OK] [CHECK-VISIBILITY] Profil public détecté pour ${steamId} — sync complet effectué`);
 
-    res.json({ visible: true, gamesCount: games.length });
+    res.json({
+      visible: true,
+      gamesVisible: true,
+      gameDetailsVisible: true,
+      playtimeVisible,
+      gamesCount: games.length,
+    });
   } catch (error) {
     console.error('Erreur dans /check-visibility:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+router.post('/check-wishlist-visibility/:steamId', validateSteamId, async (req, res) => {
+  try {
+    const { steamId } = req.params;
+
+    const [wishlistItems, games] = await Promise.all([
+      fetchUserWishlist(steamId),
+      fetchUserGames(steamId).catch((err) => {
+        console.warn(
+          `[CHECK-WISHLIST-VISIBILITY] fetchUserGames a échoué pour ${steamId}:`,
+          err?.message || err
+        );
+        return [];
+      }),
+    ]);
+
+    const wishlistVisible =
+      Array.isArray(wishlistItems) && wishlistItems.length > 0;
+    const gamesVisible = Array.isArray(games) && games.length > 0;
+
+    if (!wishlistVisible && !gamesVisible) {
+      return res.json({
+        visible: false,
+        wishlistVisible: false,
+        gamesVisible: false,
+        playtimeVisible: false,
+        wishlistCount: 0,
+        gamesCount: 0,
+      });
+    }
+
+    const user = await User.findOne({ steamId });
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    if (wishlistVisible) {
+      const syncResult = await syncUserWishlist(steamId, wishlistItems);
+      if (!syncResult?.success) {
+        return res.status(500).json({
+          message: 'Erreur lors de la synchronisation de la wishlist',
+        });
+      }
+    }
+
+    if (gamesVisible) {
+      await syncUserGames(user, {
+        force: true,
+        reason: 'check-wishlist-visibility',
+      });
+    }
+
+    const playtimeVisible =
+      gamesVisible && games.some(hasSteamPlaytimeFields);
+
+    res.json({
+      visible: wishlistVisible,
+      wishlistVisible,
+      gamesVisible,
+      playtimeVisible,
+      wishlistCount: wishlistVisible ? wishlistItems.length : 0,
+      gamesCount: gamesVisible ? games.length : 0,
+    });
+  } catch (error) {
+    console.error('Erreur dans /check-wishlist-visibility:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

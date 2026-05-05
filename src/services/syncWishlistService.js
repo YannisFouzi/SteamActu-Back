@@ -22,7 +22,6 @@ const { CRON_CONFIG } = require('../config/app');
 const { addUserToGameSubscription } = require('./users/subscriptionManager');
 const { sendFollowPromptNotifications } = require('./notifications/notificationService');
 const { getGameImage } = require('./steamGridDbService');
-const { checkGamesVisibility } = require('./steam/visibilityCheck');
 const {
   getFollowedAppIds,
   buildFollowedGamesEntry,
@@ -453,12 +452,6 @@ async function syncAllUsersWishlists() {
       const user = users[i];
       console.log(`\n[${i + 1}/${users.length}] Traitement utilisateur`);
 
-      const isVisible = await checkGamesVisibility(user.steamId);
-      if (!isVisible) {
-        console.log(`[LOCKED] [WISHLIST] Profil privé pour ${user.steamId} — sync ignoré`);
-        continue;
-      }
-
       const result = await syncUserWishlist(user.steamId);
 
       if (result.success) {
@@ -565,12 +558,6 @@ async function syncWishlistsByGroup(
     console.log(
       `\n[${i + 1}/${bucketUsers.length}] Groupe ${gi + 1}/${gt} → Traitement utilisateur`
     );
-
-    const isVisible = await checkGamesVisibility(u.steamId);
-    if (!isVisible) {
-      console.log(`[LOCKED] [WISHLIST] Profil prive pour ${u.steamId} — sync groupe ignore`);
-      continue;
-    }
 
     const result = await syncUserWishlist(u.steamId);
 

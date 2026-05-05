@@ -8,7 +8,7 @@ const rateLimit = require('express-rate-limit');
 // Routes qui vivent sous /api/steam mais NE TOUCHENT PAS l'API Steam externe
 // (lecture Mongo only). Elles sont skip du steamLimiter strict (10/min) et
 // retombent sur apiLimiter (60/min) appliqué au niveau route.
-const STEAM_LIMITER_SKIP_PATHS = ['/status/'];
+const STEAM_LIMITER_SKIP_PATHS = ['/status/', '/games/', '/wishlist/'];
 
 const steamLimiter = rateLimit({
   windowMs: 60 * 1000,

@@ -301,7 +301,7 @@ async function fetchUserWishlist(steamId) {
     }));
   } catch (error) {
     console.error('[ERROR] Erreur recuperation wishlist:', error.message);
-    return [];
+    throw error;
   }
 }
 

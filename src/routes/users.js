@@ -3,7 +3,6 @@ const router = express.Router();
 const User = require('../models/User');
 const steamService = require('../services/steamService');
 const { syncUserWishlist } = require('../services/syncWishlistService');
-const { checkGamesVisibility } = require('../services/steam/visibilityCheck');
 const {
   validateUserExists,
   validateActiveGamesFormat,
@@ -60,16 +59,8 @@ router.get('/:steamId', validateSteamId, validateUserExists, async (req, res) =>
         !req.user?.wishlist || !req.user.wishlist?.lastFullSync;
 
       if (shouldSyncWishlist) {
-        checkGamesVisibility(steamId).then((isVisible) => {
-          if (isVisible) {
-            syncUserWishlist(steamId).catch((err) => {
-              console.error('Background wishlist preload failed:', err.message);
-            });
-          } else {
-            console.log(`[LOCKED] [GET USER] Profil privé pour ${steamId} — wishlist sync ignoré`);
-          }
-        }).catch((err) => {
-          console.error('Background visibility check failed:', err.message);
+        syncUserWishlist(steamId).catch((err) => {
+          console.error('Background wishlist preload failed:', err.message);
         });
       } else {
         console.log(
