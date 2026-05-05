@@ -9,6 +9,7 @@ const User = require('../models/User');
 const Game = require('../models/Game');
 const Wishlist = require('../models/Wishlist');
 const { validateSteamId, clampQueryInt } = require('../middleware/steamValidators');
+const { apiLimiter } = require('../middleware/rateLimiter');
 const { fetchGameDetails, fetchUserGames } = require('../services/steam/apiClient');
 const { syncUserGames } = require('../services/gamesSync/userProcessor');
 const { syncUserWishlist } = require('../services/syncWishlistService');
@@ -20,10 +21,12 @@ const { SIMULATION_CONFIG } = require('../config/app');
 const { getFollowedAppIds } = require('../utils/followedGamesHelpers');
 
 /**
- * Endpoint léger pour vérifier les versions de données
- * Permet au frontend de savoir si les données ont changé sans télécharger tout
+ * Endpoint léger pour vérifier les versions de données.
+ * Lecture Mongo only (pas d'appel API Steam externe) → skip du steamLimiter
+ * strict (10/min) via STEAM_LIMITER_SKIP_PATHS, fallback sur apiLimiter (60/min)
+ * appliqué ici en route-level pour préserver la protection brute-force.
  */
-router.get('/status/:steamId', validateSteamId, async (req, res) => {
+router.get('/status/:steamId', apiLimiter, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 

@@ -5,12 +5,21 @@ const rateLimit = require('express-rate-limit');
  * Store in-memory (suffisant en mono-instance).
  */
 
+// Routes qui vivent sous /api/steam mais NE TOUCHENT PAS l'API Steam externe
+// (lecture Mongo only). Elles sont skip du steamLimiter strict (10/min) et
+// retombent sur apiLimiter (60/min) appliqué au niveau route.
+const STEAM_LIMITER_SKIP_PATHS = ['/status/'];
+
 const steamLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: {message: 'Too many requests to Steam API routes. Try again later.'},
+  skip: req => {
+    const path = req.path || '';
+    return STEAM_LIMITER_SKIP_PATHS.some(prefix => path.startsWith(prefix));
+  },
 });
 
 const authLimiter = rateLimit({
