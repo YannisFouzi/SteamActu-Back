@@ -3,12 +3,12 @@
  * Remplace node-cron + JobLock custom.
  *
  * Trois jobs récurrents :
- *   - news-check       : toutes les 30 min
- *   - user-group-sync  : tous les jours 03:00 → 14:00 (12 groupes, 1/h)
- *   - wishlist-sync    : tous les jours 03:30 → 14:30 (12 groupes, +30min d'offset)
+ *   - news-check       : toutes les 15 min
+ *   - user-group-sync  : toutes les heures (12 groupes, cycle complet en 12h)
+ *   - wishlist-sync    : toutes les heures à :30 (12 groupes, +30min d'offset)
  *
  * Le décalage de 30 min entre library et wishlist est critique pour étaler
- * les appels Steam API sur la fenêtre horaire.
+ * les appels Steam API ; chaque user repasse environ 2 fois par jour.
  */
 
 const { Agenda } = require('agenda');
@@ -43,7 +43,7 @@ function getParisHour() {
   return Number(hourPart?.value ?? '0');
 }
 
-// Mappe 03→0, 04→1, ..., 14→11
+// Mappe les heures sur 12 buckets : 03/15→0, 04/16→1, ..., 02/14→11.
 function hourToGroupIndex(hour /* 0..23 */) {
   return (hour - 3 + 24) % GROUPS_TOTAL;
 }
@@ -122,7 +122,7 @@ async function initAgenda() {
     JOBS.NEWS_CHECK,
     { lockLifetime: LONG_JOB_LOCK_LIFETIME_MS },
     async () => {
-      await runTask('NEWS_CHECK (every 30min)', checkNews);
+      await runTask('NEWS_CHECK (every 15min)', checkNews);
     }
   );
 
@@ -158,19 +158,9 @@ async function initAgenda() {
   // met à jour le `repeatInterval`/`repeatTimezone` du document existant au
   // lieu de créer un doublon. Safe à chaque boot.
   // Format 5 champs : min hour day-of-month month day-of-week
-  await agenda.every('*/30 * * * *', JOBS.NEWS_CHECK, {}, { timezone: TZ });
-  await agenda.every(
-    '0 3-14 * * *',
-    JOBS.USER_GROUP_SYNC,
-    {},
-    { timezone: TZ }
-  );
-  await agenda.every(
-    '30 3-14 * * *',
-    JOBS.WISHLIST_SYNC,
-    {},
-    { timezone: TZ }
-  );
+  await agenda.every('*/15 * * * *', JOBS.NEWS_CHECK, {}, { timezone: TZ });
+  await agenda.every('0 * * * *', JOBS.USER_GROUP_SYNC, {}, { timezone: TZ });
+  await agenda.every('30 * * * *', JOBS.WISHLIST_SYNC, {}, { timezone: TZ });
 
   logger.info(
     { collection: 'agendaJobs' },

@@ -30,12 +30,15 @@ const userRoutes = require("./src/routes/users");
 const newsRoutes = require("./src/routes/news");
 const steamRoutes = require("./src/routes/steam");
 const authRoutes = require("./src/routes/auth");
+const feedbackRoutes = require("./src/routes/feedback");
 const adminRoutes = require("./src/routes/admin");
+const mobileAdminRoutes = require("./src/routes/mobileAdmin");
 const {
   steamLimiter,
   authLimiter,
   apiLimiter,
   adminLimiter,
+  feedbackLimiter,
 } = require("./src/middleware/rateLimiter");
 
 const app = express();
@@ -64,6 +67,8 @@ app.use("/auth", authLimiter, authRoutes);
 app.use("/api/users", apiLimiter, userRoutes);
 app.use("/api/news", apiLimiter, newsRoutes);
 app.use("/api/steam", steamLimiter, steamRoutes);
+app.use("/api/feedback", feedbackLimiter, feedbackRoutes);
+app.use("/api/admin", adminLimiter, mobileAdminRoutes);
 
 // Routes admin (dashboard UI + API JSON). L'auth est appliquee par route
 // dans le router (certaines sont publiques : GET /, POST /login, POST /logout).

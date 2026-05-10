@@ -21,6 +21,7 @@ const {
   getAttempt,
   markSucceeded,
 } = require("../services/authAttemptStore");
+const { createMobileSession } = require("../services/mobileSessionService");
 
 const STEAM_OPENID_URL = "https://steamcommunity.com/openid/login";
 
@@ -134,6 +135,8 @@ router.get("/steam/status/:authToken", (req, res) => {
   }
 
   if (attempt.steamId) {
+    const mobileSession = createMobileSession(attempt.steamId);
+
     logAuthServer("Auth status check: succeeded", {
       authToken: maskToken(authToken),
       steamId: maskSteamId(attempt.steamId),
@@ -141,6 +144,8 @@ router.get("/steam/status/:authToken", (req, res) => {
     return res.json({
       status: "succeeded",
       steamId: attempt.steamId,
+      sessionToken: mobileSession.token,
+      sessionExpiresAt: mobileSession.expiresAt,
     });
   }
 

@@ -100,8 +100,8 @@ async function getOverview() {
  *   project (tier + eligible) -> group (tier, eligible) -> pivot cote JS.
  *
  * La logique de tier reproduit exactement celle de newsRotationService pour
- * rester coherent avec ce que le cron voit. Les cooldowns (hot 30min, warm
- * 6h, cold 24h) sont definis dans `newsRotationService.js`.
+ * rester coherent avec ce que le cron voit. Les cooldowns (hot 15min, warm
+ * 3h, cold 12h) sont definis dans `newsRotationService.js`.
  */
 async function getPolling() {
   const now = new Date();
@@ -181,9 +181,9 @@ async function getPolling() {
     cutoffs: {
       hotMaxAgeDays: TIER_HOT_MAX_AGE_DAYS,
       warmMaxAgeDays: TIER_WARM_MAX_AGE_DAYS,
-      cooldownHotMinutes: 30,
-      cooldownWarmHours: 6,
-      cooldownColdHours: 24,
+      cooldownHotMinutes: 15,
+      cooldownWarmHours: 3,
+      cooldownColdHours: 12,
     },
   };
 }

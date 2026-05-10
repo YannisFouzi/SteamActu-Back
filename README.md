@@ -137,9 +137,9 @@ Jobs stockés dans MongoDB (collection `agendaJobs`), survivent aux redémarrage
 
 | Job | Cron | Description |
 |-----|------|-------------|
-| `news-check` | `*/30 * * * *` | Toutes les 30 min — polling adaptatif (tiers hot/warm/cold) |
-| `user-group-sync` | `0 3-14 * * *` | 03:00→14:00, 1 des 12 groupes par heure |
-| `wishlist-sync` | `30 3-14 * * *` | 03:30→14:30, mêmes groupes, +30min offset |
+| `news-check` | `*/15 * * * *` | Toutes les 15 min — polling adaptatif (tiers hot/warm/cold) |
+| `user-group-sync` | `0 * * * *` | Toutes les heures — 12 groupes, cycle complet en 12h |
+| `wishlist-sync` | `30 * * * *` | Toutes les heures à :30 — mêmes groupes, +30min offset |
 
 Timezone : `Europe/Paris`. Graceful shutdown : `stopAgenda()` avant `disconnectDatabase()`.
 
@@ -373,13 +373,13 @@ Chaque jeu reçoit un **tier** selon l'ancienneté de sa dernière news Steam, q
 
 | Tier | Condition | Cooldown |
 |------|-----------|----------|
-| **Hot** | `lastNewsCheck == null` ou news < 30 jours | 30 min |
-| **Warm** | News entre 30 et 60 jours | 6 h |
-| **Cold** | News > 60 jours ou aucune news connue | 24 h |
+| **Hot** | `lastNewsCheck == null` ou news < 30 jours | 15 min |
+| **Warm** | News entre 30 et 60 jours | 3 h |
+| **Cold** | News > 60 jours ou aucune news connue | 12 h |
 
 ### Fonctionnement
 
-- Le job `news-check` tourne toutes les heures
+- Le job `news-check` tourne toutes les 15 min
 - Seuls les jeux dont `nextNewsCheckAt <= now` (ou `null`) sont vérifiés
 - Limite : **200 appels Steam max par run** (`MAX_STEAM_NEWS_CALLS_PER_RUN`)
 - Après chaque check, `nextNewsCheckAt` est recalculé selon le tier **frais** (post-appel Steam)

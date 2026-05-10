@@ -26,10 +26,33 @@ const SERVER_CONFIG = {
   MONGODB_URI: process.env.MONGODB_URI,
 };
 
+const API_AUTH_KEY = process.env.API_AUTH_KEY || process.env.STEAM_API_KEY;
+const ADMIN_SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || '';
+const MOBILE_SESSION_TTL_DAYS = Math.max(
+  1,
+  toNumber(process.env.MOBILE_SESSION_TTL_DAYS, 30)
+);
+
+function parseCsvList(value, fallback = []) {
+  if (!value || typeof value !== 'string') {
+    return fallback;
+  }
+
+  const items = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return items.length > 0 ? items : fallback;
+}
+
 // Configuration securite
 const SECURITY_CONFIG = {
-  API_AUTH_KEY: process.env.API_AUTH_KEY || process.env.STEAM_API_KEY,
+  API_AUTH_KEY,
   MOBILE_REDIRECT_SCHEME: process.env.MOBILE_REDIRECT_SCHEME || 'steamnotif',
+  MOBILE_SESSION_SECRET:
+    process.env.MOBILE_SESSION_SECRET || ADMIN_SESSION_SECRET || API_AUTH_KEY,
+  MOBILE_SESSION_TTL_MS: MOBILE_SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
   CORS_ORIGINS: process.env.CORS_ORIGINS?.split(',') || ['*'],
   // Dashboard /admin — auth dual : cookie signe (UI) OU Bearer token (API).
   // Si ADMIN_PASSWORD_HASH vide -> formulaire login desactive.
@@ -37,8 +60,9 @@ const SECURITY_CONFIG = {
   // Si les 2 vides -> routes /admin repondent 503.
   ADMIN_TOKEN: process.env.ADMIN_TOKEN || '',
   ADMIN_PASSWORD_HASH: process.env.ADMIN_PASSWORD_HASH || '',
-  ADMIN_SESSION_SECRET: process.env.ADMIN_SESSION_SECRET || '',
+  ADMIN_SESSION_SECRET,
   ADMIN_SESSION_MAX_AGE_MS: 24 * 60 * 60 * 1000, // 24h
+  ADMIN_STEAM_IDS: parseCsvList(process.env.ADMIN_STEAM_IDS, []),
 };
 
 // Configuration CORS
@@ -63,6 +87,14 @@ const SIMULATION_CONFIG = {
 const STEAMGRIDDB_CONFIG = {
   apiKey: process.env.STEAMGRIDDB_API_KEY || '',
   baseUrl: 'https://www.steamgriddb.com/api/v2',
+};
+
+const FEEDBACK_CONFIG = {
+  toEmail: process.env.FEEDBACK_TO_EMAIL || 'contact@fouzi-dev.fr',
+  fromEmail:
+    process.env.FEEDBACK_FROM_EMAIL ||
+    'Game News <noreply@fouzi-dev.fr>',
+  resendApiKey: process.env.RESEND_API_KEY || '',
 };
 
 function toNumber(value, fallback) {
@@ -100,7 +132,7 @@ const CRON_GROUPS_TOTAL =
 
 if (CRON_GROUPS_TOTAL !== 12) {
   console.warn(
-    `[CRON] CRON_GROUPS_TOTAL=${CRON_GROUPS_TOTAL} ignoré car fenêtre fixe 03→14 (12 slots). Forçage à 12.`
+    `[CRON] CRON_GROUPS_TOTAL=${CRON_GROUPS_TOTAL} ignoré car cycle fixe de 12 buckets sur 12h. Forçage à 12.`
   );
 }
 
@@ -132,6 +164,7 @@ module.exports = {
   DATABASE_CONFIG,
   STEAM_CONFIG,
   STEAMGRIDDB_CONFIG,
+  FEEDBACK_CONFIG,
   NOTIFICATION_CONFIG,
   CRON_CONFIG,
   CORS_OPTIONS,

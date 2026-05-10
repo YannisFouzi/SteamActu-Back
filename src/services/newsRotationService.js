@@ -35,9 +35,9 @@ const CONFIG = {
   TIER_WARM_MAX_AGE_DAYS: 60,    // news 30–60 j → warm
 
   // Cooldowns par tier (ms)
-  COOLDOWN_HOT_MS:  30 * 60 * 1000,          // 30 min
-  COOLDOWN_WARM_MS:  6 * 60 * 60 * 1000,   //  6 h
-  COOLDOWN_COLD_MS: 24 * 60 * 60 * 1000,   // 24 h
+  COOLDOWN_HOT_MS:  15 * 60 * 1000,          // 15 min
+  COOLDOWN_WARM_MS:  3 * 60 * 60 * 1000,   //  3 h
+  COOLDOWN_COLD_MS: 12 * 60 * 60 * 1000,   // 12 h
 
   // Retry sur erreur Steam (timeout, 5xx, réseau) : courte pour récupérer vite
   ERROR_RETRY_MS: 15 * 60 * 1000,           // 15 min

@@ -1,7 +1,7 @@
 /**
  * Force un syncUserGames pour tester la détection Steam Family.
  *
- * Usage: node scripts/trigger-family-test.js [steamId]
+ * Usage: node scripts/trigger-family-test.js <steamId>
  * (depuis le dossier backend)
  * SteamId par défaut: 76561198158439485
  *
@@ -24,7 +24,13 @@ const Game = require('../src/models/Game');
 const { syncUserGames } = require('../src/services/gamesSync/userProcessor');
 
 async function run() {
-  const steamId = process.argv[2] || '76561198158439485';
+  const steamId = process.argv[2] || process.env.TEST_STEAM_ID;
+
+  if (!steamId) {
+    console.error('Usage: node scripts/trigger-family-test.js <steamId>');
+    console.error('Ou definissez TEST_STEAM_ID dans votre environnement.');
+    process.exit(1);
+  }
 
   console.log('='.repeat(70));
   console.log('[FAMILY-TEST] Démarrage');
