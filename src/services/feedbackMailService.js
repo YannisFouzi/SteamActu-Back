@@ -73,8 +73,27 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+/** Affichage mail feedback : JJ/MM/AAAA - HHhMM (fuseau Europe/Paris, comme le cron). */
+function formatFeedbackSentAt(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+
+  const byType = Object.fromEntries(
+    parts.filter((p) => p.type !== 'literal').map((p) => [p.type, p.value]),
+  );
+
+  return `${byType.day}/${byType.month}/${byType.year} - ${byType.hour}h${byType.minute}`;
+}
+
 function buildEmailPayload({ feedback }) {
-  const sentAt = new Date().toISOString();
+  const sentAt = formatFeedbackSentAt();
   const text = [
     `Type: ${feedback.typeLabel}`,
     `Email: ${feedback.email}`,
