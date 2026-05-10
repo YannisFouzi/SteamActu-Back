@@ -17,10 +17,7 @@ router.post('/', async (req, res, next) => {
         .json({ message: parsed.message });
     }
 
-    const result = await sendFeedbackMail(parsed.feedback, {
-      ip: req.ip,
-      userAgent: req.get('user-agent') || '',
-    });
+    const result = await sendFeedbackMail(parsed.feedback);
 
     return res.status(202).json({
       message: 'Feedback envoye',

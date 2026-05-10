@@ -73,17 +73,11 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
-function buildEmailPayload({ feedback, requestMeta }) {
-  const steamLine = feedback.steamId || 'Non fourni';
-  const userAgent = requestMeta.userAgent || 'Non fourni';
-  const ip = requestMeta.ip || 'Non fournie';
+function buildEmailPayload({ feedback }) {
   const sentAt = new Date().toISOString();
   const text = [
     `Type: ${feedback.typeLabel}`,
     `Email: ${feedback.email}`,
-    `SteamID: ${steamLine}`,
-    `IP: ${ip}`,
-    `User-Agent: ${userAgent}`,
     `Date: ${sentAt}`,
     '',
     feedback.message,
@@ -91,9 +85,6 @@ function buildEmailPayload({ feedback, requestMeta }) {
   const html = `
     <h2>Game News - ${escapeHtml(feedback.typeLabel)}</h2>
     <p><strong>Email:</strong> ${escapeHtml(feedback.email)}</p>
-    <p><strong>SteamID:</strong> ${escapeHtml(steamLine)}</p>
-    <p><strong>IP:</strong> ${escapeHtml(ip)}</p>
-    <p><strong>User-Agent:</strong> ${escapeHtml(userAgent)}</p>
     <p><strong>Date:</strong> ${escapeHtml(sentAt)}</p>
     <hr />
     <p style="white-space: pre-wrap;">${escapeHtml(feedback.message)}</p>
@@ -109,7 +100,7 @@ function buildEmailPayload({ feedback, requestMeta }) {
   };
 }
 
-async function sendFeedbackMail(feedback, requestMeta = {}) {
+async function sendFeedbackMail(feedback) {
   if (!FEEDBACK_CONFIG.resendApiKey) {
     if (SERVER_CONFIG.NODE_ENV === 'production') {
       const error = new Error('RESEND_API_KEY is not configured');
@@ -132,7 +123,7 @@ async function sendFeedbackMail(feedback, requestMeta = {}) {
       Authorization: `Bearer ${FEEDBACK_CONFIG.resendApiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(buildEmailPayload({ feedback, requestMeta })),
+    body: JSON.stringify(buildEmailPayload({ feedback })),
   });
 
   if (!response.ok) {
