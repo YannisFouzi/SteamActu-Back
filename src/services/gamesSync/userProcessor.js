@@ -12,12 +12,70 @@ const GameSubscription = require('../../models/GameSubscription');
 const { addUserToGameSubscription } = require('../users/subscriptionManager');
 const { sendFollowPromptNotifications } = require('../notifications/notificationService');
 const { getGameImage } = require('../steamGridDbService');
+const { fetchGameDetails } = require('../steam/apiClient');
 const {
   getFollowedAppIds,
   buildFollowedGamesEntry,
 } = require('../../utils/followedGamesHelpers');
 
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+// Noms qu'on refuse d'écrire en base : placeholders historiques `Xxx <appId>`
+// + le cas figé "Unknown Game" qui apparaissait quand Steam ne renvoyait pas
+// de nom (typiquement jeu pré-release vu via Family Sharing). Synchronisé
+// avec le pattern de subscriptionManager.js pour cohérence.
+const PLACEHOLDER_NAME_PATTERN = /^((Test Game|Jeu|Game)\s+\d+|Unknown Game)$/i;
+
+function isUnresolvedName(name) {
+  if (!name || typeof name !== 'string') return true;
+  const trimmed = name.trim();
+  if (!trimmed) return true;
+  return PLACEHOLDER_NAME_PATTERN.test(trimmed);
+}
+
+/**
+ * Pour chaque jeu dont le `name` est manquant/placeholder, tente une
+ * résolution via Steam Store appdetails (la même source que la wishlist).
+ * Mute `steamGame.name` en place. Les jeux non résolus restent avec leur
+ * name vide → upsertGamesCollection les filtrera en aval.
+ *
+ * @param {Array} steamGames - Jeux à enrichir (mutation en place)
+ * @returns {Promise<void>}
+ */
+async function resolveMissingNames(steamGames) {
+  const needsResolution = steamGames.filter((g) => isUnresolvedName(g.name));
+  if (needsResolution.length === 0) {
+    return;
+  }
+
+  console.log(
+    `[NAME-RESOLVER] ${needsResolution.length} jeu(x) sans nom — fallback Steam Store appdetails`
+  );
+
+  await Promise.all(
+    needsResolution.map(async (game) => {
+      const appId = game.appid?.toString();
+      if (!appId) return;
+      try {
+        const details = await fetchGameDetails(appId);
+        if (details?.name && !isUnresolvedName(details.name)) {
+          console.log(
+            `[NAME-RESOLVER] appId=${appId} → "${details.name}" (résolu via Store)`
+          );
+          game.name = details.name;
+        } else {
+          console.warn(
+            `[NAME-RESOLVER] appId=${appId} → introuvable sur Steam Store, sera skip ce run`
+          );
+        }
+      } catch (error) {
+        console.warn(
+          `[NAME-RESOLVER] appId=${appId} échec appdetails: ${error.message}`
+        );
+      }
+    })
+  );
+}
 
 function canSyncUser(user, force = false) {
   if (force) {
@@ -87,50 +145,84 @@ async function upsertGamesCollection(steamGames) {
     return;
   }
 
-  const startTime = Date.now();
-  console.log(`[SYNC] upsertGamesCollection() - START`);
-  console.log(`  - Jeux à traiter: ${steamGames.length}`);
-
-  const appIds = steamGames.map((steamGame) => steamGame.appid.toString());
-  const existingGames = await Game.find({ appId: { $in: appIds } })
-    .select('appId')
-    .lean();
-  const existingSet = new Set(existingGames.map((game) => game.appId));
-
-  const newGames = steamGames.filter(
-    (steamGame) => !existingSet.has(steamGame.appid.toString())
-  );
-
-  console.log(
-    `  - Déjà présents: ${steamGames.length - newGames.length} | Nouveaux: ${newGames.length}`
-  );
-
-  if (newGames.length === 0) {
-    console.log(
-      `[SYNC] upsertGamesCollection() - Aucun nouvel appId à insérer [OK]`
+  // Contrat dur : aucun document Game ne doit contenir un nom placeholder.
+  // Si le name reste inutilisable après le resolver, on skip cet appId pour
+  // ce run (le prochain sync retentera). Pas d'écriture polluée.
+  const resolvedGames = steamGames.filter((g) => !isUnresolvedName(g.name));
+  const skippedGames = steamGames.filter((g) => isUnresolvedName(g.name));
+  if (skippedGames.length > 0) {
+    console.warn(
+      `[NAME-RESOLVER] ${skippedGames.length} jeu(x) sans nom résolvable — SKIP upsert: [${skippedGames
+        .map((g) => g.appid)
+        .join(', ')}]`
     );
+  }
+  if (resolvedGames.length === 0) {
+    console.log(`[SYNC] upsertGamesCollection() - Rien à écrire après filtrage`);
     return;
   }
 
-  const bulkOps = newGames.map((steamGame) => ({
-    updateOne: {
-      filter: { appId: steamGame.appid.toString() },
-      update: {
-        $setOnInsert: {
-          appId: steamGame.appid.toString(),
-          name: steamGame.name || 'Unknown Game',
-          img_icon_url: steamGame.img_icon_url || '',
+  const startTime = Date.now();
+  console.log(`[SYNC] upsertGamesCollection() - START`);
+  console.log(`  - Jeux à traiter: ${resolvedGames.length}`);
+
+  // Lookup ciblé : on a besoin de connaître les docs existants ET leur
+  // name actuel, pour distinguer "nouveau jeu" vs "doc existant à réparer".
+  const appIds = resolvedGames.map((g) => g.appid.toString());
+  const existingGames = await Game.find({ appId: { $in: appIds } })
+    .select('appId name')
+    .lean();
+  const existingMap = new Map(existingGames.map((g) => [g.appId, g]));
+
+  const bulkOps = [];
+  let newCount = 0;
+  let healCount = 0;
+
+  for (const steamGame of resolvedGames) {
+    const appId = steamGame.appid.toString();
+    const existing = existingMap.get(appId);
+
+    if (!existing) {
+      newCount++;
+      bulkOps.push({
+        updateOne: {
+          filter: { appId },
+          update: {
+            $setOnInsert: {
+              appId,
+              name: steamGame.name,
+              img_icon_url: steamGame.img_icon_url || '',
+            },
+          },
+          upsert: true,
         },
-      },
-      upsert: true,
-    },
-  }));
+      });
+    } else if (isUnresolvedName(existing.name)) {
+      healCount++;
+      console.log(
+        `[NAME-RESOLVER] auto-réparation appId=${appId}: "${existing.name}" → "${steamGame.name}"`
+      );
+      bulkOps.push({
+        updateOne: {
+          filter: { appId },
+          update: { $set: { name: steamGame.name } },
+        },
+      });
+    }
+  }
+
+  if (bulkOps.length === 0) {
+    console.log(
+      `[SYNC] upsertGamesCollection() - Aucune écriture nécessaire (${existingMap.size} déjà OK) [OK]`
+    );
+    return;
+  }
 
   await Game.bulkWrite(bulkOps, { ordered: false });
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log(`[SYNC] upsertGamesCollection() - END`);
-  console.log(`  - Inserts réalisés: ${bulkOps.length}`);
+  console.log(`  - Nouveaux: ${newCount} | Auto-réparés: ${healCount}`);
   console.log(`  - Durée: ${duration}s`);
 }
 
@@ -206,6 +298,15 @@ async function processAutoFollow(
     const appId = game.appid.toString();
 
     if (!cachedGameIds.has(appId) && !followedGamesSet.has(appId)) {
+      // Contrat strict : on n'auto-follow ni n'envoie de prompt pour un jeu
+      // sans nom résolu — sinon la notif afficherait "Unknown Game". Le
+      // prochain sync (6h max) retentera la résolution.
+      if (isUnresolvedName(game.name)) {
+        console.warn(
+          `[NAME-RESOLVER] Skip follow appId=${appId} (nom non résolu) — sera retenté au prochain sync`
+        );
+        continue;
+      }
       gamesToHandle.push({
         appId,
         name: game.name,
@@ -270,7 +371,7 @@ async function processAutoFollow(
 
         let imageUrl = subsImageMap.get(appId) || '';
         if (!imageUrl) {
-          imageUrl = (await getGameImage(appId).catch(() => null)) || '';
+          imageUrl = (await getGameImage(appId, gameName).catch(() => null)) || '';
         }
 
         newGames.push({
@@ -391,12 +492,21 @@ async function syncUserGames(user, options = {}) {
       }
     }
 
+    // ---- Résolution des noms manquants --------------------------------
+    // Steam Web API peut renvoyer un name vide pour les jeux pré-release
+    // (cas typique : jeu acheté en accès anticipé partagé via Steam Family
+    // avant publication complète de l'appinfo). On enrichit via Steam Store
+    // appdetails AVANT d'écrire en base, pour ne jamais persister un
+    // placeholder ni déclencher une notif "Unknown Game".
+    await resolveMissingNames([...userGames, ...familyGames]);
+
     // ---- Upsert Games (owned + family) --------------------------------
     // Les Family games ont aussi besoin d'un document Game pour que le
     // frontend puisse résoudre name + header_image via le lazy-loading.
+    // upsertGamesCollection skip les jeux dont le nom reste non résolu.
     await upsertGamesCollection([...userGames, ...familyGames]);
     console.log(
-      `[OK] ${userGames.length + familyGames.length} jeux créés/mis à jour dans Games (dont ${familyGames.length} Family)`
+      `[OK] ${userGames.length + familyGames.length} jeux traités pour Games (dont ${familyGames.length} Family)`
     );
 
     const cachedGameIds = new Set(

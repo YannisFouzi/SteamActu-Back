@@ -6,8 +6,10 @@ const GameSubscription = require('../../models/GameSubscription');
 const { getGameImage } = require('../steamGridDbService');
 
 // Noms génériques injectés par d'anciens scripts de test ou quand Steam ne renvoie
-// pas le vrai titre. Détectés pour permettre l'auto-correction au prochain follow.
-const PLACEHOLDER_NAME_PATTERN = /^(Test Game|Jeu)\s+\d+$/i;
+// pas le vrai titre (cas "Unknown Game" pour les jeux pré-release vus via Family
+// Sharing). Détectés pour permettre l'auto-correction au prochain follow.
+// Synchronisé avec PLACEHOLDER_NAME_PATTERN de gamesSync/userProcessor.js.
+const PLACEHOLDER_NAME_PATTERN = /^((Test Game|Jeu|Game)\s+\d+|Unknown Game)$/i;
 
 function isPlaceholderName(name) {
   if (!name || typeof name !== 'string') return true;
@@ -23,7 +25,9 @@ function isPlaceholderName(name) {
  * @returns {Promise<void>}
  */
 async function addUserToGameSubscription(appId, steamId, name, imageUrl) {
-  const gridDbIcon = await getGameImage(appId).catch(() => null);
+  // Le nom est passé au resolver pour activer le 5ème étage SteamGridDB
+  // (search par nom, utile pour les jeux pré-release non liés à l'appId).
+  const gridDbIcon = await getGameImage(appId, name).catch(() => null);
   const bestImageUrl = gridDbIcon || imageUrl || '';
   const firstFollowTimestamp = Math.floor(Date.now() / 1000);
 

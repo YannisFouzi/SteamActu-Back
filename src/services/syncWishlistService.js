@@ -342,7 +342,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
         for (const game of gamesToConsider) {
           let imageUrl = subsImageMap.get(game.appId) || '';
           if (!imageUrl) {
-            imageUrl = (await getGameImage(game.appId).catch(() => null)) || '';
+            imageUrl = (await getGameImage(game.appId, game.name).catch(() => null)) || '';
           }
           if (!imageUrl) {
             imageUrl = game.imageUrl || '';
