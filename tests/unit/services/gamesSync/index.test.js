@@ -16,7 +16,7 @@ const {
 const {
   checkGamesVisibility,
 } = require('../../../../src/services/steam/visibilityCheck');
-const { createUser, nextSteamId } = require('../../../helpers/factories');
+const { createUser } = require('../../../helpers/factories');
 
 describe('services/gamesSync/index', () => {
   beforeEach(() => {

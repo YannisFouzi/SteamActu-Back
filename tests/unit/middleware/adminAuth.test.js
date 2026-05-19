@@ -1,4 +1,3 @@
-const crypto = require('crypto');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const signature = require('cookie-signature');

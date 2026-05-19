@@ -35,7 +35,6 @@ const User = require('../../../../src/models/User');
 const Game = require('../../../../src/models/Game');
 const {
   createUser,
-  nextSteamId,
   createGame,
 } = require('../../../helpers/factories');
 

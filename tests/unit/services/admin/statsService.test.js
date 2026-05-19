@@ -26,7 +26,6 @@ const {
 } = require('../../../helpers/factories');
 
 const HOUR = 60 * 60 * 1000;
-const DAY = 24 * HOUR;
 
 describe('services/admin/statsService', () => {
   beforeEach(() => {

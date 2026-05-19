@@ -10,7 +10,6 @@ const {
   sendFollowPromptNotifications,
 } = require('../../../../src/services/notifications/notificationService');
 const User = require('../../../../src/models/User');
-const GameSubscription = require('../../../../src/models/GameSubscription');
 const {
   createUser,
   createGameSubscription,

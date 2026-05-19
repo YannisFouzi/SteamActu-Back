@@ -29,7 +29,7 @@ describe('middleware/steamValidators', () => {
       expect(isValidSteamId('')).toBe(false);
       expect(isValidSteamId(null)).toBe(false);
       expect(isValidSteamId(undefined)).toBe(false);
-      expect(isValidSteamId(76561197960287930)).toBe(false);
+      expect(isValidSteamId(7656119796028793)).toBe(false);
     });
   });
 
