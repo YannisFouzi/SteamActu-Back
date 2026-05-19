@@ -17,4 +17,13 @@ module.exports = {
     'no-unused-vars': ['warn', {argsIgnorePattern: '^_', varsIgnorePattern: '^_'}],
     'no-console': 'off',
   },
+  overrides: [
+    {
+      files: ['tests/**/*.js', '**/*.test.js'],
+      env: {
+        jest: true,
+        node: true,
+      },
+    },
+  ],
 };
