@@ -102,6 +102,7 @@ function createNewsNotification(
       url: newsItem.url,
       appId,
       ...(steamId ? { steamId } : {}),
+      ...(gameName ? { gameName } : {}),
       newsId: newsItem.gid,
       ...(newsItem.firstImageUrl ? { imageUrl: newsItem.firstImageUrl } : {}),
       ...(newsItem.gameLogoUrl ? { gameLogoUrl: newsItem.gameLogoUrl } : {}),

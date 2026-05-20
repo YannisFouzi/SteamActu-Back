@@ -8,9 +8,8 @@
  *   node scripts/test-notification.js 76561198123456789 570
  */
 
-const path = require('path');
+require('./_loadEnv');
 const mongoose = require('mongoose');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const {
   sendNewsNotification,
@@ -18,6 +17,7 @@ const {
 const steamService = require('../src/services/steamService');
 const { extractFirstImage } = require('../src/services/newsFeed/imageExtractor');
 const User = require('../src/models/User');
+const GameSubscription = require('../src/models/GameSubscription');
 
 async function testNotification() {
   try {
@@ -81,7 +81,13 @@ async function testNotification() {
       process.exit(1);
     }
 
-    const gameName = latestNews.feedlabel || `Game ${appId}`;
+    // Recupere le vrai nom du jeu depuis GameSubscription (comme le fait
+    // newsRotationService en prod via `game.name`). `latestNews.feedlabel`
+    // contient "Community Announcements" / "Patch Notes" — pas un nom de jeu.
+    const subscription = await GameSubscription.findOne({ gameId: String(appId) })
+      .select('name')
+      .lean();
+    const gameName = subscription?.name || latestNews.feedlabel || `Game ${appId}`;
     const newsTitle = latestNews.title || 'Steam news test';
     const newsUrl =
       latestNews.url || `https://store.steampowered.com/news/app/${appId}`;

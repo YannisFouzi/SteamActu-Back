@@ -7,9 +7,8 @@
  * Exemple: node scripts/trigger-real-notification.js 730
  */
 
-const path = require('path');
+require('./_loadEnv');
 const mongoose = require('mongoose');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const GameSubscription = require('../src/models/GameSubscription');
 const { checkNewsRotation } = require('../src/services/newsRotationService');
 

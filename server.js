@@ -3,6 +3,26 @@
  * Architecture modulaire avec separation des responsabilites
  */
 
+// Charge .env ICI (et non via instrument.js) pour pouvoir lire des env vars
+// avant le bootstrap Sentry. `dotenv.config()` est idempotent — l'appel
+// suivant dans instrument.js est un no-op pour les cles deja definies.
+require("dotenv").config();
+
+// Override optionnel des serveurs DNS utilises par Node (c-ares) avant TOUT
+// require qui pourrait declencher une resolution. Utile en dev quand le
+// resolver local (VPN, antivirus, DNS d'entreprise) refuse les requetes SRV
+// `mongodb+srv://` avec ECONNREFUSED. Aucune incidence en prod si l'env var
+// n'est pas definie. Format : "1.1.1.1,8.8.8.8".
+if (process.env.BACKEND_DNS_SERVERS) {
+  const servers = process.env.BACKEND_DNS_SERVERS
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (servers.length > 0) {
+    require("dns").setServers(servers);
+  }
+}
+
 // Sentry DOIT etre require() en premier (auto-instrumentation OpenTelemetry)
 require("./instrument");
 
