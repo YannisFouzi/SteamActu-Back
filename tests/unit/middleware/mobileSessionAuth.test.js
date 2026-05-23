@@ -11,6 +11,7 @@ jest.doMock('../../../src/services/mobileSessionService', () => ({
 }));
 
 const {
+  isMobileAdminSession,
   mobileSessionAuth,
   requireMobileAdmin,
 } = require('../../../src/middleware/mobileSessionAuth');
@@ -67,6 +68,12 @@ describe('middleware/mobileSessionAuth', () => {
   });
 
   describe('requireMobileAdmin()', () => {
+    it('isMobileAdminSession() renvoie true uniquement pour un admin allowliste', () => {
+      expect(isMobileAdminSession({ steamId: '76561197960287930' })).toBe(true);
+      expect(isMobileAdminSession({ steamId: '76561197960287999' })).toBe(false);
+      expect(isMobileAdminSession(null)).toBe(false);
+    });
+
     it('appelle next() si steamId est dans ADMIN_STEAM_IDS', () => {
       const req = mockRequest();
       req.mobileSession = { steamId: '76561197960287930' };

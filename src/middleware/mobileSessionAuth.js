@@ -21,10 +21,16 @@ function mobileSessionAuth(req, res, next) {
   return next();
 }
 
-function requireMobileAdmin(req, res, next) {
-  const steamId = req.mobileSession?.steamId;
+function isMobileAdminSession(session) {
+  const adminSteamIds = Array.isArray(SECURITY_CONFIG.ADMIN_STEAM_IDS)
+    ? SECURITY_CONFIG.ADMIN_STEAM_IDS
+    : [];
 
-  if (!SECURITY_CONFIG.ADMIN_STEAM_IDS.includes(steamId)) {
+  return Boolean(session?.steamId && adminSteamIds.includes(session.steamId));
+}
+
+function requireMobileAdmin(req, res, next) {
+  if (!isMobileAdminSession(req.mobileSession)) {
     return res.status(403).json({ message: 'Admin access denied' });
   }
 
@@ -32,6 +38,7 @@ function requireMobileAdmin(req, res, next) {
 }
 
 module.exports = {
+  isMobileAdminSession,
   mobileSessionAuth,
   requireMobileAdmin,
 };

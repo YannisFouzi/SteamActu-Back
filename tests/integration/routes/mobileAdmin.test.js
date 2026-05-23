@@ -35,7 +35,7 @@ describe('routes /api/admin (mobile)', () => {
     Object.values(statsServiceMock).forEach((fn) => fn.mockClear());
   });
 
-  describe('auth requise (mobileSessionAuth + requireMobileAdmin)', () => {
+  describe('GET /access', () => {
     it('401 sans Authorization', async () => {
       const r = await request(app).get('/api/admin/access');
       expect(r.status).toBe(401);
@@ -48,12 +48,13 @@ describe('routes /api/admin (mobile)', () => {
       expect(r.status).toBe(401);
     });
 
-    it('403 si steamId hors ADMIN_STEAM_IDS', async () => {
+    it('200 + { isAdmin:false } si steamId hors ADMIN_STEAM_IDS', async () => {
       const { token } = createMobileSession(NON_ADMIN_STEAM_ID);
       const r = await request(app)
         .get('/api/admin/access')
         .set('Authorization', `Bearer ${token}`);
-      expect(r.status).toBe(403);
+      expect(r.status).toBe(200);
+      expect(r.body).toEqual({ isAdmin: false });
     });
 
     it('200 + { isAdmin:true } si admin', async () => {
@@ -68,9 +69,18 @@ describe('routes /api/admin (mobile)', () => {
 
   describe('GET /api/admin/stats[*]', () => {
     let adminToken;
+    let nonAdminToken;
 
     beforeAll(() => {
       adminToken = createMobileSession(ADMIN_STEAM_ID).token;
+      nonAdminToken = createMobileSession(NON_ADMIN_STEAM_ID).token;
+    });
+
+    it('403 si steamId hors ADMIN_STEAM_IDS', async () => {
+      const r = await request(app)
+        .get('/api/admin/stats')
+        .set('Authorization', `Bearer ${nonAdminToken}`);
+      expect(r.status).toBe(403);
     });
 
     it('GET /stats délègue à getAllStats', async () => {

@@ -9,6 +9,7 @@
 const express = require('express');
 
 const {
+  isMobileAdminSession,
   mobileSessionAuth,
   requireMobileAdmin,
 } = require('../middleware/mobileSessionAuth');
@@ -19,11 +20,13 @@ const router = express.Router();
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next);
 
-router.use(mobileSessionAuth, requireMobileAdmin);
+router.use(mobileSessionAuth);
 
-router.get('/access', (_req, res) => {
-  res.json({ isAdmin: true });
+router.get('/access', (req, res) => {
+  res.json({ isAdmin: isMobileAdminSession(req.mobileSession) });
 });
+
+router.use(requireMobileAdmin);
 
 router.get(
   '/stats',
