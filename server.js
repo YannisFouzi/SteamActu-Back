@@ -30,6 +30,7 @@ const Sentry = require("@sentry/node");
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const helmet = require("helmet");
 
 // Configuration et utilitaires
 const {
@@ -53,6 +54,7 @@ const authRoutes = require("./src/routes/auth");
 const feedbackRoutes = require("./src/routes/feedback");
 const adminRoutes = require("./src/routes/admin");
 const mobileAdminRoutes = require("./src/routes/mobileAdmin");
+const healthRoutes = require("./src/routes/health");
 const {
   steamLimiter,
   authLimiter,
@@ -67,6 +69,12 @@ const app = express();
 app.set("trust proxy", 1);
 
 // Middleware globaux
+// helmet pose les headers de securite par defaut (HSTS, X-Content-Type-Options,
+// X-Frame-Options, X-DNS-Prefetch-Control, etc.).
+// `contentSecurityPolicy: false` : la route /admin a sa propre CSP nonce-based
+// strictement plus restrictive ; helmet's default CSP casserait le dashboard.
+// Pour les autres routes (API JSON), la CSP est inutile (pas de rendu HTML).
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(CORS_OPTIONS));
 app.use(express.json());
 // cookie-parser pour les routes /admin (session signee). Pas global pour
@@ -79,6 +87,9 @@ if (SECURITY_CONFIG.ADMIN_SESSION_SECRET) {
 app.get("/", (req, res) => {
   res.send(SUCCESS_MESSAGES.API_OPERATIONAL);
 });
+
+// Healthcheck (Railway/k8s) — pas de rate-limit, pas d'auth
+app.use("/healthz", healthRoutes);
 
 // Routes d'authentification (publiques)
 app.use("/auth", authLimiter, authRoutes);

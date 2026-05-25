@@ -55,10 +55,10 @@ describe('services/notifications/providers', () => {
       expect(providers.getActiveProvider()).toBe(providers.firebaseProvider);
     });
 
-    it('renvoie oneSignalProvider si provider="onesignal"', () => {
+    it('provider inconnu (ex: ancien "onesignal") tombe en simulation', () => {
       notificationConfig.provider = 'onesignal';
       providers = loadProvidersFresh();
-      expect(providers.getActiveProvider()).toBe(providers.oneSignalProvider);
+      expect(providers.getActiveProvider()).toBe(providers.simulationProvider);
     });
 
     it('insensible à la casse', () => {
@@ -233,13 +233,4 @@ describe('services/notifications/providers', () => {
     });
   });
 
-  describe('oneSignalProvider()', () => {
-    it('délègue à simulationProvider (placeholder)', async () => {
-      jest.useFakeTimers();
-      const p = providers.oneSignalProvider('t1', { title: 'hi' });
-      jest.advanceTimersByTime(100);
-      jest.useRealTimers();
-      expect(await p).toBe(true);
-    });
-  });
 });

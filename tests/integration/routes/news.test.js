@@ -17,6 +17,7 @@ const {
   createGameSubscription,
   nextSteamId,
 } = require('../../helpers/factories');
+const { authHeader } = require('../../helpers/authHeaders');
 
 const app = createTestApp({ mount: ['news'] });
 
@@ -40,6 +41,8 @@ describe('routes /api/news', () => {
   });
 
   describe('GET /api/news/game/:appId', () => {
+    // Route PUBLIQUE: pas de steamId implique, donnees agnostiques
+
     it('400 si appId invalide', async () => {
       const r = await request(app).get('/api/news/game/abc');
       expect(r.status).toBe(400);
@@ -75,15 +78,38 @@ describe('routes /api/news', () => {
   });
 
   describe('GET /api/news/feed', () => {
+    it('401 si pas de header Authorization', async () => {
+      const r = await request(app).get(
+        '/api/news/feed?steamId=76561197960287930',
+      );
+      expect(r.status).toBe(401);
+    });
+
+    it('403 si query.steamId != session.steamId', async () => {
+      const attackerId = '76561197960287777';
+      const victimId = '76561197960287930';
+      const r = await request(app)
+        .get(`/api/news/feed?steamId=${victimId}`)
+        .set(authHeader(attackerId));
+      expect(r.status).toBe(403);
+    });
+
     it('400 si steamId invalide', async () => {
-      const r = await request(app).get('/api/news/feed?steamId=abc');
-      expect(r.status).toBe(400);
+      // sessionId valide + query.steamId 'abc' -> requireSelf 403 (mismatch)
+      // (validateSteamId est cote route GET /feed apres requireSelf)
+      const steamId = '76561197960287930';
+      const r = await request(app)
+        .get('/api/news/feed?steamId=abc')
+        .set(authHeader(steamId));
+      expect(r.status).toBe(403);
     });
 
     it('200 + items vides si user sans followed', async () => {
       const steamId = nextSteamId();
       await createUser({ steamId });
-      const r = await request(app).get(`/api/news/feed?steamId=${steamId}`);
+      const r = await request(app)
+        .get(`/api/news/feed?steamId=${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body.items).toEqual([]);
       expect(r.body.metadata.source).toBe('followed');
@@ -108,7 +134,9 @@ describe('routes /api/news', () => {
         .mockResolvedValueOnce([makeNewsItem({ gid: 'a', date: nowSec - 100 })])
         .mockResolvedValueOnce([makeNewsItem({ gid: 'b', date: nowSec - 50 })]);
 
-      const r = await request(app).get(`/api/news/feed?steamId=${steamId}`);
+      const r = await request(app)
+        .get(`/api/news/feed?steamId=${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body.items).toHaveLength(2);
       expect(r.body.items[0].news.id).toBe('b'); // plus récent en premier
@@ -127,7 +155,9 @@ describe('routes /api/news', () => {
         makeNewsItem({ gid: 'gid-new', date: nowSec }),
       ]);
 
-      await request(app).get(`/api/news/feed?steamId=${steamId}`);
+      await request(app)
+        .get(`/api/news/feed?steamId=${steamId}`)
+        .set(authHeader(steamId));
 
       const state = await UserNewsState.findOne({
         steamId,
@@ -154,7 +184,9 @@ describe('routes /api/news', () => {
         makeNewsItem({ gid: 'recent', date: nowSec }),
       ]);
 
-      const r = await request(app).get(`/api/news/feed?steamId=${steamId}`);
+      const r = await request(app)
+        .get(`/api/news/feed?steamId=${steamId}`)
+        .set(authHeader(steamId));
       expect(r.body.items).toHaveLength(1);
       expect(r.body.items[0].news.id).toBe('recent');
     });
@@ -184,9 +216,9 @@ describe('routes /api/news', () => {
         makeNewsItem({ gid: 'other', date: nowSec - 100 }),
       ]);
 
-      const r = await request(app).get(
-        `/api/news/feed?steamId=${steamId}&favoritesOnly=true`,
-      );
+      const r = await request(app)
+        .get(`/api/news/feed?steamId=${steamId}&favoritesOnly=true`)
+        .set(authHeader(steamId));
       expect(r.body.items).toHaveLength(1);
       expect(r.body.items[0].news.id).toBe('fav-news');
       expect(r.body.items[0].isFavorite).toBe(true);
@@ -211,7 +243,9 @@ describe('routes /api/news', () => {
       });
       steamService.getGameNews.mockResolvedValueOnce([]);
 
-      await request(app).get(`/api/news/feed?steamId=${steamId}`);
+      await request(app)
+        .get(`/api/news/feed?steamId=${steamId}`)
+        .set(authHeader(steamId));
       expect(steamService.getGameNews).toHaveBeenCalledWith(
         '730',
         expect.any(Number),
@@ -226,9 +260,9 @@ describe('routes /api/news', () => {
       await createGameSubscription({ gameId: '730', subscribers: [steamId], name: 'A' });
       steamService.getGameNews.mockResolvedValueOnce([]);
 
-      const r = await request(app).get(
-        `/api/news/feed?steamId=${steamId}&limit=99999&perGameLimit=999`,
-      );
+      const r = await request(app)
+        .get(`/api/news/feed?steamId=${steamId}&limit=99999&perGameLimit=999`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(steamService.getGameNews).toHaveBeenCalledWith('730', 20, undefined, 'fr');
     });

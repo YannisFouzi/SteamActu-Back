@@ -1,597 +1,264 @@
-# Game News API - Backend
+# Game News API — Backend
 
-API REST moderne et robuste pour la gestion des notifications et actualités Steam, construite avec Node.js, Express et MongoDB.
+API REST pour Game News : agregation d'actualites Steam, notifications push,
+sync multi-utilisateurs distribuee.
 
-## 🚀 Vue d'Ensemble
+> Documentation source de verite : ce README couvre l'API publique et les
+> commandes. Pour les details d'architecture interne (modeles, services,
+> patterns), voir `.claude/rules/backend.md` et `CLAUDE.md` a la racine.
 
-**Game News API** est un backend complet qui fournit :
+## Stack
 
-- 🔐 **Authentification Steam OpenID** sécurisée
-- 📰 **Agrégation d'actualités** multi-jeux intelligente
-- 🔔 **Système de notifications** push extensible
-- 📊 **Synchronisation automatique** des bibliothèques Steam
-- ⚡ **Tâches planifiées** pour la mise à jour des données
-- 🎮 **Gestion avancée** des abonnements de jeux
+- Node.js >= 18
+- Express 4.21
+- MongoDB + Mongoose 8.12
+- Agenda.js 5 — scheduler persistant (jobs en collection `agendaJobs`)
+- Firebase Admin 13 — notifications push (FCM)
+- Sentry Node 10 — monitoring (optionnel)
+- Pino — logger structure
+- bcryptjs, cookie-parser, helmet — securite
 
-## 🏗️ Architecture Technique
+## Tests
 
-### Stack Technologique
+531 tests unitaires + integration via Jest + MongoDB Memory Server.
 
-- **Runtime** : Node.js ≥ 18.0.0
-- **Framework Web** : Express.js 4.21.2
-- **Base de Données** : MongoDB avec Mongoose 8.12.1
-- **Authentification** : Steam OpenID 2.0
-- **Tâches Planifiées** : Agenda.js 5 (jobs persistants MongoDB)
-- **Requêtes HTTP** : Axios 1.8.2
-- **Variables d'Environnement** : dotenv 16.4.7
-
-### Architecture Modulaire
-
-```
-backend/
-├── server.js                 # Point d'entrée principal
-├── src/
-│   ├── config/              # Configuration de l'application
-│   │   ├── app.js          # Configuration Express et constantes
-│   │   └── cron/           # Scheduler Agenda.js
-│   │       ├── index.js    # Init Agenda, define + every des jobs
-│   │       └── tasks.js    # Tâches métier
-│   ├── database/           # Gestion de la base de données
-│   │   └── connection.js   # Connexion MongoDB et shutdown
-│   ├── middleware/         # Middlewares Express
-│   │   ├── auth.js         # Authentification et validation
-│   │   ├── steamValidators.js # Validation des données Steam
-│   │   └── userValidators.js  # Validation des données utilisateur
-│   ├── models/             # Modèles de données Mongoose
-│   │   ├── User.js         # Modèle utilisateur
-│   │   └── GameSubscription.js # Modèle d'abonnements aux jeux
-│   ├── routes/             # Routes API
-│   │   ├── auth.js         # Authentification Steam
-│   │   ├── users.js        # Gestion des utilisateurs
-│   │   ├── steam.js        # Intégration Steam API
-│   │   └── news.js         # Actualités et fil de nouvelles
-│   ├── services/           # Services métier
-│   │   ├── steamService.js # Interface Steam API principale
-│   │   ├── newsFeedService.js # Agrégation d'actualités
-│   │   ├── notificationService.js # Notifications push
-│   │   ├── gamesSyncService.js # Synchronisation des jeux
-│   │   ├── steam/          # Services Steam spécialisés
-│   │   ├── newsFeed/       # Gestion du fil d'actualités
-│   │   ├── notifications/  # Système de notifications
-│   │   ├── gameSync/       # Synchronisation des données
-│   │   └── users/          # Gestion des utilisateurs
-│   └── utils/              # Utilitaires et helpers
-└── package.json            # Dépendances et scripts
+```bash
+npm test                # full suite (~10s)
+npm run test:unit       # tests/unit/
+npm run test:integration
+npm run test:coverage   # + rapport HTML coverage/
+npm run test:ci         # CI mode (--ci --runInBand --coverage)
 ```
 
-## 🔧 Fonctionnalités Principales
+CI bloquante : `coverageThreshold` configure dans `jest.config.js`
+(global 80% lines/functions, 65% branches ; seuils plus stricts par dossier
+critique : `middleware/`, `services/steam/`, `services/newsFeed/`).
 
-### 1. Authentification Steam OpenID
+## Lancement
 
-**Processus d'authentification sécurisé** :
-
-- Redirection vers Steam OpenID
-- Validation des réponses OpenID
-- Extraction et vérification des SteamID
-- Redirection native vers l'application mobile
-
-```javascript
-// Route d'authentification
-GET /auth/steam/return
+```bash
+npm install
+cp .env.example .env       # puis remplir MONGODB_URI et STEAM_API_KEY
+npm run dev                # nodemon
+npm start                  # production
 ```
 
-### 2. Gestion des Utilisateurs
+Le serveur ecoute par defaut sur `:5000`.
 
-**CRUD complet des utilisateurs** :
+## Configuration (.env)
 
-- Enregistrement automatique lors de la première connexion
-- Mise à jour des profils Steam
-- Gestion des préférences de notification
-- Suivi des jeux récemment actifs
+Voir `.env.example` pour la liste complete et commentee. Resume :
 
-```javascript
-// Endpoints utilisateurs
+| Variable | Required | Defaut | Note |
+|----------|:--------:|--------|------|
+| `MONGODB_URI` | oui | — | exit(1) si absent |
+| `STEAM_API_KEY` | oui | — | exit(1) si absent |
+| `PORT` | non | 5000 | |
+| `NODE_ENV` | non | development | active `/api/debug` si dev |
+| `CORS_ORIGINS` | non | `*` | a restreindre en prod |
+| `MOBILE_REDIRECT_SCHEME` | non | `steamnotif` | deep link app |
+| `MOBILE_SESSION_SECRET` | recommande | fallback STEAM_API_KEY | HMAC sessions mobiles |
+| `MOBILE_SESSION_TTL_DAYS` | non | 30 | |
+| `ADMIN_STEAM_IDS` | non | vide | allowlist mobile admin |
+| `ADMIN_TOKEN` | non | vide | Bearer pour curl `/admin` |
+| `ADMIN_PASSWORD_HASH` | non | vide | bcrypt UI `/admin` |
+| `ADMIN_SESSION_SECRET` | non | vide | cookie signe `/admin` |
+| `NOTIFICATION_PROVIDER` | non | `simulation` | `simulation` ou `firebase` |
+| `FIREBASE_SERVICE_ACCOUNT_PATH` | si firebase | — | chemin JSON |
+| `STEAMGRIDDB_API_KEY` | non | vide | icones HQ |
+| `RESEND_API_KEY` | non | vide | feedback emails |
+| `SENTRY_DSN` | non | vide | desactive si vide |
+
+## Authentification
+
+**Steam OpenID 2.0** uniquement (pas de mot de passe). Flow mobile :
+
+1. `POST /auth/steam/start` → renvoie `authToken` + URL Steam OpenID
+2. L'app ouvre cette URL dans le navigateur, user se logge sur Steam
+3. Steam redirige sur `GET /auth/steam/return?authToken=...` qui :
+   - verifie la signature OpenID aupres de Steam (check_authentication)
+   - cree/met a jour l'utilisateur en base
+   - redirige vers le deep link mobile
+4. L'app poll `GET /auth/steam/status/:authToken` → recoit un `sessionToken`
+   HMAC SHA-256 signe (TTL configurable)
+5. Toutes les requetes mobiles suivantes envoient
+   `Authorization: Bearer <sessionToken>`
+
+Cote serveur :
+- `mobileSessionAuth` valide la signature + expiration du token
+- `requireSelf` verifie que la session correspond au steamId cible de la route
+- Sans ces deux middlewares, **toutes** les routes `/api/users/*`,
+  `/api/news/feed`, `/api/steam/:steamId/*` repondraient 401
+
+## Endpoints
+
+### Auth (publics)
+
+```
+POST /auth/steam/start            -> { authToken, authUrl }
+GET  /auth/steam/status/:token    -> { status, steamId?, sessionToken? }
+GET  /auth/steam/return           -> redirect vers deep link mobile
+```
+
+### Healthcheck (public)
+
+```
+GET /healthz                       -> 200 { status: 'ok', checks: {...} }
+                                      503 si Mongo ou Agenda KO
+```
+
+### Users (auth + ownership requis)
+
+```
 POST   /api/users/register
 GET    /api/users/:steamId
 PUT    /api/users/:steamId/notifications
+POST   /api/users/:steamId/fcm-token
+DELETE /api/users/:steamId/fcm-token
 PUT    /api/users/:steamId/active-games
 POST   /api/users/:steamId/follow
 DELETE /api/users/:steamId/follow/:appId
+POST   /api/users/:steamId/news-favorites
+DELETE /api/users/:steamId/news-favorites/:appId/:newsId
+GET    /api/users/:steamId/followed-games-details
+PUT    /api/users/:steamId/news/seen
+PUT    /api/users/:steamId/language
+DELETE /api/users/:steamId
 ```
 
-### 3. Intégration Steam API
+### News
 
-**Interface complète avec Steam Web API** :
-
-- Récupération des bibliothèques de jeux
-- Informations détaillées des profils
-- Actualités des jeux en temps réel
-- Gestion des erreurs et retry automatique
-
-```javascript
-// Endpoints Steam
-GET /api/steam/games/:steamId
-GET /api/steam/profile/:steamId
+```
+GET /api/news/game/:appId          (public) — news d'un jeu
+GET /api/news/feed?steamId=...     (auth + ownership) — fil agrege
 ```
 
-### 4. Système d'Actualités Intelligent
+### Steam
 
-**Agrégation multi-sources** :
-
-- Collecte d'actualités de plusieurs jeux
-- Filtrage par jeux suivis
-- Tri chronologique intelligent
-- Optimisation des appels API Steam
-
-```javascript
-// Endpoints actualités
-GET /api/news/game/:appId
-GET /api/news/feed
+```
+GET  /api/steam/search?q=...                        (public)
+GET  /api/steam/status/:steamId                     (auth + ownership)
+GET  /api/steam/games/:steamId[?refresh=recent]     (auth + ownership)
+GET  /api/steam/profile/:steamId                    (auth + ownership)
+GET  /api/steam/wishlist/:steamId                   (auth + ownership)
+POST /api/steam/check-visibility/:steamId           (auth + ownership)
+POST /api/steam/check-wishlist-visibility/:steamId  (auth + ownership)
 ```
 
-### 5. Tâches Planifiées (Agenda.js)
+### Feedback (public, rate-limite 3/min)
 
-**Scheduler persistant avec locking distribué** :
-
-Jobs stockés dans MongoDB (collection `agendaJobs`), survivent aux redémarrages. Locking atomique natif via `lockedAt` — un seul worker par job.
-
-| Job | Cron | Description |
-|-----|------|-------------|
-| `news-check` | `*/15 * * * *` | Toutes les 15 min — polling adaptatif (tiers hot/warm/cold) |
-| `user-group-sync` | `0 * * * *` | Toutes les heures — 12 groupes, cycle complet en 12h |
-| `wishlist-sync` | `30 * * * *` | Toutes les heures à :30 — mêmes groupes, +30min offset |
-
-Timezone : `Europe/Paris`. Graceful shutdown : `stopAgenda()` avant `disconnectDatabase()`.
-
-## 🗄️ Modèles de Données
-
-### Utilisateur (User)
-
-```javascript
-{
-  steamId: String,              // ID Steam unique
-  lastChecked: Date,            // Dernière vérification
-  followedGames: [String],      // IDs des jeux suivis
-  recentActiveGames: [{         // Jeux récemment actifs
-    appId: String,
-    name: String,
-    lastNewsDate: Date
-  }],
-  notificationSettings: {       // Paramètres de notification
-    newsNotifications: Boolean,            // Notifications d’actualités
-    followPromptNotifications: Boolean,    // Notifications de confirmation de suivi
-    pushToken: String,
-    libraryFollowMode: 'off' | 'auto' | 'prompt',
-    wishlistFollowMode: 'off' | 'auto' | 'prompt'
-  },
-}
+```
+POST /api/feedback                 -> envoi email via Resend
 ```
 
-### Abonnement de Jeu (GameSubscription)
+### Admin
 
-```javascript
-{
-  gameId: String,               // ID de l'application Steam
-  name: String,                 // Nom du jeu
-  imageUrl: String,             // URL de l'image
-  subscribers: [String],        // Liste des SteamID abonnés
-  lastNewsTimestamp: Number,     // Timestamp Steam dernière news connue
-  lastNewsCheck: Date,          // Dernière vérification d'actualités
-  nextNewsCheckAt: Date,        // Prochaine vérification éligible (polling adaptatif)
-}
+Deux faces, partagent le meme service de stats :
+
+- **Web UI** `GET /admin` — dashboard HTML autonome, login bcrypt + cookie signe
+  HttpOnly, CSP nonce-based, refresh auto 30s
+- **API curl** `GET /admin/stats` — `Authorization: Bearer <ADMIN_TOKEN>`
+- **API mobile** `GET /api/admin/stats` — session mobile + steamId dans
+  `ADMIN_STEAM_IDS`
+
+```
+GET /admin                        (UI)
+POST /admin/login                 (UI auth)
+POST /admin/logout                (UI auth)
+GET  /admin/stats[/overview|/polling|/crons]   (Bearer ou cookie)
+GET  /api/admin/access            (session mobile)
+GET  /api/admin/stats[/...]       (session mobile + admin allowlist)
 ```
 
-## 🚀 Installation et Configuration
+### Debug (NODE_ENV=development uniquement)
 
-### Prérequis
-
-- **Node.js** ≥ 18.0.0
-- **MongoDB** (local ou MongoDB Atlas)
-- **Clé API Steam** (obtenue sur https://steamcommunity.com/dev/apikey)
-
-### Installation
-
-1. **Cloner le projet**
-
-   ```bash
-   git clone [URL_DU_REPO]
-   cd steam-actu/backend
-   ```
-
-2. **Installer les dépendances**
-
-   ```bash
-   npm install
-   ```
-
-3. **Configuration de l'environnement**
-
-   Créer un fichier `.env` :
-
-   ```env
-   # Base de données MongoDB
-   MONGODB_URI=mongodb://localhost:27017/steam-notifications
-   # Ou MongoDB Atlas :
-   # MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/steam-notifications
-
-   # Clé API Steam
-   STEAM_API_KEY=votre_cle_api_steam
-
-   # Port du serveur
-   PORT=5000
-
-   # Configuration optionnelle
-   NODE_ENV=development
-   API_AUTH_KEY=votre_cle_auth_api
-   MOBILE_REDIRECT_SCHEME=steamnotif
-   CORS_ORIGINS=http://localhost:3000,http://10.0.2.2:3000
-   ```
-
-## 🏃‍♂️ Lancement du Serveur
-
-### Développement
-
-```bash
-# Démarrage avec rechargement automatique
-npm run dev
-
-# Ou démarrage simple
-npm start
+```
+POST /api/debug/simulate-news-notification
+POST /api/debug/force-wishlist-sync
 ```
 
-### Production
+## Crons (Agenda v5, timezone Europe/Paris)
 
-```bash
-# Démarrage en mode production
-NODE_ENV=production npm start
-```
+| Job | Cron | Lock | Description |
+|-----|------|------|-------------|
+| `news-check` | `*/30 * * * *` | 15 min | Polling adaptatif news (tiers hot/warm/cold) |
+| `user-group-sync` | `0 3-14 * * *` | 15 min | 1 des 12 buckets par heure (cycle 12h) |
+| `wishlist-sync` | `30 3-14 * * *` | 15 min | Idem, offset +30 min |
 
-Le serveur démarre sur `http://localhost:5000` par défaut.
+Jobs persistants en `agendaJobs` (Mongo). Survivent aux redemarrages.
+`groupIndex = (hour - 3 + 24) % 12`, hash DJB2 de `user._id`.
 
-## 📡 API Documentation
-
-### Authentification
-
-#### Steam OpenID Callback
-
-```http
-GET /auth/steam/return
-```
-
-**Paramètres de requête** : Réponse OpenID de Steam
-**Réponse** : Redirection vers l'app mobile avec SteamID
-
-### Utilisateurs
-
-#### Enregistrer un utilisateur
-
-```http
-POST /api/users/register
-Content-Type: application/json
-
-{
-  "steamId": "76561198000000000"
-}
-```
-
-#### Récupérer un utilisateur
-
-```http
-GET /api/users/{steamId}
-```
-
-#### Suivre un jeu
-
-```http
-POST /api/users/{steamId}/follow
-Content-Type: application/json
-
-{
-  "appId": "730",
-  "name": "Counter-Strike 2",
-  "logoUrl": "https://..."
-}
-```
-
-#### Ne plus suivre un jeu
-
-```http
-DELETE /api/users/{steamId}/follow/{appId}
-```
-
-### Steam API
-
-#### Récupérer les jeux d'un utilisateur
-
-```http
-GET /api/steam/games/{steamId}
-```
-
-#### Récupérer un profil Steam
-
-```http
-GET /api/steam/profile/{steamId}
-```
-
-### Actualités
-
-#### Actualités d'un jeu spécifique
-
-```http
-GET /api/news/game/{appId}?count=5&maxLength=300&language=fr
-```
-
-#### Fil d'actualités global
-
-```http
-GET /api/news/feed?steamId={steamId}&perGameLimit=10
-```
-
-## 🔄 Services et Logique Métier
-
-### Service Steam (`steamService.js`)
-
-**Interface principale avec Steam Web API** :
-
-- `getUserGames(steamId)` - Récupère la bibliothèque de jeux
-- `getGameNews(appId, options)` - Actualités d'un jeu
-- `getUserProfile(steamId)` - Informations du profil
-- `registerOrUpdateUser(steamId)` - Enregistrement utilisateur
-
-### Service de Fil d'Actualités (`newsFeedService.js`)
-
-**Agrégation intelligente d'actualités** :
-
-- Collecte multi-jeux optimisée
-- Filtrage par préférences utilisateur
-- Tri chronologique et pertinence
-- Cache intelligent pour les performances
-
-### Service de Notifications (`notificationService.js`)
-
-**Système de notifications extensible** :
-
-- Support multi-provider (FCM, APNS, etc.)
-- Templates de notifications personnalisables
-- Gestion des erreurs et retry
-- Statistiques d'envoi
-
-### Service de Synchronisation (`gamesSyncService.js`)
-
-**Synchronisation automatisée** :
-
-- Mise à jour des bibliothèques utilisateur
-- Détection de nouveaux jeux
-- Synchronisation des métadonnées
-- Gestion des erreurs API Steam
-
-## ⚡ Polling Adaptatif des News
-
-### Principe
-
-Chaque jeu reçoit un **tier** selon l'ancienneté de sa dernière news Steam, qui détermine le cooldown avant le prochain check :
+### Polling adaptatif (`news-check`)
 
 | Tier | Condition | Cooldown |
 |------|-----------|----------|
-| **Hot** | `lastNewsCheck == null` ou news < 30 jours | 15 min |
-| **Warm** | News entre 30 et 60 jours | 3 h |
-| **Cold** | News > 60 jours ou aucune news connue | 12 h |
+| Hot | jamais checke OU news < 30j | 1 h |
+| Warm | news 30-60j | 6 h |
+| Cold | news > 60j ou aucune | 24 h |
 
-### Fonctionnement
+Limite : **200 appels Steam max / run** (`MAX_STEAM_NEWS_CALLS_PER_RUN`).
+Eligibilite via `GameSubscription.nextNewsCheckAt <= now`.
 
-- Le job `news-check` tourne toutes les 15 min
-- Seuls les jeux dont `nextNewsCheckAt <= now` (ou `null`) sont vérifiés
-- Limite : **200 appels Steam max par run** (`MAX_STEAM_NEWS_CALLS_PER_RUN`)
-- Après chaque check, `nextNewsCheckAt` est recalculé selon le tier **frais** (post-appel Steam)
-- Erreur Steam → retry dans 15 min
+## Modeles (Mongoose)
 
-## 🛡️ Sécurité et Validation
+- **`User`** — steamId, language, followedGames[], notificationSettings
+  (fcmTokens[], modes follow), gameLibrary, wishlist, newsFavorites,
+  versioning gamesVersion/wishlistVersion
+- **`GameSubscription`** — gameId, name, imageUrl, subscribers[],
+  lastNewsTimestamp, nextNewsCheckAt
+- **`UserNewsState`** — dedup `{steamId, appId, newsId}`, inFeedAt,
+  pushSentAt, TTL 90j auto
+- **`Game`** — metadonnees Steam (name, header_image)
+- **`Wishlist`** — pareil pour la wishlist
 
-### Middlewares de Sécurité
+## Securite
 
-- **CORS configuré** pour les origines autorisées
-- **Validation des SteamID** avec regex strict
-- **Sanitisation des données** utilisateur
-- **Gestion des erreurs** sans exposition d'informations sensibles
+- Auth par session mobile signee HMAC (cf. section Authentification)
+- `requireSelf` empeche tout acces croise (mismatch session/cible -> 403)
+- `helmet` global pose les headers de securite par defaut
+- `/admin` : CSP nonce-based, cookie signe HttpOnly SameSite=Strict,
+  bcrypt cost 12, dummy hash pour timing-safe login, `Sentry` integre
+- `crypto.timingSafeEqual` pour la comparaison Bearer admin
+- Rate limiters : `steamLimiter` 10/min, `authLimiter` 10/min,
+  `apiLimiter` 60/min, `adminLimiter` 30/min, `feedbackLimiter` 3/min
+- `SIMULATION_CONFIG.privateProfile=true` pour simuler profil prive en dev
+- CORS configurable, par defaut `*` (a restreindre en prod)
 
-### Validation des Données
+## Monitoring
 
-```javascript
-// Exemple de validation SteamID
-const STEAM_ID_REGEX = /^7656119[0-9]{10}$/;
+- **Sentry** — backend `@sentry/node`, init dans `instrument.js` charge
+  AVANT tout autre require (auto-instrumentation OpenTelemetry).
+  Desactive si `SENTRY_DSN` vide.
+- **Healthcheck** `/healthz` pour Railway/k8s : verifie Mongo + Agenda
+- **Pino** — logger structure (`utils/logger.js`)
 
-// Validation des formats de jeux
-const validateActiveGamesFormat = (games) => {
-  return (
-    Array.isArray(games) &&
-    games.every((game) => game.appId && game.name && game.lastNewsDate)
-  );
-};
+## Deploiement
+
+Production cible : Railway. Variables critiques :
+- `NODE_ENV=production`
+- `MONGODB_URI`, `STEAM_API_KEY`
+- `MOBILE_SESSION_SECRET` (explicite, ne pas s'appuyer sur le fallback)
+- `CORS_ORIGINS` restreint
+- `FIREBASE_SERVICE_ACCOUNT_JSON` (string JSON) ou
+  `FIREBASE_SERVICE_ACCOUNT_PATH` (fichier)
+- `ADMIN_TOKEN`, `ADMIN_PASSWORD_HASH`, `ADMIN_SESSION_SECRET`
+- `SENTRY_DSN`, `SENTRY_RELEASE`
+
+`trust proxy: 1` deja configure pour Railway/reverse proxy.
+
+## Scripts utilitaires
+
+```
+node scripts/generate-admin-password.js <password>  # bcrypt hash
+node scripts/test-notification.js
+node scripts/test-follow-prompt.js
+node scripts/trigger-real-notification.js
+node scripts/trigger-family-test.js [steamId]
 ```
 
-## 📊 Monitoring et Logging
+## Liens
 
-### Logging Structuré
-
-```javascript
-// Exemples de logs
-console.log(`✅ Utilisateur ${steamId} authentifié avec succès`);
-console.error(`❌ Erreur Steam API pour ${steamId}:`, error);
-console.log(`📊 Traitement de ${games.length} jeux pour ${steamId}`);
-```
-
-### Métriques Importantes
-
-- Nombre d'utilisateurs actifs
-- Fréquence des appels Steam API
-- Taux de succès des notifications
-- Performance des tâches planifiées
-
-## 🐛 Débogage et Maintenance
-
-### Logs de Débogage
-
-```bash
-# Activer les logs détaillés
-DEBUG=steam-api,mongodb npm start
-
-# Logs des tâches cron
-DEBUG=cron-tasks npm start
-```
-
-### Problèmes Courants
-
-1. **Quota Steam API dépassé**
-
-   - Implémenter un système de cache plus agressif
-   - Espacer les requêtes avec des delays
-   - Utiliser plusieurs clés API en rotation
-
-2. **Connexion MongoDB perdue**
-
-   - Vérifier la chaîne de connexion
-   - S'assurer que MongoDB est accessible
-   - Vérifier les credentials et la whitelist IP
-
-3. **Notifications non reçues**
-   - Vérifier les tokens push des utilisateurs
-   - Tester la configuration FCM/APNS
-   - Vérifier les logs d'erreur du service
-
-### Commandes de Maintenance
-
-```bash
-# Vérifier la santé de l'API
-curl http://localhost:5000/
-
-# Tester l'authentification
-curl http://localhost:5000/auth/steam/return?openid.identity=...
-
-# Vérifier un utilisateur
-curl http://localhost:5000/api/users/76561198000000000
-```
-
-## 🚀 Déploiement
-
-### Variables d'Environnement Production
-
-```env
-NODE_ENV=production
-PORT=5000
-MONGODB_URI=mongodb+srv://...
-STEAM_API_KEY=...
-CORS_ORIGINS=https://votre-frontend.com
-```
-
-### Docker (Optionnel)
-
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-EXPOSE 5000
-CMD ["npm", "start"]
-```
-
-### Plateformes de Déploiement
-
-- **Heroku** : Déploiement simple avec MongoDB Atlas
-- **DigitalOcean App Platform** : Intégration continue
-- **AWS/GCP** : Solutions enterprise avec load balancing
-- **VPS** : Déploiement manuel avec PM2
-
-## 📈 Optimisations et Performance
-
-### Cache et Performance
-
-- **Cache MongoDB** avec index sur steamId et appId
-- **Polling adaptatif** Steam API (tiers hot/warm/cold, max 200 appels/run)
-- **Batching des opérations** pour réduire la latence
-- **Compression gzip** activée sur Express
-
-### Scalabilité
-
-- **Architecture modulaire** prête pour la microservices
-- **Séparation des concerns** avec services dédiés
-- **Tâches asynchrones** avec queues (Redis/Bull.js)
-- **Load balancing** horizontal possible
-
-## 🤝 Contribution et Standards
-
-### Standards de Code
-
-- **ES6+** avec async/await
-- **Modules CommonJS** pour la compatibilité Node.js
-- **JSDoc** pour la documentation des fonctions
-- **Gestion d'erreurs** systématique avec try/catch
-
-### Architecture Pattern
-
-- **MVC Pattern** avec routes/services/models
-- **Dependency Injection** via modules
-- **Factory Pattern** pour les services
-- **Observer Pattern** pour les notifications
-
-### Tests (À implémenter)
-
-```bash
-# Framework de test recommandé
-npm install --save-dev jest supertest
-
-# Structure de tests
-tests/
-├── unit/           # Tests unitaires
-├── integration/    # Tests d'intégration
-└── e2e/           # Tests end-to-end
-```
-
-## 📚 Scripts NPM Disponibles
-
-```json
-{
-  "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "test": "jest",
-    "lint": "eslint src/",
-    "format": "prettier --write src/"
-  }
-}
-```
-
-## 🔮 Roadmap et Évolutions
-
-### Fonctionnalités Futures
-
-- [ ] **Système de cache Redis** pour améliorer les performances
-- [ ] **API GraphQL** en complément du REST
-- [ ] **Webhooks Steam** pour les mises à jour en temps réel
-- [ ] **Analytics avancées** des comportements utilisateurs
-- [ ] **Support multi-langues** pour les actualités
-- [ ] **API de modération** des contenus
-
-### Améliorations Techniques
-
-- [ ] **Migration vers TypeScript** pour une meilleure robustesse
-- [ ] **Tests automatisés** avec couverture de code
-- [ ] **Documentation OpenAPI/Swagger** interactive
-- [ ] **Monitoring APM** (New Relic, Datadog)
-- [ ] **CI/CD Pipeline** avec GitHub Actions
-- [ ] **Rate limiting avancé** par utilisateur
-
----
-
-## 📞 Support et Contact
-
-Pour toute question ou problème :
-
-1. Vérifier les logs de l'application
-2. Consulter la documentation Steam Web API
-3. Vérifier la configuration MongoDB
-4. Tester les endpoints avec un client REST (Postman, Insomnia)
-
-**Steam Web API Documentation** : https://steamcommunity.com/dev
-**MongoDB Documentation** : https://docs.mongodb.com/
-**Express.js Documentation** : https://expressjs.com/
+- Steam Web API : https://steamcommunity.com/dev
+- Agenda.js : https://github.com/agenda/agenda
+- Mongoose : https://mongoosejs.com
+- Sentry Node : https://docs.sentry.io/platforms/node/

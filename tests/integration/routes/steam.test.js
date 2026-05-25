@@ -38,6 +38,7 @@ const {
   createWishlist,
   nextSteamId,
 } = require('../../helpers/factories');
+const { authHeader } = require('../../helpers/authHeaders');
 
 const app = createTestApp({ mount: ['steam'] });
 
@@ -53,13 +54,25 @@ describe('routes /api/steam', () => {
   });
 
   describe('GET /api/steam/status/:steamId', () => {
-    it('400 si steamId invalide', async () => {
-      const r = await request(app).get('/api/steam/status/abc');
-      expect(r.status).toBe(400);
+    it('401 si pas de header', async () => {
+      const r = await request(app).get('/api/steam/status/76561197960287930');
+      expect(r.status).toBe(401);
+    });
+
+    it('403 si mismatch', async () => {
+      const attackerId = '76561197960287777';
+      const victimId = '76561197960287930';
+      const r = await request(app)
+        .get(`/api/steam/status/${victimId}`)
+        .set(authHeader(attackerId));
+      expect(r.status).toBe(403);
     });
 
     it('404 si user inexistant', async () => {
-      const r = await request(app).get('/api/steam/status/76561197960287999');
+      const steamId = '76561197960287999';
+      const r = await request(app)
+        .get(`/api/steam/status/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(404);
     });
 
@@ -67,7 +80,9 @@ describe('routes /api/steam', () => {
       const steamId = nextSteamId();
       const gv = new Date('2026-05-01T10:00:00.000Z');
       await createUser({ steamId, gamesVersion: gv, wishlistVersion: null });
-      const r = await request(app).get(`/api/steam/status/${steamId}`);
+      const r = await request(app)
+        .get(`/api/steam/status/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body).toEqual({
         gamesVersion: gv.toISOString(),
@@ -77,15 +92,34 @@ describe('routes /api/steam', () => {
   });
 
   describe('GET /api/steam/games/:steamId', () => {
+    it('401 si pas de header', async () => {
+      const r = await request(app).get('/api/steam/games/76561197960287930');
+      expect(r.status).toBe(401);
+    });
+
+    it('403 si mismatch (empeche scraping bibliotheque)', async () => {
+      const attackerId = '76561197960287777';
+      const victimId = '76561197960287930';
+      const r = await request(app)
+        .get(`/api/steam/games/${victimId}`)
+        .set(authHeader(attackerId));
+      expect(r.status).toBe(403);
+    });
+
     it('404 si user inexistant', async () => {
-      const r = await request(app).get('/api/steam/games/76561197960287999');
+      const steamId = '76561197960287999';
+      const r = await request(app)
+        .get(`/api/steam/games/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(404);
     });
 
     it('renvoie [] si library vide', async () => {
       const steamId = nextSteamId();
       await createUser({ steamId });
-      const r = await request(app).get(`/api/steam/games/${steamId}`);
+      const r = await request(app)
+        .get(`/api/steam/games/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body).toEqual([]);
     });
@@ -115,7 +149,9 @@ describe('routes /api/steam', () => {
         img_icon_url: 'icon',
       });
 
-      const r = await request(app).get(`/api/steam/games/${steamId}`);
+      const r = await request(app)
+        .get(`/api/steam/games/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body).toHaveLength(1);
       expect(r.body[0]).toMatchObject({
@@ -129,7 +165,9 @@ describe('routes /api/steam', () => {
       const steamId = nextSteamId();
       await createUser({ steamId });
 
-      await request(app).get(`/api/steam/games/${steamId}?refresh=recent`);
+      await request(app)
+        .get(`/api/steam/games/${steamId}?refresh=recent`)
+        .set(authHeader(steamId));
       expect(syncUserGames).toHaveBeenCalledWith(
         expect.objectContaining({ steamId }),
         expect.objectContaining({ force: true }),
@@ -138,26 +176,53 @@ describe('routes /api/steam', () => {
   });
 
   describe('GET /api/steam/profile/:steamId', () => {
-    it('404 si profile null', async () => {
-      steamService.getUserProfile.mockResolvedValueOnce(null);
+    it('401 si pas de header', async () => {
       const r = await request(app).get('/api/steam/profile/76561197960287930');
+      expect(r.status).toBe(401);
+    });
+
+    it('403 si mismatch', async () => {
+      const attackerId = '76561197960287777';
+      const victimId = '76561197960287930';
+      const r = await request(app)
+        .get(`/api/steam/profile/${victimId}`)
+        .set(authHeader(attackerId));
+      expect(r.status).toBe(403);
+    });
+
+    it('404 si profile null', async () => {
+      const steamId = '76561197960287930';
+      steamService.getUserProfile.mockResolvedValueOnce(null);
+      const r = await request(app)
+        .get(`/api/steam/profile/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(404);
     });
 
     it('200 + profil renvoyé', async () => {
-      const profile = { steamid: '76561197960287930', personaname: 'Alice' };
+      const steamId = '76561197960287930';
+      const profile = { steamid: steamId, personaname: 'Alice' };
       steamService.getUserProfile.mockResolvedValueOnce(profile);
-      const r = await request(app).get('/api/steam/profile/76561197960287930');
+      const r = await request(app)
+        .get(`/api/steam/profile/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body).toEqual(profile);
     });
   });
 
   describe('GET /api/steam/wishlist/:steamId', () => {
+    it('401 si pas de header', async () => {
+      const r = await request(app).get('/api/steam/wishlist/76561197960287930');
+      expect(r.status).toBe(401);
+    });
+
     it('renvoie [] si user sans wishlist', async () => {
       const steamId = nextSteamId();
       await createUser({ steamId });
-      const r = await request(app).get(`/api/steam/wishlist/${steamId}`);
+      const r = await request(app)
+        .get(`/api/steam/wishlist/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body).toEqual([]);
     });
@@ -177,7 +242,9 @@ describe('routes /api/steam', () => {
         },
       });
 
-      const r = await request(app).get(`/api/steam/wishlist/${steamId}`);
+      const r = await request(app)
+        .get(`/api/steam/wishlist/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body).toHaveLength(2);
       expect(r.body[0].name).toBe('AAA'); // date_added 200 → premier
@@ -186,6 +253,8 @@ describe('routes /api/steam', () => {
   });
 
   describe('GET /api/steam/search', () => {
+    // Route PUBLIQUE: recherche Steam agnostique, pas de steamId
+
     it('400 si query trop courte', async () => {
       const r = await request(app).get('/api/steam/search?q=a');
       expect(r.status).toBe(400);
@@ -213,12 +282,30 @@ describe('routes /api/steam', () => {
   });
 
   describe('POST /api/steam/check-visibility/:steamId', () => {
+    it('401 si pas de header (empeche force-sync au nom d\'autrui)', async () => {
+      const r = await request(app).post(
+        '/api/steam/check-visibility/76561197960287930',
+      );
+      expect(r.status).toBe(401);
+    });
+
+    it('403 si mismatch', async () => {
+      const attackerId = '76561197960287777';
+      const victimId = '76561197960287930';
+      const r = await request(app)
+        .post(`/api/steam/check-visibility/${victimId}`)
+        .set(authHeader(attackerId));
+      expect(r.status).toBe(403);
+    });
+
     it('renvoie visible=false si fetchUserGames vide ET wishlist vide', async () => {
       apiClient.fetchUserGames.mockResolvedValueOnce([]);
       apiClient.fetchUserWishlist.mockResolvedValueOnce([]);
       const steamId = nextSteamId();
       await createUser({ steamId });
-      const r = await request(app).post(`/api/steam/check-visibility/${steamId}`);
+      const r = await request(app)
+        .post(`/api/steam/check-visibility/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body.visible).toBe(false);
       expect(r.body.wishlistVisible).toBe(false);
@@ -231,7 +318,9 @@ describe('routes /api/steam', () => {
       const steamId = nextSteamId();
       await createUser({ steamId });
 
-      const r = await request(app).post(`/api/steam/check-visibility/${steamId}`);
+      const r = await request(app)
+        .post(`/api/steam/check-visibility/${steamId}`)
+        .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body.visible).toBe(true);
       expect(r.body.gamesCount).toBe(1);

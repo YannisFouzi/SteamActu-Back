@@ -5,6 +5,8 @@ const newsFeedService = require('../services/newsFeedService');
 const steamService = require('../services/steamService');
 const { normalizeAppLanguage } = require('../utils/language');
 const { isValidAppId, isValidSteamId, clampQueryInt } = require('../middleware/steamValidators');
+const { mobileSessionAuth } = require('../middleware/mobileSessionAuth');
+const requireSelf = require('../middleware/requireSelf');
 
 router.get('/game/:appId', async (req, res) => {
   try {
@@ -30,7 +32,7 @@ router.get('/game/:appId', async (req, res) => {
   }
 });
 
-router.get('/feed', async (req, res) => {
+router.get('/feed', mobileSessionAuth, requireSelf, async (req, res) => {
   try {
     const {steamId, limit, perGameLimit, language, favoritesOnly} = req.query;
 

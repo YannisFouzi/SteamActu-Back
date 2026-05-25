@@ -108,18 +108,6 @@ async function simulationProvider(_token, notification) {
 }
 
 /**
- * Provider OneSignal (placeholder pour implementation future)
- * @param {string} token - Token de notification
- * @param {Object} notification - Notification a envoyer
- * @returns {Promise<boolean>} - Succes de l'envoi
- */
-async function oneSignalProvider(token, notification) {
-  // TODO: Implementer OneSignal en utilisant NOTIFICATION_CONFIG.oneSignalAppId et NOTIFICATION_CONFIG.oneSignalApiKey
-  // Fallback vers simulation en attendant l'implementation
-  return simulationProvider(token, notification);
-}
-
-/**
  * Provider Firebase Cloud Messaging
  * @param {string|string[]} tokens - Token(s) FCM (peut être un tableau pour multi-device)
  * @param {Object} notification - Notification a envoyer
@@ -292,8 +280,6 @@ function getActiveProvider() {
   ).toLowerCase();
 
   switch (providerName) {
-    case 'onesignal':
-      return oneSignalProvider;
     case 'firebase':
       return firebaseProvider;
     case 'simulation':
@@ -304,7 +290,6 @@ function getActiveProvider() {
 
 module.exports = {
   simulationProvider,
-  oneSignalProvider,
   firebaseProvider,
   getActiveProvider,
 };

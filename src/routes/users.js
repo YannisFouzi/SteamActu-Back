@@ -13,6 +13,8 @@ const {
   validateAppId,
   isValidAppId,
 } = require('../middleware/steamValidators');
+const { mobileSessionAuth } = require('../middleware/mobileSessionAuth');
+const requireSelf = require('../middleware/requireSelf');
 const { sanitizeActiveGames } = require('../services/users/userGameProcessor');
 const {
   addUserToGameSubscription,
@@ -35,7 +37,11 @@ const {
 
 
 // Enregistrer un nouvel utilisateur
-router.post('/register', validateBodySteamId, async (req, res) => {
+// Note securite : la creation reelle du compte se fait dans /auth/steam/return
+// (callback OpenID verifie par Steam). Cet endpoint est appele APRES, donc le
+// mobile a deja sa session. On exige donc auth + ownership pour empecher la
+// creation/modification de comptes pour un steamId qu'on ne possede pas.
+router.post('/register', mobileSessionAuth, requireSelf, validateBodySteamId, async (req, res) => {
   try {
     const { steamId, language } = req.body;
 
@@ -50,7 +56,7 @@ router.post('/register', validateBodySteamId, async (req, res) => {
 });
 
 // Récupérer les informations d'un utilisateur
-router.get('/:steamId', validateSteamId, validateUserExists, async (req, res) => {
+router.get('/:steamId', mobileSessionAuth, requireSelf, validateSteamId, validateUserExists, async (req, res) => {
     try {
       const { steamId } = req.params;
       res.json(req.user);
@@ -77,6 +83,8 @@ router.get('/:steamId', validateSteamId, validateUserExists, async (req, res) =>
 // Mettre à jour les paramètres de notification
 router.put(
   '/:steamId/notifications',
+  mobileSessionAuth,
+  requireSelf,
   validateSteamId,
   validateUserExists,
   async (req, res) => {
@@ -102,7 +110,7 @@ router.put(
 );
 
 // Enregistrer ou mettre à jour un token FCM
-router.post('/:steamId/fcm-token', validateSteamId, validateUserExists, async (req, res) => {
+router.post('/:steamId/fcm-token', mobileSessionAuth, requireSelf, validateSteamId, validateUserExists, async (req, res) => {
   try {
     const { token, platform } = req.body;
     const user = req.user;
@@ -169,7 +177,7 @@ router.post('/:steamId/fcm-token', validateSteamId, validateUserExists, async (r
 });
 
 // Supprimer un token FCM
-router.delete('/:steamId/fcm-token', validateSteamId, validateUserExists, async (req, res) => {
+router.delete('/:steamId/fcm-token', mobileSessionAuth, requireSelf, validateSteamId, validateUserExists, async (req, res) => {
   try {
     const { token } = req.body;
     const user = req.user;
@@ -206,6 +214,8 @@ router.delete('/:steamId/fcm-token', validateSteamId, validateUserExists, async 
 // Mettre à jour la liste des jeux récemment actifs
 router.put(
   '/:steamId/active-games',
+  mobileSessionAuth,
+  requireSelf,
   validateSteamId,
   validateUserExists,
   async (req, res) => {
@@ -233,7 +243,7 @@ router.put(
 );
 
 // Suivre un jeu
-router.post('/:steamId/follow', validateSteamId, validateUserExists, async (req, res) => {
+router.post('/:steamId/follow', mobileSessionAuth, requireSelf, validateSteamId, validateUserExists, async (req, res) => {
     try {
       const { steamId } = req.params;
       const { appId, name, logoUrl } = req.body;
@@ -277,6 +287,8 @@ router.post('/:steamId/follow', validateSteamId, validateUserExists, async (req,
 // Ne plus suivre un jeu
 router.delete(
   '/:steamId/follow/:appId',
+  mobileSessionAuth,
+  requireSelf,
   validateSteamId,
   validateAppId,
   validateUserExists,
@@ -315,7 +327,7 @@ router.delete(
 );
 
 // Ajouter une news aux favoris
-router.post('/:steamId/news-favorites', validateSteamId, validateUserExists, async (req, res) => {
+router.post('/:steamId/news-favorites', mobileSessionAuth, requireSelf, validateSteamId, validateUserExists, async (req, res) => {
   try {
     const { appId, newsId, newsDate } = req.body || {};
     if (!appId || !newsId || !newsDate) {
@@ -353,6 +365,8 @@ router.post('/:steamId/news-favorites', validateSteamId, validateUserExists, asy
 // Supprimer une news des favoris
 router.delete(
   '/:steamId/news-favorites/:appId/:newsId',
+  mobileSessionAuth,
+  requireSelf,
   validateSteamId,
   validateAppId,
   validateUserExists,
@@ -378,7 +392,7 @@ router.delete(
   },
 );
 
-router.get('/:steamId/followed-games-details', validateSteamId, async (req, res) => {
+router.get('/:steamId/followed-games-details', mobileSessionAuth, requireSelf, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
     const result = await getFollowedGamesDetailsBySteamId(steamId);
@@ -395,7 +409,7 @@ router.get('/:steamId/followed-games-details', validateSteamId, async (req, res)
 });
 
 // Supprimer le compte utilisateur
-router.delete('/:steamId', validateSteamId, async (req, res) => {
+router.delete('/:steamId', mobileSessionAuth, requireSelf, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -449,6 +463,8 @@ router.delete('/:steamId', validateSteamId, async (req, res) => {
 // safe vs writes concurrentes multi-device.
 router.put(
   '/:steamId/news/seen',
+  mobileSessionAuth,
+  requireSelf,
   validateSteamId,
   async (req, res) => {
     try {
@@ -493,7 +509,7 @@ router.put(
   }
 );
 
-router.put('/:steamId/language', validateSteamId, validateUserExists, async (req, res) => {
+router.put('/:steamId/language', mobileSessionAuth, requireSelf, validateSteamId, validateUserExists, async (req, res) => {
   try {
     const { language } = req.body || {};
 

@@ -118,8 +118,6 @@ const DATABASE_CONFIG = {
 // Configuration notifications
 const NOTIFICATION_CONFIG = {
   provider: process.env.NOTIFICATION_PROVIDER || 'simulation',
-  oneSignalAppId: process.env.ONESIGNAL_APP_ID,
-  oneSignalApiKey: process.env.ONESIGNAL_API_KEY,
   firebaseServiceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH,
 };
 

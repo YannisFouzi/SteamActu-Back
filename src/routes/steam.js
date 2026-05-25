@@ -10,6 +10,8 @@ const Game = require('../models/Game');
 const Wishlist = require('../models/Wishlist');
 const { validateSteamId, clampQueryInt } = require('../middleware/steamValidators');
 const { apiLimiter } = require('../middleware/rateLimiter');
+const { mobileSessionAuth } = require('../middleware/mobileSessionAuth');
+const requireSelf = require('../middleware/requireSelf');
 const {
   fetchGameDetails,
   fetchUserGames,
@@ -63,7 +65,7 @@ async function getWishlistVisibilityState(steamId) {
  * strict (10/min) via STEAM_LIMITER_SKIP_PATHS, fallback sur apiLimiter (60/min)
  * appliqué ici en route-level pour préserver la protection brute-force.
  */
-router.get('/status/:steamId', apiLimiter, validateSteamId, async (req, res) => {
+router.get('/status/:steamId', apiLimiter, mobileSessionAuth, requireSelf, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -88,7 +90,7 @@ router.get('/status/:steamId', apiLimiter, validateSteamId, async (req, res) => 
   }
 });
 
-router.get('/games/:steamId', apiLimiter, validateSteamId, async (req, res) => {
+router.get('/games/:steamId', apiLimiter, mobileSessionAuth, requireSelf, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -205,7 +207,7 @@ router.get('/games/:steamId', apiLimiter, validateSteamId, async (req, res) => {
 });
 
 // Récupérer le profil d'un utilisateur Steam
-router.get('/profile/:steamId', validateSteamId, async (req, res) => {
+router.get('/profile/:steamId', mobileSessionAuth, requireSelf, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -223,7 +225,7 @@ router.get('/profile/:steamId', validateSteamId, async (req, res) => {
 });
 
 // Récupérer la wishlist d'un utilisateur Steam (depuis BDD uniquement)
-router.get('/wishlist/:steamId', apiLimiter, validateSteamId, async (req, res) => {
+router.get('/wishlist/:steamId', apiLimiter, mobileSessionAuth, requireSelf, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -303,7 +305,7 @@ router.get('/search', async (req, res) => {
 });
 
 // Vérifier la visibilité du profil Steam et sync si public
-router.post('/check-visibility/:steamId', validateSteamId, async (req, res) => {
+router.post('/check-visibility/:steamId', mobileSessionAuth, requireSelf, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
@@ -354,7 +356,7 @@ router.post('/check-visibility/:steamId', validateSteamId, async (req, res) => {
   }
 });
 
-router.post('/check-wishlist-visibility/:steamId', validateSteamId, async (req, res) => {
+router.post('/check-wishlist-visibility/:steamId', mobileSessionAuth, requireSelf, validateSteamId, async (req, res) => {
   try {
     const { steamId } = req.params;
 
