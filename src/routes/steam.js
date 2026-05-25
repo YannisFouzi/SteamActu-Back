@@ -12,6 +12,7 @@ const { validateSteamId, clampQueryInt } = require('../middleware/steamValidator
 const { apiLimiter } = require('../middleware/rateLimiter');
 const { mobileSessionAuth } = require('../middleware/mobileSessionAuth');
 const requireSelf = require('../middleware/requireSelf');
+const logger = require('../utils/logger');
 const {
   fetchGameDetails,
   fetchUserGames,
@@ -47,7 +48,7 @@ async function getWishlistVisibilityState(steamId) {
       items: Array.isArray(items) ? items : [],
     };
   } catch (error) {
-    console.warn(
+    logger.warn(
       `[VISIBILITY] Wishlist inaccessible pour ${steamId}:`,
       error?.message || error
     );
@@ -85,7 +86,7 @@ router.get('/status/:steamId', apiLimiter, mobileSessionAuth, requireSelf, valid
         : null,
     });
   } catch (error) {
-    console.error('Erreur dans /status/:steamId:', error);
+    logger.error('Erreur dans /status/:steamId:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -95,7 +96,7 @@ router.get('/games/:steamId', apiLimiter, mobileSessionAuth, requireSelf, valida
     const { steamId } = req.params;
 
     if (SIMULATION_CONFIG.privateProfile) {
-      console.log(`[LOCKED] [SIMULATION] Route /games → réponse vide (profil privé simulé)`);
+      logger.info(`[LOCKED] [SIMULATION] Route /games → réponse vide (profil privé simulé)`);
       return res.json([]);
     }
 
@@ -169,7 +170,7 @@ router.get('/games/:steamId', apiLimiter, mobileSessionAuth, requireSelf, valida
       }
 
       if (enrichedCount > 0) {
-        console.log(`[LAZY] ${enrichedCount}/${gamesToEnrich.length} jeux enrichis avec header_image`);
+        logger.info(`[LAZY] ${enrichedCount}/${gamesToEnrich.length} jeux enrichis avec header_image`);
       }
     }
 
@@ -201,7 +202,7 @@ router.get('/games/:steamId', apiLimiter, mobileSessionAuth, requireSelf, valida
 
     res.json(formattedGames);
   } catch (error) {
-    console.error('Erreur dans /games/:steamId:', error);
+    logger.error('Erreur dans /games/:steamId:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -230,7 +231,7 @@ router.get('/wishlist/:steamId', apiLimiter, mobileSessionAuth, requireSelf, val
     const { steamId } = req.params;
 
     if (SIMULATION_CONFIG.privateProfile) {
-      console.log(`[LOCKED] [SIMULATION] Route /wishlist → réponse vide (profil privé simulé)`);
+      logger.info(`[LOCKED] [SIMULATION] Route /wishlist → réponse vide (profil privé simulé)`);
       return res.json([]);
     }
 
@@ -239,7 +240,7 @@ router.get('/wishlist/:steamId', apiLimiter, mobileSessionAuth, requireSelf, val
       .lean();
 
     if (!user?.wishlist?.games || user.wishlist.games.length === 0) {
-      console.log('[INFO] Wishlist vide');
+      logger.info('[INFO] Wishlist vide');
       return res.json([]);
     }
 
@@ -268,10 +269,10 @@ router.get('/wishlist/:steamId', apiLimiter, mobileSessionAuth, requireSelf, val
       .filter(Boolean)
       .sort((a, b) => b.date_added - a.date_added);
 
-    console.log(`[OK] ${result.length} jeux retournés depuis BDD`);
+    logger.info(`[OK] ${result.length} jeux retournés depuis BDD`);
     res.json(result);
   } catch (error) {
-    console.error('Erreur dans /wishlist/:steamId:', error);
+    logger.error('Erreur dans /wishlist/:steamId:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -299,7 +300,7 @@ router.get('/search', async (req, res) => {
 
     res.json(results);
   } catch (error) {
-    console.error('Erreur dans /search:', error);
+    logger.error('Erreur dans /search:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -341,7 +342,7 @@ router.post('/check-visibility/:steamId', mobileSessionAuth, requireSelf, valida
     await syncUserGames(user, { force: true, reason: 'check-visibility' });
     await syncUserWishlist(steamId);
 
-    console.log(`[OK] [CHECK-VISIBILITY] Profil public détecté pour ${steamId} — sync complet effectué`);
+    logger.info(`[OK] [CHECK-VISIBILITY] Profil public détecté pour ${steamId} — sync complet effectué`);
 
     res.json({
       visible: true,
@@ -351,7 +352,7 @@ router.post('/check-visibility/:steamId', mobileSessionAuth, requireSelf, valida
       gamesCount: games.length,
     });
   } catch (error) {
-    console.error('Erreur dans /check-visibility:', error);
+    logger.error('Erreur dans /check-visibility:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -363,7 +364,7 @@ router.post('/check-wishlist-visibility/:steamId', mobileSessionAuth, requireSel
     const [wishlistItems, games] = await Promise.all([
       fetchUserWishlist(steamId),
       fetchUserGames(steamId).catch((err) => {
-        console.warn(
+        logger.warn(
           `[CHECK-WISHLIST-VISIBILITY] fetchUserGames a échoué pour ${steamId}:`,
           err?.message || err
         );
@@ -419,7 +420,7 @@ router.post('/check-wishlist-visibility/:steamId', mobileSessionAuth, requireSel
       gamesCount: gamesVisible ? games.length : 0,
     });
   } catch (error) {
-    console.error('Erreur dans /check-wishlist-visibility:', error);
+    logger.error('Erreur dans /check-wishlist-visibility:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

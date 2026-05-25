@@ -4,41 +4,42 @@ const { isInBucket } = require('../../utils/userBucket');
 const { syncUserGames } = require('./userProcessor');
 const { createStats, updateStats } = require('./statsManager');
 const { checkGamesVisibility } = require('../steam/visibilityCheck');
+const logger = require('../../utils/logger');
 
 /**
  * Synchronise les jeux de tous les utilisateurs enregistrés
  * @returns {Promise<Object>} Statistiques de synchronisation
  */
 async function syncAllUsersGames() {
-  console.log('Démarrage de la synchronisation automatique des bibliothèques...');
+  logger.info('Démarrage de la synchronisation automatique des bibliothèques...');
   const stats = createStats();
 
   try {
     // Récupérer tous les utilisateurs
     const users = await User.find({});
     stats.totalUsers = users.length;
-    console.log(`Synchronisation des jeux pour ${users.length} utilisateur(s)`);
+    logger.info(`Synchronisation des jeux pour ${users.length} utilisateur(s)`);
 
     // Pour chaque utilisateur
     for (const user of users) {
       try {
         const isVisible = await checkGamesVisibility(user.steamId);
         if (!isVisible) {
-          console.log(`[LOCKED] [SYNC] Profil privé pour ${user.steamId} — sync ignoré`);
+          logger.info(`[LOCKED] [SYNC] Profil privé pour ${user.steamId} — sync ignoré`);
           continue;
         }
         const result = await syncUserGames(user);
         updateStats(stats, result);
       } catch (error) {
-        console.error('Erreur lors de la synchronisation des jeux pour un utilisateur:', error);
+        logger.error('Erreur lors de la synchronisation des jeux pour un utilisateur:', error);
         stats.errors++;
       }
     }
 
-    console.log('Synchronisation automatique terminée:', stats);
+    logger.info('Synchronisation automatique terminée:', stats);
     return stats;
   } catch (error) {
-    console.error(
+    logger.error(
       'Erreur lors de la synchronisation automatique des jeux:',
       error
     );
@@ -64,21 +65,21 @@ async function syncUserGroupByIndex(
   const stats = createStats({ groupIndex: gi, totalGroups: groupsTotal });
 
   if (!Number.isInteger(gi) || gi < 0 || gi >= groupsTotal) {
-    console.warn(
+    logger.warn(
       `[SYNC][BIBLIO] Index de groupe invalide (${groupIndex}) pour ${groupsTotal} groupes`
     );
     stats.errors++;
     return stats;
   }
 
-  console.log(`Synchronisation du groupe ${gi + 1}/${groupsTotal} d'utilisateurs (bucket stable)`);
+  logger.info(`Synchronisation du groupe ${gi + 1}/${groupsTotal} d'utilisateurs (bucket stable)`);
 
   try {
     const allUsers = await User.find({});
     stats.totalUsers = allUsers.length;
 
     if (allUsers.length === 0) {
-      console.log('Aucun utilisateur trouvé, rien à synchroniser.');
+      logger.info('Aucun utilisateur trouvé, rien à synchroniser.');
       return stats;
     }
 
@@ -87,13 +88,13 @@ async function syncUserGroupByIndex(
     );
     stats.usersInGroup = bucketUsers.length;
 
-    console.log(
+    logger.info(
       `[SYNC][BIBLIO] Groupe ${gi} → ${bucketUsers.length} utilisateur(s) sur ${allUsers.length} au total`
     );
 
     if (bucketUsers.length === 0) {
       stats.skipped = true;
-      console.log(
+      logger.info(
         `[SYNC][BIBLIO] Aucun utilisateur dans ce bucket, fin de la synchronisation du groupe ${gi + 1}/${
           groupsTotal
         }.`
@@ -101,30 +102,30 @@ async function syncUserGroupByIndex(
       return stats;
     }
 
-    console.log('  - Listing des utilisateurs masqué pour raisons de confidentialité');
+    logger.info('  - Listing des utilisateurs masqué pour raisons de confidentialité');
 
     for (const user of bucketUsers) {
       try {
         const isVisible = await checkGamesVisibility(user.steamId);
         if (!isVisible) {
-          console.log(`[LOCKED] [SYNC] Profil privé pour ${user.steamId} — sync groupe ignoré`);
+          logger.info(`[LOCKED] [SYNC] Profil privé pour ${user.steamId} — sync groupe ignoré`);
           continue;
         }
         const result = await syncUserGames(user);
         updateStats(stats, result);
       } catch (error) {
-        console.error("Erreur lors de la synchronisation d'un utilisateur du groupe:", error);
+        logger.error("Erreur lors de la synchronisation d'un utilisateur du groupe:", error);
         stats.errors++;
       }
     }
 
-    console.log(
+    logger.info(
       `Synchronisation du groupe ${gi + 1}/${groupsTotal} terminée:`,
       stats
     );
     return stats;
   } catch (error) {
-    console.error(
+    logger.error(
       `Erreur lors de la synchronisation du groupe ${gi + 1}/${groupsTotal}:`,
       error
     );

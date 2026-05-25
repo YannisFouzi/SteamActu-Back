@@ -13,6 +13,7 @@
  */
 
 const axios = require('axios');
+const logger = require('../utils/logger');
 const { STEAMGRIDDB_CONFIG } = require('../config/app');
 
 const client = axios.create({
@@ -36,7 +37,7 @@ async function fetchAssets(endpoint, params = {}) {
     return Array.isArray(data) && data.length > 0 ? data : null;
   } catch (error) {
     if (error.response?.status !== 404) {
-      console.error(`[SteamGridDB] Erreur ${endpoint}:`, error.message);
+      logger.error(`[SteamGridDB] Erreur ${endpoint}:`, error.message);
     }
     return null;
   }
@@ -131,7 +132,7 @@ async function getGameImage(appId, gameName = null) {
   if (gameName) {
     const sgdbId = await lookupSgdbIdByName(gameName);
     if (sgdbId) {
-      console.log(
+      logger.info(
         `[SteamGridDB] appId=${appId} non lié → fallback recherche nom "${gameName}" → sgdbId=${sgdbId}`
       );
 

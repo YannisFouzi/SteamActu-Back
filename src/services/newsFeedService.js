@@ -9,6 +9,7 @@ const {
 } = require('./newsFeed/newsProcessor');
 const UserNewsState = require('../models/UserNewsState');
 const { normalizeAppLanguage } = require('../utils/language');
+const logger = require('../utils/logger');
 
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
 const RETENTION_DAYS = 90;
@@ -189,7 +190,7 @@ async function getNewsFeed({
           existingInFeedMap.set(buildNewsKey(row.appId, row.newsId), row);
         });
       } catch (err) {
-        console.error('UserNewsState lookup error:', err.message);
+        logger.error('UserNewsState lookup error:', err.message);
       }
     }
   }
@@ -243,7 +244,7 @@ async function getNewsFeed({
       try {
         await UserNewsState.bulkWrite(bulkOps, { ordered: false });
       } catch (err) {
-        console.error('UserNewsState bulkWrite error:', err.message);
+        logger.error('UserNewsState bulkWrite error:', err.message);
       }
     }
   }

@@ -14,7 +14,6 @@ const {
 const {
   SECURITY_CONFIG,
   ERROR_MESSAGES,
-  SUCCESS_MESSAGES,
 } = require("../config/app");
 const {
   createAttempt,
@@ -22,6 +21,7 @@ const {
   markSucceeded,
 } = require("../services/authAttemptStore");
 const { createMobileSession } = require("../services/mobileSessionService");
+const logger = require("../utils/logger");
 
 const STEAM_OPENID_URL = "https://steamcommunity.com/openid/login";
 
@@ -66,11 +66,11 @@ const maskSensitiveUrl = (url) => {
 
 const logAuthServer = (message, payload = null) => {
   if (payload === null || payload === undefined) {
-    console.log(`[AUTH] ${message}`);
+    logger.info(`[AUTH] ${message}`);
     return;
   }
 
-  console.log(`[AUTH] ${message}`, JSON.stringify(payload));
+  logger.info(payload, `[AUTH] ${message}`);
 };
 
 /**
@@ -109,7 +109,7 @@ router.post("/steam/start", (req, res) => {
       expiresAt: new Date(attempt.expiresAt).toISOString(),
     });
   } catch (error) {
-    console.error("[AUTH] Erreur creation tentative:", error.message);
+    logger.error({ err: error }, "auth_attempt_create_failed");
     res.status(500).json({ message: "Erreur interne" });
   }
 });
@@ -188,9 +188,9 @@ router.get("/steam/return", validateOpenIdResponse, async (req, res) => {
     // Enregistrer ou mettre a jour l'utilisateur
     try {
       await steamService.registerOrUpdateUser(steamId);
-      console.log(SUCCESS_MESSAGES.USER_AUTHENTICATED(steamId));
+      logger.info({ steamId: maskSteamId(steamId) }, "auth_user_authenticated");
     } catch (error) {
-      console.error(ERROR_MESSAGES.USER_REGISTRATION_ERROR, error);
+      logger.error({ err: error }, "auth_user_registration_failed");
       // On continue malgre l'erreur d'enregistrement
     }
 
@@ -214,7 +214,7 @@ router.get("/steam/return", validateOpenIdResponse, async (req, res) => {
     });
     res.redirect(redirectUrl);
   } catch (error) {
-    console.error("Erreur lors de l'authentification Steam:", error);
+    logger.error({ err: error }, "auth_steam_return_failed");
     res.status(500).json({
       message: ERROR_MESSAGES.AUTH_ERROR,
     });

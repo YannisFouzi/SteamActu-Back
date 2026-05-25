@@ -5,6 +5,7 @@
 
 const axios = require("axios");
 const { ERROR_MESSAGES } = require("../config/app");
+const logger = require("../utils/logger");
 
 const STEAM_OPENID_URL = "https://steamcommunity.com/openid/login";
 
@@ -36,7 +37,7 @@ async function verifySteamOpenIdSignature(query) {
     const body = typeof response.data === "string" ? response.data : String(response.data);
     return body.includes("is_valid:true");
   } catch (error) {
-    console.error("[AUTH] Erreur verification OpenID aupres de Steam:", error.message);
+    logger.error({ err: error }, "auth_openid_signature_verify_failed");
     return false;
   }
 }
@@ -49,14 +50,14 @@ const validateOpenIdResponse = async (req, res, next) => {
   const query = req.query;
 
   if (!query["openid.identity"] || !query["openid.sig"] || !query["openid.signed"]) {
-    console.warn(
-      "[AUTH] Callback OpenID invalide: champs manquants",
-      JSON.stringify({
+    logger.warn(
+      {
         queryKeys: Object.keys(query || {}),
         hasIdentity: Boolean(query["openid.identity"]),
         hasSig: Boolean(query["openid.sig"]),
         hasSigned: Boolean(query["openid.signed"]),
-      })
+      },
+      "auth_openid_callback_missing_fields"
     );
     return res.status(400).json({
       message: ERROR_MESSAGES.INVALID_OPENID,
@@ -71,10 +72,7 @@ const validateOpenIdResponse = async (req, res, next) => {
     !identity.startsWith("https://steamcommunity.com/openid/id/") ||
     (claimedId && !claimedId.startsWith("https://steamcommunity.com/openid/id/"))
   ) {
-    console.warn("[AUTH] Callback OpenID: identity/claimed_id suspect", {
-      identity,
-      claimedId,
-    });
+    logger.warn({ identity, claimedId }, "auth_openid_suspect_identity");
     return res.status(400).json({
       message: ERROR_MESSAGES.INVALID_OPENID,
     });
@@ -84,7 +82,7 @@ const validateOpenIdResponse = async (req, res, next) => {
   const isValid = await verifySteamOpenIdSignature(query);
 
   if (!isValid) {
-    console.warn("[AUTH] Callback OpenID: signature rejetee par Steam");
+    logger.warn("auth_openid_signature_rejected_by_steam");
     return res.status(403).json({
       message: "Verification OpenID echouee aupres de Steam",
     });

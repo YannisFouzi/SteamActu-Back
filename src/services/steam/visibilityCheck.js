@@ -8,6 +8,7 @@
  */
 
 const { fetchUserGames } = require('./apiClient');
+const logger = require('../../utils/logger');
 
 async function checkGamesVisibility(steamId) {
   try {
@@ -15,12 +16,12 @@ async function checkGamesVisibility(steamId) {
     const visible = Array.isArray(games) && games.length > 0;
 
     if (!visible) {
-      console.log(`[LOCKED] [VISIBILITY] Profil prive ou bibliotheque vide pour ${steamId}`);
+      logger.info(`[LOCKED] [VISIBILITY] Profil prive ou bibliotheque vide pour ${steamId}`);
     }
 
     return visible;
   } catch (error) {
-    console.error(`[VISIBILITY] Erreur vérification visibilité pour ${steamId}:`, error.message);
+    logger.error(`[VISIBILITY] Erreur vérification visibilité pour ${steamId}:`, error.message);
     return false;
   }
 }

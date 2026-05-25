@@ -5,6 +5,10 @@
 
 require('dotenv').config();
 
+// NOTE : les 3 `console.*` ci-dessous sont volontaires. Ce fichier est require()
+// AVANT que `utils/logger` (pino) puisse etre instancie (cycle : logger require
+// implicitement la conf). En cas de bootstrap manquant, on log brut + process.exit(1).
+
 if (!process.env.MONGODB_URI) {
   console.error(
     '[Config] Missing MONGODB_URI. Define it in your environment before starting the server.'

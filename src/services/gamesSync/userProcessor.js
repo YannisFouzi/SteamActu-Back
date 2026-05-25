@@ -17,6 +17,7 @@ const {
   getFollowedAppIds,
   buildFollowedGamesEntry,
 } = require('../../utils/followedGamesHelpers');
+const logger = require('../../utils/logger');
 
 const SYNC_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
@@ -48,7 +49,7 @@ async function resolveMissingNames(steamGames) {
     return;
   }
 
-  console.log(
+  logger.info(
     `[NAME-RESOLVER] ${needsResolution.length} jeu(x) sans nom — fallback Steam Store appdetails`
   );
 
@@ -59,17 +60,17 @@ async function resolveMissingNames(steamGames) {
       try {
         const details = await fetchGameDetails(appId);
         if (details?.name && !isUnresolvedName(details.name)) {
-          console.log(
+          logger.info(
             `[NAME-RESOLVER] appId=${appId} → "${details.name}" (résolu via Store)`
           );
           game.name = details.name;
         } else {
-          console.warn(
+          logger.warn(
             `[NAME-RESOLVER] appId=${appId} → introuvable sur Steam Store, sera skip ce run`
           );
         }
       } catch (error) {
-        console.warn(
+        logger.warn(
           `[NAME-RESOLVER] appId=${appId} échec appdetails: ${error.message}`
         );
       }
@@ -86,11 +87,11 @@ function canSyncUser(user, force = false) {
   const lastSyncTime = user.lastChecked || new Date(0);
   const canSync = lastSyncTime <= cooldownTime;
 
-  console.log('[SYNC] canSyncUser() - Vérification utilisateur');
-  console.log(`  - lastChecked: ${lastSyncTime.toISOString()}`);
-  console.log(`  - Cooldown expires at: ${cooldownTime.toISOString()}`);
-  console.log(`  - Current time: ${new Date().toISOString()}`);
-  console.log(`  - Can sync: ${canSync ? 'true' : 'false'}`);
+  logger.info('[SYNC] canSyncUser() - Vérification utilisateur');
+  logger.info(`  - lastChecked: ${lastSyncTime.toISOString()}`);
+  logger.info(`  - Cooldown expires at: ${cooldownTime.toISOString()}`);
+  logger.info(`  - Current time: ${new Date().toISOString()}`);
+  logger.info(`  - Can sync: ${canSync ? 'true' : 'false'}`);
 
   return canSync;
 }
@@ -151,20 +152,20 @@ async function upsertGamesCollection(steamGames) {
   const resolvedGames = steamGames.filter((g) => !isUnresolvedName(g.name));
   const skippedGames = steamGames.filter((g) => isUnresolvedName(g.name));
   if (skippedGames.length > 0) {
-    console.warn(
+    logger.warn(
       `[NAME-RESOLVER] ${skippedGames.length} jeu(x) sans nom résolvable — SKIP upsert: [${skippedGames
         .map((g) => g.appid)
         .join(', ')}]`
     );
   }
   if (resolvedGames.length === 0) {
-    console.log(`[SYNC] upsertGamesCollection() - Rien à écrire après filtrage`);
+    logger.info(`[SYNC] upsertGamesCollection() - Rien à écrire après filtrage`);
     return;
   }
 
   const startTime = Date.now();
-  console.log(`[SYNC] upsertGamesCollection() - START`);
-  console.log(`  - Jeux à traiter: ${resolvedGames.length}`);
+  logger.info(`[SYNC] upsertGamesCollection() - START`);
+  logger.info(`  - Jeux à traiter: ${resolvedGames.length}`);
 
   // Lookup ciblé : on a besoin de connaître les docs existants ET leur
   // name actuel, pour distinguer "nouveau jeu" vs "doc existant à réparer".
@@ -199,7 +200,7 @@ async function upsertGamesCollection(steamGames) {
       });
     } else if (isUnresolvedName(existing.name)) {
       healCount++;
-      console.log(
+      logger.info(
         `[NAME-RESOLVER] auto-réparation appId=${appId}: "${existing.name}" → "${steamGame.name}"`
       );
       bulkOps.push({
@@ -212,7 +213,7 @@ async function upsertGamesCollection(steamGames) {
   }
 
   if (bulkOps.length === 0) {
-    console.log(
+    logger.info(
       `[SYNC] upsertGamesCollection() - Aucune écriture nécessaire (${existingMap.size} déjà OK) [OK]`
     );
     return;
@@ -221,9 +222,9 @@ async function upsertGamesCollection(steamGames) {
   await Game.bulkWrite(bulkOps, { ordered: false });
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-  console.log(`[SYNC] upsertGamesCollection() - END`);
-  console.log(`  - Nouveaux: ${newCount} | Auto-réparés: ${healCount}`);
-  console.log(`  - Durée: ${duration}s`);
+  logger.info(`[SYNC] upsertGamesCollection() - END`);
+  logger.info(`  - Nouveaux: ${newCount} | Auto-réparés: ${healCount}`);
+  logger.info(`  - Durée: ${duration}s`);
 }
 
 /**
@@ -302,7 +303,7 @@ async function processAutoFollow(
       // sans nom résolu — sinon la notif afficherait "Unknown Game". Le
       // prochain sync (6h max) retentera la résolution.
       if (isUnresolvedName(game.name)) {
-        console.warn(
+        logger.warn(
           `[NAME-RESOLVER] Skip follow appId=${appId} (nom non résolu) — sera retenté au prochain sync`
         );
         continue;
@@ -349,7 +350,7 @@ async function processAutoFollow(
         await addUserToGameSubscription(appId, user.steamId, gameName, imageUrl);
       }
 
-      console.log(
+      logger.info(
         `[OK] ${gamesToHandle.length} GameSubscriptions mises à jour via auto-follow`
       );
     } else if (followMode === 'prompt') {
@@ -389,7 +390,7 @@ async function processAutoFollow(
       }
     }
   } catch (error) {
-    console.error('[ERROR] Erreur traitement follow mode:', error.message);
+    logger.error('[ERROR] Erreur traitement follow mode:', error.message);
   }
 
   return {
@@ -422,15 +423,15 @@ async function syncUserGames(user, options = {}) {
 
   try {
     const startTime = Date.now();
-    console.log(`\n[SYNC] syncUserGames() - START`);
-    console.log(`  - Démarrage de la synchronisation utilisateur`);
+    logger.info(`\n[SYNC] syncUserGames() - START`);
+    logger.info(`  - Démarrage de la synchronisation utilisateur`);
 
     if (!canSyncUser(user, force)) {
       const lastSyncTime = user.lastChecked || new Date(0);
-      console.log(
+      logger.info(
         `Utilisateur synchronisé récemment (${lastSyncTime.toISOString()}), en attente.`
       );
-      console.log(`[SYNC] syncUserGames() - SKIPPED (cooldown actif)\n`);
+      logger.info(`[SYNC] syncUserGames() - SKIPPED (cooldown actif)\n`);
       return {
         ...result,
         skipped: true,
@@ -438,12 +439,12 @@ async function syncUserGames(user, options = {}) {
       };
     }
 
-    console.log(`[SYNC] Steam API GetOwnedGames + GetRecentlyPlayedGames (reason=${reason}, force=${force})`);
+    logger.info(`[SYNC] Steam API GetOwnedGames + GetRecentlyPlayedGames (reason=${reason}, force=${force})`);
 
     const [userGames, recentlyPlayedGames] = await Promise.all([
       steamService.getUserGames(user.steamId),
       steamService.getRecentlyPlayedGames(user.steamId).catch((error) => {
-        console.warn(
+        logger.warn(
           '[SYNC] GetRecentlyPlayedGames indisponible, fallback OwnedGames:',
           error?.message || error
         );
@@ -452,14 +453,14 @@ async function syncUserGames(user, options = {}) {
     ]);
 
     if (!userGames || !Array.isArray(userGames)) {
-      console.error(`Réponse invalide de l'API Steam pour un utilisateur`);
-      console.log(`[SYNC] syncUserGames() - ERROR (Invalid Steam response)\n`);
+      logger.error(`Réponse invalide de l'API Steam pour un utilisateur`);
+      logger.info(`[SYNC] syncUserGames() - ERROR (Invalid Steam response)\n`);
       result.error = "Réponse invalide de l'API Steam";
       return result;
     }
 
-    console.log(`  - Jeux récupérés: ${userGames.length}`);
-    console.log(`  - Jeux récemment lancés (2 semaines): ${recentlyPlayedGames.length}`);
+    logger.info(`  - Jeux récupérés: ${userGames.length}`);
+    logger.info(`  - Jeux récemment lancés (2 semaines): ${recentlyPlayedGames.length}`);
 
     // ---- Détection Steam Family ---------------------------------------
     // L'API GetRecentlyPlayedGames renvoie aussi les jeux lancés depuis
@@ -480,13 +481,13 @@ async function syncUserGames(user, options = {}) {
       familyGames.map((g) => g.appid.toString())
     );
 
-    console.log(`[FAMILY] Analyse diff recentlyPlayed \\ owned`);
-    console.log(`  - Owned: ${userGames.length} | RecentlyPlayed: ${recentlyPlayedGames.length}`);
-    console.log(`  - Family détectés ce run: ${familyGames.length}`);
+    logger.info(`[FAMILY] Analyse diff recentlyPlayed \\ owned`);
+    logger.info(`  - Owned: ${userGames.length} | RecentlyPlayed: ${recentlyPlayedGames.length}`);
+    logger.info(`  - Family détectés ce run: ${familyGames.length}`);
     if (familyGames.length > 0) {
       for (const fg of familyGames) {
         const wasKnown = previousFamilyIds.has(fg.appid?.toString());
-        console.log(
+        logger.info(
           `  - [FAMILY]${wasKnown ? ' (déjà connu)' : ' (NOUVEAU)'} appId=${fg.appid} name="${fg.name}" playtime_2weeks=${fg.playtime_2weeks || 0}min rtime_last_played=${fg.rtime_last_played || 'n/a'}`
         );
       }
@@ -505,7 +506,7 @@ async function syncUserGames(user, options = {}) {
     // frontend puisse résoudre name + header_image via le lazy-loading.
     // upsertGamesCollection skip les jeux dont le nom reste non résolu.
     await upsertGamesCollection([...userGames, ...familyGames]);
-    console.log(
+    logger.info(
       `[OK] ${userGames.length + familyGames.length} jeux traités pour Games (dont ${familyGames.length} Family)`
     );
 
@@ -515,7 +516,7 @@ async function syncUserGames(user, options = {}) {
 
     const removedGameIds = detectRemovedGames(user, userGames);
     if (removedGameIds.length > 0) {
-      console.log(
+      logger.info(
         `[INFO] ${removedGameIds.length} jeu(x) supprimé(s) de la bibliothèque Steam`
       );
       result.removedGames = removedGameIds;
@@ -558,7 +559,7 @@ async function syncUserGames(user, options = {}) {
       (id) => !previousFamilyIds.has(id)
     );
     if (newFamilyIds.length > 0) {
-      console.log(
+      logger.info(
         `[FAMILY] ${newFamilyIds.length} nouveau(x) jeu(x) Family déclenchent le pipeline follow_prompt (si mode=prompt)`
       );
     }
@@ -592,7 +593,7 @@ async function syncUserGames(user, options = {}) {
       }
 
       user.followedGames = Array.from(existingByAppId.values());
-      console.log(
+      logger.info(
         `[OK] ${result.updatedGames.length} jeux auto-suivis pour un utilisateur`
       );
     }
@@ -660,7 +661,7 @@ async function syncUserGames(user, options = {}) {
       });
     }
 
-    console.log(
+    logger.info(
       `[FAMILY] gameLibrary final: ${libraryGames.length} entrées (${userGames.length} owned + ${familyUnionIds.size} Family sticky)`
     );
 
@@ -676,7 +677,7 @@ async function syncUserGames(user, options = {}) {
 
     await user.save();
 
-    console.log(`[OK] Bibliothèque mise à jour: ${user.gameLibrary.games.length} jeux`);
+    logger.info(`[OK] Bibliothèque mise à jour: ${user.gameLibrary.games.length} jeux`);
 
     if (result.followPrompts && result.followPrompts.length > 0) {
       try {
@@ -684,11 +685,11 @@ async function syncUserGames(user, options = {}) {
           user.steamId,
           result.followPrompts
         );
-        console.log(
+        logger.info(
           `[INFO] ${sent}/${result.followPrompts.length} notification(s) follow_prompt envoyée(s)`
         );
       } catch (promptError) {
-        console.error(
+        logger.error(
           '[SYNC] Erreur envoi notifications follow_prompt:',
           promptError.message
         );
@@ -696,22 +697,22 @@ async function syncUserGames(user, options = {}) {
     }
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`\n[SYNC] syncUserGames() - RÉSULTAT`);
-    console.log(`  - Résumé pour l'utilisateur synchronisé`);
-    console.log(
+    logger.info(`\n[SYNC] syncUserGames() - RÉSULTAT`);
+    logger.info(`  - Résumé pour l'utilisateur synchronisé`);
+    logger.info(
       `  - gameLibrary.games: ${user.gameLibrary.games.length} jeux écrits [OK]`
     );
-    console.log(
+    logger.info(
       `  - Games collection: ${userGames.length} documents créés/mis à jour [OK]`
     );
-    console.log(`  - Nouveaux jeux détectés: ${result.updatedGames.length}`);
-    console.log(`  - Auto-followed: ${result.updatedGames.length}`);
-    console.log(`  - Jeux supprimés: ${removedGameIds.length}`);
-    console.log(`  - Durée: ${duration}s\n`);
+    logger.info(`  - Nouveaux jeux détectés: ${result.updatedGames.length}`);
+    logger.info(`  - Auto-followed: ${result.updatedGames.length}`);
+    logger.info(`  - Jeux supprimés: ${removedGameIds.length}`);
+    logger.info(`  - Durée: ${duration}s\n`);
 
     return result;
   } catch (error) {
-    console.error(
+    logger.error(
       `Erreur lors de la synchronisation des jeux pour un utilisateur:`,
       error
     );

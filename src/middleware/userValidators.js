@@ -3,6 +3,7 @@
  */
 
 const User = require('../models/User');
+const logger = require('../utils/logger');
 
 /**
  * Middleware pour vérifier qu'un utilisateur existe
@@ -22,7 +23,7 @@ async function validateUserExists(req, res, next) {
     req.user = user;
     next();
   } catch (error) {
-    console.error('Erreur dans validateUserExists:', error);
+    logger.error({ err: error }, 'validateUserExists_failed');
     res.status(500).json({ message: 'Erreur serveur' });
   }
 }

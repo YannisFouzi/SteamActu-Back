@@ -7,6 +7,7 @@ const { normalizeAppLanguage } = require('../utils/language');
 const { isValidAppId, isValidSteamId, clampQueryInt } = require('../middleware/steamValidators');
 const { mobileSessionAuth } = require('../middleware/mobileSessionAuth');
 const requireSelf = require('../middleware/requireSelf');
+const logger = require('../utils/logger');
 
 router.get('/game/:appId', async (req, res) => {
   try {
@@ -60,7 +61,7 @@ router.get('/feed', mobileSessionAuth, requireSelf, async (req, res) => {
 
     res.json(feed);
   } catch (error) {
-    console.error("Erreur lors de la recuperation du fil d'actualites:", error);
+    logger.error({ err: error }, "news_feed_failed");
     res.status(500).json({message: 'Erreur serveur'});
   }
 });

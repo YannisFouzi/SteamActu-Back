@@ -15,6 +15,7 @@ jest.doMock('axios', () => ({
 const {
   getGameImage,
 } = require('../../../src/services/steamGridDbService');
+const logger = require('../../../src/utils/logger');
 
 function ok(data) {
   return { data: { data } };
@@ -100,24 +101,24 @@ describe('services/steamGridDbService', () => {
     expect(await getGameImage(730, 'Forza Horizon 6')).toBe('by-name.png');
   });
 
-  it('404 silencieux (pas de console.error)', async () => {
-    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  it('404 silencieux (pas de logger.error)', async () => {
+    logger.error.mockClear();
     axiosInstance.get
       .mockRejectedValueOnce({ response: { status: 404 }, message: 'nf' })
       .mockResolvedValue({ data: { data: null } });
 
     expect(await getGameImage(730)).toBeNull();
-    expect(errSpy).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
   it('autres erreurs : log mais retourne null', async () => {
-    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    logger.error.mockClear();
     axiosInstance.get
       .mockRejectedValueOnce({ response: { status: 500 }, message: 'boom' })
       .mockResolvedValue({ data: { data: null } });
 
     expect(await getGameImage(730)).toBeNull();
-    expect(errSpy).toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalled();
   });
 
   it('renvoie null final si rien ne marche et pas de gameName', async () => {

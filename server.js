@@ -76,7 +76,10 @@ app.set("trust proxy", 1);
 // Pour les autres routes (API JSON), la CSP est inutile (pas de rendu HTML).
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors(CORS_OPTIONS));
-app.use(express.json());
+// Body limit pinne a 100kb : default Express, on l'explicite pour eviter
+// qu'un upgrade silencieux change la valeur. Nos plus gros payloads (tokens
+// FCM ~200 chars, listes de jeux) tiennent largement dedans.
+app.use(express.json({ limit: "100kb" }));
 // cookie-parser pour les routes /admin (session signee). Pas global pour
 // limiter la surface d'attaque ; monte juste avant le router admin.
 if (SECURITY_CONFIG.ADMIN_SESSION_SECRET) {
@@ -115,6 +118,13 @@ if (SERVER_CONFIG.NODE_ENV === "development") {
 // Sentry error handler DOIT etre avant le errorHandler custom
 Sentry.setupExpressErrorHandler(app);
 
+// Catch-all 404 JSON : repond une 404 structuree (et non le HTML par defaut
+// d'Express) pour toute route non matchee. A monter APRES tous les routers
+// mais AVANT errorHandler.
+app.use((req, res) => {
+  res.status(404).json({ message: "Not Found", path: req.originalUrl });
+});
+
 // Middleware global de gestion des erreurs (doit rester en dernier)
 const errorHandler = require("./src/middleware/errorHandler");
 app.use(errorHandler);
@@ -128,9 +138,17 @@ async function startServer() {
     await initAgenda();
     setupGracefulShutdown();
 
-    app.listen(SERVER_CONFIG.PORT, () => {
+    const server = app.listen(SERVER_CONFIG.PORT, () => {
       logger.info({ port: SERVER_CONFIG.PORT }, "server_started");
     });
+
+    // Mitigation slow-loris : ferme les connexions HTTP qui prennent trop de
+    // temps a envoyer leurs headers ou leur body. Defaults Node 18 : header=60s,
+    // request=300s — trop generaux pour une API publique. On serre.
+    // headersTimeout > requestTimeout sinon Node throw au boot.
+    server.requestTimeout = 30_000; // 30s pour body complet
+    server.headersTimeout = 35_000; // 35s pour headers (doit etre > requestTimeout)
+    server.keepAliveTimeout = 65_000; // > 60s default Railway/ALB pour eviter race
   } catch (error) {
     logger.fatal({ err: error }, "server_start_failed");
     process.exit(1);

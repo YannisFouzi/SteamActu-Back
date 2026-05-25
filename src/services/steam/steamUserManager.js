@@ -6,6 +6,7 @@ const {
 } = require('../../utils/language');
 const {fetchUserProfile} = require('./apiClient');
 const {checkGamesVisibility} = require('./visibilityCheck');
+const logger = require('../../utils/logger');
 
 async function registerOrUpdateUser(steamId, language) {
   try {
@@ -21,7 +22,7 @@ async function registerOrUpdateUser(steamId, language) {
         await user.save();
       }
 
-      console.log('User already exists');
+      logger.info('User already exists');
       return user;
     }
 
@@ -46,16 +47,16 @@ async function registerOrUpdateUser(steamId, language) {
         const {syncUserGames} = require('../gamesSync/userProcessor');
         await syncUserGames(user);
       } catch (syncError) {
-        console.error('Initial games sync failed:', syncError.message);
+        logger.error('Initial games sync failed:', syncError.message);
       }
     } else {
-      console.log(`[LOCKED] [REGISTER] Profil prive detecte pour ${steamId} — sync initial ignore`);
+      logger.info(`[LOCKED] [REGISTER] Profil prive detecte pour ${steamId} — sync initial ignore`);
     }
 
     user = await User.findOne({steamId});
     return user;
   } catch (error) {
-    console.error('registerOrUpdateUser error:', error.message);
+    logger.error('registerOrUpdateUser error:', error.message);
     throw error;
   }
 }

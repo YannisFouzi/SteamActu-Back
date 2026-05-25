@@ -3,6 +3,7 @@ const {
   SERVER_CONFIG,
 } = require('../config/app');
 const { isValidSteamId } = require('../middleware/steamValidators');
+const logger = require('../utils/logger');
 
 const RESEND_EMAIL_URL = 'https://api.resend.com/emails';
 const VALID_TYPES = new Set(['bug', 'feature']);
@@ -127,7 +128,7 @@ async function sendFeedbackMail(feedback) {
       throw error;
     }
 
-    console.log('[FEEDBACK] RESEND_API_KEY non configure, email non envoye:', {
+    logger.info('[FEEDBACK] RESEND_API_KEY non configure, email non envoye:', {
       type: feedback.type,
       email: feedback.email,
       steamId: feedback.steamId,

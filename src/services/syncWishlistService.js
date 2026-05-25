@@ -18,6 +18,7 @@ const GameSubscription = require('../models/GameSubscription');
 const steamService = require('./steamService');
 const { fetchGameDetails } = require('./steam/apiClient');
 const { isInBucket } = require('../utils/userBucket');
+const logger = require('../utils/logger');
 const { CRON_CONFIG } = require('../config/app');
 const { addUserToGameSubscription } = require('./users/subscriptionManager');
 const { sendFollowPromptNotifications } = require('./notifications/notificationService');
@@ -88,16 +89,16 @@ async function enrichWishlistItems(wishlistItems) {
   });
 
   const cacheHits = wishlistItems.length - missingEntries.length;
-  console.log(
+  logger.info(
     `[INFO] Cache hits: ${cacheHits}/${wishlistItems.length} jeux en base`
   );
 
   if (missingEntries.length === 0) {
-    console.log(`[WISHLIST] Aucun appel Steam supplémentaire nécessaire [OK]`);
+    logger.info(`[WISHLIST] Aucun appel Steam supplémentaire nécessaire [OK]`);
     return { enrichedItems, newWishlistDocs: [] };
   }
 
-  console.log(
+  logger.info(
     `[WISHLIST] ${missingEntries.length} jeu(x) manquant(s) → fetch Steam Store`
   );
 
@@ -141,12 +142,12 @@ async function enrichWishlistItems(wishlistItems) {
     );
 
     newWishlistDocs.push(...batchResults);
-    console.log(
+    logger.info(
       `   [SYNC] Batch ${batchNumber}/${totalBatches} → ${newWishlistDocs.length}/${missingEntries.length} jeux enrichis`
     );
   }
 
-  console.log(
+  logger.info(
     `[WISHLIST] Steam Store fetch terminé : ${newWishlistDocs.length} nouvel(le)s fiche(s)`
   );
 
@@ -159,20 +160,20 @@ async function enrichWishlistItems(wishlistItems) {
 
 async function upsertWishlistCollection(wishlistGames) {
   if (!wishlistGames || wishlistGames.length === 0) {
-    console.log(`[WISHLIST] upsertWishlistCollection() - Aucun nouveau jeu à insérer`);
+    logger.info(`[WISHLIST] upsertWishlistCollection() - Aucun nouveau jeu à insérer`);
     return;
   }
 
   const startTime = Date.now();
-  console.log(`[WISHLIST] upsertWishlistCollection() - START`);
-  console.log(`  - Nouveaux jeux à insérer: ${wishlistGames.length}`);
+  logger.info(`[WISHLIST] upsertWishlistCollection() - START`);
+  logger.info(`  - Nouveaux jeux à insérer: ${wishlistGames.length}`);
 
   const validGames = wishlistGames.filter((steamGame) => {
     return steamGame.name && steamGame.appid;
   });
 
   if (validGames.length === 0) {
-    console.log(`  [WARN] Aucun jeu valide après filtrage, skip bulkWrite`);
+    logger.info(`  [WARN] Aucun jeu valide après filtrage, skip bulkWrite`);
     return;
   }
 
@@ -196,9 +197,9 @@ async function upsertWishlistCollection(wishlistGames) {
   await Wishlist.bulkWrite(bulkOps, { ordered: false });
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-  console.log(`[WISHLIST] upsertWishlistCollection() - END`);
-  console.log(`  - Inserts/Upserts réalisés: ${bulkOps.length}`);
-  console.log(`  - Durée: ${duration}s`);
+  logger.info(`[WISHLIST] upsertWishlistCollection() - END`);
+  logger.info(`  - Inserts/Upserts réalisés: ${bulkOps.length}`);
+  logger.info(`  - Durée: ${duration}s`);
 }
 
 /* =========================
@@ -213,34 +214,34 @@ async function upsertWishlistCollection(wishlistGames) {
  */
 async function syncUserWishlist(steamId, wishlistData = null) {
   try {
-    console.log(`\n[WISHLIST] Synchronisation utilisateur démarrée`);
+    logger.info(`\n[WISHLIST] Synchronisation utilisateur démarrée`);
 
     const user = await User.findOne({ steamId });
     if (!user) {
-      console.log(`[ERROR] Utilisateur non trouvé`);
+      logger.info(`[ERROR] Utilisateur non trouvé`);
       return { success: false, error: 'Utilisateur non trouvé' };
     }
 
     let wishlistItems = [];
 
     if (wishlistData && Array.isArray(wishlistData)) {
-      console.log(
+      logger.info(
         `📦 Utilisation des données déjà récupérées : ${wishlistData.length} jeux`
       );
       wishlistItems = wishlistData;
     } else {
       try {
         wishlistItems = await steamService.getUserWishlist(steamId);
-        console.log(`[INFO] Wishlist brute recuperee : ${wishlistItems.length} jeux`);
+        logger.info(`[INFO] Wishlist brute recuperee : ${wishlistItems.length} jeux`);
       } catch (error) {
-        console.error(`[ERROR] Erreur récupération wishlist:`, error.message);
+        logger.error(`[ERROR] Erreur récupération wishlist:`, error.message);
         return { success: false, error: error.message };
       }
     }
 
     // Si la wishlist est vide
     if (!Array.isArray(wishlistItems) || wishlistItems.length === 0) {
-      console.log(`[INFO] Wishlist vide`);
+      logger.info(`[INFO] Wishlist vide`);
       user.wishlist = { games: [], lastFullSync: new Date() };
 
       // Bump version pour invalidation cache frontend
@@ -257,7 +258,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
     // Insert uniquement les nouveaux jeux dans la collection Wishlist
     await upsertWishlistCollection(newWishlistDocs);
 
-    console.log(
+    logger.info(
       `[OK] Wishlist enrichie : ${enrichedItems.length} jeux (nouveaux: ${newWishlistDocs.length})`
     );
 
@@ -285,7 +286,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
       }
     }
 
-    console.log(`[NEW] ${newGames.length} nouveau(x) jeu(x) détecté(s)`);
+    logger.info(`[NEW] ${newGames.length} nouveau(x) jeu(x) détecté(s)`);
 
     // Auto-follow si activé (paramètre spécifique wishlist)
     let autoFollowedCount = 0;
@@ -320,9 +321,9 @@ async function syncUserWishlist(steamId, wishlistData = null) {
             }
 
             autoFollowedCount = gamesToConsider.length;
-            console.log(`[OK] ${autoFollowedCount} jeu(x) auto-suivi(s)`);
+            logger.info(`[OK] ${autoFollowedCount} jeu(x) auto-suivi(s)`);
           } catch (error) {
-            console.error(`[ERROR] Erreur auto-follow:`, error.message);
+            logger.error(`[ERROR] Erreur auto-follow:`, error.message);
           }
         }
       } else if (wishlistFollowMode === 'prompt') {
@@ -388,16 +389,16 @@ async function syncUserWishlist(steamId, wishlistData = null) {
 
     await user.save();
 
-    console.log(`[OK] Wishlist mise à jour: ${wishlistItems.length} jeux\n`);
+    logger.info(`[OK] Wishlist mise à jour: ${wishlistItems.length} jeux\n`);
 
     if (followPrompts.length > 0) {
       try {
         const sent = await sendFollowPromptNotifications(user.steamId, followPrompts);
-        console.log(
+        logger.info(
           `[INFO] ${sent}/${followPrompts.length} notification(s) follow_prompt envoyée(s) (wishlist)`
         );
       } catch (promptError) {
-        console.error(
+        logger.error(
           `[WISHLIST] [ERROR] Erreur envoi notifications follow_prompt:`,
           promptError.message
         );
@@ -413,7 +414,7 @@ async function syncUserWishlist(steamId, wishlistData = null) {
       followPrompts,
     };
   } catch (error) {
-    console.error(`[ERROR] Erreur sync wishlist:`, error);
+    logger.error(`[ERROR] Erreur sync wishlist:`, error);
     return { success: false, error: error.message };
   }
 }
@@ -428,15 +429,15 @@ async function syncUserWishlist(steamId, wishlistData = null) {
  */
 async function syncAllUsersWishlists() {
   try {
-    console.log('\n' + '='.repeat(60));
-    console.log('[NEW] DÉBUT SYNCHRONISATION GLOBALE WISHLISTS');
-    console.log('='.repeat(60));
+    logger.info('\n' + '='.repeat(60));
+    logger.info('[NEW] DÉBUT SYNCHRONISATION GLOBALE WISHLISTS');
+    logger.info('='.repeat(60));
 
     const startTime = Date.now();
 
     // Récupérer tous les utilisateurs
     const users = await User.find({});
-    console.log(`[INFO] ${users.length} utilisateur(s) à synchroniser`);
+    logger.info(`[INFO] ${users.length} utilisateur(s) à synchroniser`);
 
     const stats = {
       totalUsers: users.length,
@@ -450,7 +451,7 @@ async function syncAllUsersWishlists() {
     // Synchroniser chaque utilisateur avec pause entre les appels
     for (let i = 0; i < users.length; i++) {
       const user = users[i];
-      console.log(`\n[${i + 1}/${users.length}] Traitement utilisateur`);
+      logger.info(`\n[${i + 1}/${users.length}] Traitement utilisateur`);
 
       const result = await syncUserWishlist(user.steamId);
 
@@ -474,25 +475,25 @@ async function syncAllUsersWishlists() {
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-    console.log('\n' + '='.repeat(60));
-    console.log('[INFO] RÉSUMÉ SYNCHRONISATION WISHLISTS');
-    console.log('='.repeat(60));
-    console.log(`[TIMER] Durée : ${duration}s`);
-    console.log(`[OK] Succès : ${stats.successCount}`);
-    console.log(`[ERROR] Erreurs : ${stats.errorCount}`);
-    console.log(`[NEW] Nouveaux jeux détectés : ${stats.totalNewGames}`);
-    console.log(`[INFO] Jeux auto-suivis : ${stats.totalAutoFollowed}`);
+    logger.info('\n' + '='.repeat(60));
+    logger.info('[INFO] RÉSUMÉ SYNCHRONISATION WISHLISTS');
+    logger.info('='.repeat(60));
+    logger.info(`[TIMER] Durée : ${duration}s`);
+    logger.info(`[OK] Succès : ${stats.successCount}`);
+    logger.info(`[ERROR] Erreurs : ${stats.errorCount}`);
+    logger.info(`[NEW] Nouveaux jeux détectés : ${stats.totalNewGames}`);
+    logger.info(`[INFO] Jeux auto-suivis : ${stats.totalAutoFollowed}`);
     if (stats.errors.length > 0) {
-      console.log('\n[ERROR] Erreurs détaillées :');
+      logger.info('\n[ERROR] Erreurs détaillées :');
       stats.errors.forEach(() => {
-        console.log(`  - Erreur signalée lors de la synchronisation d'un utilisateur`);
+        logger.info(`  - Erreur signalée lors de la synchronisation d'un utilisateur`);
       });
     }
-    console.log('='.repeat(60) + '\n');
+    logger.info('='.repeat(60) + '\n');
 
     return stats;
   } catch (error) {
-    console.error(
+    logger.error(
       '[ERROR] Erreur globale lors de la synchronisation des wishlists:',
       error
     );
@@ -526,20 +527,20 @@ async function syncWishlistsByGroup(
     );
   }
 
-  console.log('\n' + '='.repeat(60));
-  console.log(`🚀 DÉBUT SYNC WISHLISTS (GROUPE ${gi + 1}/${gt})`);
-  console.log('='.repeat(60));
+  logger.info('\n' + '='.repeat(60));
+  logger.info(`🚀 DÉBUT SYNC WISHLISTS (GROUPE ${gi + 1}/${gt})`);
+  logger.info('='.repeat(60));
 
   const startTime = Date.now();
 
   // On minimise la projection : uniquement ce qui est nécessaire ici
   const users = await User.find({}, { _id: 1, steamId: 1 }).lean();
-  console.log(`[INFO] ${users.length} utilisateur(s) totaux`);
+  logger.info(`[INFO] ${users.length} utilisateur(s) totaux`);
 
   // Bucket stable par hash (user._id si dispo, sinon steamId)
   const bucketUsers = users.filter((u) => isInBucket(u, gi, gt));
 
-  console.log(`[INFO] Groupe ${gi + 1}/${gt} → ${bucketUsers.length} utilisateur(s) à traiter`);
+  logger.info(`[INFO] Groupe ${gi + 1}/${gt} → ${bucketUsers.length} utilisateur(s) à traiter`);
 
   const stats = {
     groupIndex: gi,
@@ -555,7 +556,7 @@ async function syncWishlistsByGroup(
 
   for (let i = 0; i < bucketUsers.length; i++) {
     const u = bucketUsers[i];
-    console.log(
+    logger.info(
       `\n[${i + 1}/${bucketUsers.length}] Groupe ${gi + 1}/${gt} → Traitement utilisateur`
     );
 
@@ -579,22 +580,22 @@ async function syncWishlistsByGroup(
   }
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-  console.log('\n' + '='.repeat(60));
-  console.log(`[INFO] RÉSUMÉ WISHLISTS GROUPE ${gi + 1}/${gt}`);
-  console.log('='.repeat(60));
-  console.log(`[TIMER] Durée : ${duration}s`);
-  console.log(`[INFO] Users dans le groupe : ${stats.usersInGroup}`);
-  console.log(`[OK] Succès : ${stats.successCount}`);
-  console.log(`[ERROR] Erreurs : ${stats.errorCount}`);
-  console.log(`[NEW] Nouveaux jeux : ${stats.newGames}`);
-  console.log(`[INFO] Auto-suivis : ${stats.totalAutoFollowed}`);
+  logger.info('\n' + '='.repeat(60));
+  logger.info(`[INFO] RÉSUMÉ WISHLISTS GROUPE ${gi + 1}/${gt}`);
+  logger.info('='.repeat(60));
+  logger.info(`[TIMER] Durée : ${duration}s`);
+  logger.info(`[INFO] Users dans le groupe : ${stats.usersInGroup}`);
+  logger.info(`[OK] Succès : ${stats.successCount}`);
+  logger.info(`[ERROR] Erreurs : ${stats.errorCount}`);
+  logger.info(`[NEW] Nouveaux jeux : ${stats.newGames}`);
+  logger.info(`[INFO] Auto-suivis : ${stats.totalAutoFollowed}`);
   if (stats.errors.length > 0) {
-    console.log('\n[ERROR] Erreurs détaillées :');
+    logger.info('\n[ERROR] Erreurs détaillées :');
     stats.errors.forEach(() =>
-      console.log(`  - Erreur signalée lors de la synchronisation d'un utilisateur`)
+      logger.info(`  - Erreur signalée lors de la synchronisation d'un utilisateur`)
     );
   }
-  console.log('='.repeat(60) + '\n');
+  logger.info('='.repeat(60) + '\n');
 
   return stats;
 }

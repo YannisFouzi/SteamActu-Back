@@ -5,6 +5,7 @@ const { syncUserWishlist } = require('../services/syncWishlistService');
 const { isValidSteamId } = require('../middleware/steamValidators');
 const GameSubscription = require('../models/GameSubscription');
 const Game = require('../models/Game');
+const logger = require('../utils/logger');
 
 async function resolveGameName(appId) {
   const sub = await GameSubscription.findOne({ gameId: String(appId) })
@@ -72,14 +73,14 @@ router.post('/force-wishlist-sync', async (req, res) => {
     return res.status(400).json({ message: 'steamId invalide' });
   }
 
-  console.log(`\n[DEBUG] === FORCE WISHLIST SYNC pour ${steamId} ===`);
+  logger.info(`\n[DEBUG] === FORCE WISHLIST SYNC pour ${steamId} ===`);
 
   try {
     const result = await syncUserWishlist(steamId);
-    console.log('[DEBUG] Résultat sync:', JSON.stringify(result, null, 2));
+    logger.info('[DEBUG] Résultat sync:', JSON.stringify(result, null, 2));
     res.json({ message: 'Sync terminée', result });
   } catch (error) {
-    console.error('[DEBUG] Erreur sync wishlist:', error.message);
+    logger.error('[DEBUG] Erreur sync wishlist:', error.message);
     res.status(500).json({ message: 'Erreur sync', error: error.message });
   }
 });

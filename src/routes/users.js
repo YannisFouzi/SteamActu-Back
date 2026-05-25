@@ -15,6 +15,7 @@ const {
 } = require('../middleware/steamValidators');
 const { mobileSessionAuth } = require('../middleware/mobileSessionAuth');
 const requireSelf = require('../middleware/requireSelf');
+const logger = require('../utils/logger');
 const { sanitizeActiveGames } = require('../services/users/userGameProcessor');
 const {
   addUserToGameSubscription,
@@ -50,7 +51,7 @@ router.post('/register', mobileSessionAuth, requireSelf, validateBodySteamId, as
 
     res.status(200).json(user);
   } catch (error) {
-    console.error("Erreur lors de l'enregistrement de l'utilisateur:", error);
+    logger.error("Erreur lors de l'enregistrement de l'utilisateur:", error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -66,15 +67,15 @@ router.get('/:steamId', mobileSessionAuth, requireSelf, validateSteamId, validat
 
       if (shouldSyncWishlist) {
         syncUserWishlist(steamId).catch((err) => {
-          console.error('Background wishlist preload failed:', err.message);
+          logger.error('Background wishlist preload failed:', err.message);
         });
       } else {
-        console.log(
+        logger.info(
           'Wishlist sync skipped (lastFullSync already set)'
         );
       }
     } catch (error) {
-      console.error('Erreur dans GET /users/:steamId:', error);
+      logger.error('Erreur dans GET /users/:steamId:', error);
       res.status(500).json({ message: 'Erreur serveur' });
     }
   }
@@ -100,7 +101,7 @@ router.put(
 
       res.json(user);
     } catch (error) {
-      console.error(
+      logger.error(
         'Erreur lors de la mise à jour des paramètres de notification:',
         error
       );
@@ -153,7 +154,7 @@ router.post('/:steamId/fcm-token', mobileSessionAuth, requireSelf, validateSteam
         platform;
       user.notificationSettings.fcmTokens[existingTokenIndex].addedAt =
         new Date();
-      console.log(`[FCM] Token mis à jour pour ${user.steamId} (${platform})`);
+      logger.info(`[FCM] Token mis à jour pour ${user.steamId} (${platform})`);
     } else {
       // Nouveau token : ajouter
       user.notificationSettings.fcmTokens.push({
@@ -161,7 +162,7 @@ router.post('/:steamId/fcm-token', mobileSessionAuth, requireSelf, validateSteam
         platform,
         addedAt: new Date(),
       });
-      console.log(`[FCM] Nouveau token ajouté pour ${user.steamId} (${platform})`);
+      logger.info(`[FCM] Nouveau token ajouté pour ${user.steamId} (${platform})`);
     }
 
     await user.save();
@@ -171,7 +172,7 @@ router.post('/:steamId/fcm-token', mobileSessionAuth, requireSelf, validateSteam
       tokensCount: user.notificationSettings.fcmTokens.length,
     });
   } catch (error) {
-    console.error("Erreur lors de l'enregistrement du token FCM:", error);
+    logger.error("Erreur lors de l'enregistrement du token FCM:", error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -200,13 +201,13 @@ router.delete('/:steamId/fcm-token', mobileSessionAuth, requireSelf, validateSte
 
     await user.save();
 
-    console.log(`[FCM] Token supprimé pour ${user.steamId}`);
+    logger.info(`[FCM] Token supprimé pour ${user.steamId}`);
     res.json({
       message: 'Token FCM supprimé avec succès',
       tokensCount: user.notificationSettings.fcmTokens.length,
     });
   } catch (error) {
-    console.error('Erreur lors de la suppression du token FCM:', error);
+    logger.error('Erreur lors de la suppression du token FCM:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -236,7 +237,7 @@ router.put(
 
       res.json({ recentActiveGames: user.recentActiveGames });
     } catch (error) {
-      console.error('Erreur lors de la mise à jour des jeux récents:', error);
+      logger.error('Erreur lors de la mise à jour des jeux récents:', error);
       res.status(500).json({ message: 'Erreur serveur' });
     }
   }
@@ -278,7 +279,7 @@ router.post('/:steamId/follow', mobileSessionAuth, requireSelf, validateSteamId,
 
       res.json(updatedUser);
     } catch (error) {
-      console.error("Erreur lors de l'ajout du jeu aux suivis:", error);
+      logger.error("Erreur lors de l'ajout du jeu aux suivis:", error);
       res.status(500).json({ message: 'Erreur serveur' });
     }
   }
@@ -320,7 +321,7 @@ router.delete(
 
       res.json(updatedUser);
     } catch (error) {
-      console.error('Erreur lors du retrait du jeu des suivis:', error);
+      logger.error('Erreur lors du retrait du jeu des suivis:', error);
       res.status(500).json({ message: 'Erreur serveur' });
     }
   }
@@ -357,7 +358,7 @@ router.post('/:steamId/news-favorites', mobileSessionAuth, requireSelf, validate
 
     res.json({favorites: user.newsFavorites});
   } catch (error) {
-    console.error('Erreur lors de l’ajout du favori:', error);
+    logger.error('Erreur lors de l’ajout du favori:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -386,7 +387,7 @@ router.delete(
 
       res.json({favorites: user.newsFavorites});
     } catch (error) {
-      console.error('Erreur lors de la suppression du favori:', error);
+      logger.error('Erreur lors de la suppression du favori:', error);
       res.status(500).json({ message: 'Erreur serveur' });
     }
   },
@@ -403,7 +404,7 @@ router.get('/:steamId/followed-games-details', mobileSessionAuth, requireSelf, v
 
     res.json({ followedGames: result.followedGames });
   } catch (error) {
-    console.error('Erreur dans /followed-games-details:', error);
+    logger.error('Erreur dans /followed-games-details:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -428,7 +429,7 @@ router.delete('/:steamId', mobileSessionAuth, requireSelf, validateSteamId, asyn
 
     // Unfollow tous les jeux (nettoyage automatique des GameSubscriptions)
     if (followedAppIds.length > 0) {
-      console.log(
+      logger.info(
         `[INFO] Nettoyage de ${followedAppIds.length} jeux suivis...`
       );
 
@@ -439,21 +440,21 @@ router.delete('/:steamId', mobileSessionAuth, requireSelf, validateSteamId, asyn
         }
       }
 
-      console.log(
+      logger.info(
         `[OK] ${stats.gameSubscriptionsRemoved} GameSubscription(s) supprimée(s)`
       );
     }
 
     // Supprimer le compte utilisateur
     await User.deleteOne({ steamId });
-    console.log('[OK] Compte utilisateur supprimé');
+    logger.info('[OK] Compte utilisateur supprimé');
 
     res.json({
       message: 'Compte supprimé avec succès',
       stats: stats,
     });
   } catch (error) {
-    console.error('Erreur lors de la suppression du compte:', error);
+    logger.error('Erreur lors de la suppression du compte:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
@@ -503,7 +504,7 @@ router.put(
 
       res.json({ lastNewsFeedSeenAt: existing.lastNewsFeedSeenAt });
     } catch (error) {
-      console.error('Erreur lors du marquage du fil comme vu:', error);
+      logger.error('Erreur lors du marquage du fil comme vu:', error);
       res.status(500).json({ message: 'Erreur serveur' });
     }
   }
@@ -530,7 +531,7 @@ router.put('/:steamId/language', mobileSessionAuth, requireSelf, validateSteamId
       language: req.user.language,
     });
   } catch (error) {
-    console.error('Erreur lors de la mise a jour de la langue:', error);
+    logger.error('Erreur lors de la mise a jour de la langue:', error);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

@@ -4,6 +4,7 @@
 
 const steamService = require('../steamService');
 const { extractFirstImage } = require('./imageExtractor');
+const logger = require('../../utils/logger');
 
 // Cap la concurrence des appels Steam par requête /api/news/feed :
 // - trop bas -> latence cumulée sur les gros followings
@@ -86,7 +87,7 @@ async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
 
         return { appId: game.appId, items, latestDate };
       } catch (error) {
-        console.error(`Failed to fetch news for ${game.appId}:`, error.message);
+        logger.error(`Failed to fetch news for ${game.appId}:`, error.message);
         return null;
       }
     }
