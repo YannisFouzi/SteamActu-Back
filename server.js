@@ -55,6 +55,8 @@ const feedbackRoutes = require("./src/routes/feedback");
 const adminRoutes = require("./src/routes/admin");
 const mobileAdminRoutes = require("./src/routes/mobileAdmin");
 const healthRoutes = require("./src/routes/health");
+const versionRoutes = require("./src/routes/version");
+const legalRoutes = require("./src/routes/legal");
 const {
   steamLimiter,
   authLimiter,
@@ -94,8 +96,16 @@ app.get("/", (req, res) => {
 // Healthcheck (Railway/k8s) — pas de rate-limit, pas d'auth
 app.use("/healthz", healthRoutes);
 
+// Pages legales publiques (Play Store / RGPD) — pas de rate-limit, pas d'auth
+// URLs stables a soumettre sur Play Console et a ne JAMAIS bouger
+app.use("/", legalRoutes);
+
 // Routes d'authentification (publiques)
 app.use("/auth", authLimiter, authRoutes);
+
+// Endpoint version (public, pas d'auth — l'app non-authentifiee doit pouvoir
+// verifier qu'elle n'est pas trop vieille avant meme de tenter le login)
+app.use("/api/version", apiLimiter, versionRoutes);
 
 // Routes API (publiques pour l'app mobile)
 app.use("/api/users", apiLimiter, userRoutes);
