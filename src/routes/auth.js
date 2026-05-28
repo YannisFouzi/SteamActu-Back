@@ -81,8 +81,12 @@ router.post("/steam/start", (req, res) => {
   try {
     const attempt = createAttempt();
 
+    // Flow web : on propage platform=web dans le return_to pour que /return
+    // affiche une page de succes (au lieu du deep link mobile steamnotif://).
+    const isWeb = req.body && req.body.platform === "web";
+
     // Construire le return_to avec authToken
-    const returnTo = `${req.protocol}://${req.get("host")}/auth/steam/return?authToken=${attempt.authToken}`;
+    const returnTo = `${req.protocol}://${req.get("host")}/auth/steam/return?authToken=${attempt.authToken}${isWeb ? "&platform=web" : ""}`;
     const realm = `${req.protocol}://${req.get("host")}/`;
 
     const params = new URLSearchParams({
@@ -202,6 +206,24 @@ router.get("/steam/return", validateOpenIdResponse, async (req, res) => {
         steamId: maskSteamId(steamId),
         marked,
       });
+    }
+
+    // Flow web : pas de deep link mobile. On rend une petite page de succes
+    // auto-fermante ; le SPA recupere le sessionToken via /auth/steam/status.
+    if (req.query.platform === "web") {
+      logAuthServer("Auth web: rendu page de succes", {
+        steamId: maskSteamId(steamId),
+      });
+      return res
+        .type("html")
+        .send(
+          `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Connecté</title>` +
+            `<style>body{background:#171a21;color:#c7d5e0;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}` +
+            `.box{text-align:center}.ok{color:#66c0f4;font-size:20px;font-weight:600}</style></head>` +
+            `<body><div class="box"><div class="ok">Connecté à Steam ✓</div>` +
+            `<p>Vous pouvez fermer cette fenêtre.</p></div>` +
+            `<script>setTimeout(function(){window.close()},800)</script></body></html>`,
+        );
     }
 
     // Rediriger vers l'application mobile

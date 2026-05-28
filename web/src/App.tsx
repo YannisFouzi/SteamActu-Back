@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CONTEXT, fetchProfile, type WebProfile } from './api';
+import { getSession, login, logout, type Session } from './auth';
 import { maskSteamId } from './format';
 import ActuTab from './tabs/ActuTab';
 import SuivreTab from './tabs/SuivreTab';
@@ -15,9 +16,9 @@ type ProfileState =
 export default function App() {
   const [tab, setTab] = useState<Tab>('actu');
   const [profile, setProfile] = useState<ProfileState>({ status: 'loading' });
+  const [session, setSession] = useState<Session | null>(getSession());
+  const [authBusy, setAuthBusy] = useState(false);
 
-  // Profile (followed games + wishlist + account) loads once and feeds the
-  // Suivre and Compte tabs. News are fetched separately inside ActuTab.
   useEffect(() => {
     let cancelled = false;
     if (!/^\d{17}$/.test(CONTEXT.steamId)) {
@@ -41,11 +42,40 @@ export default function App() {
     };
   }, []);
 
+  // Writes are only allowed for your own account (backend requireSelf).
+  const editable = session != null && session.steamId === CONTEXT.steamId;
+
+  const handleLogin = () => {
+    setAuthBusy(true);
+    login()
+      .then(setSession)
+      .catch((err: unknown) => {
+        console.error('[GameNews] login failed', err);
+      })
+      .finally(() => setAuthBusy(false));
+  };
+
+  const handleLogout = () => {
+    logout();
+    setSession(null);
+  };
+
   return (
     <div className="page">
       <header className="app-header">
         <h1>Game News</h1>
-        <div className="meta">SteamID: {maskSteamId(CONTEXT.steamId)}</div>
+        <div className="header-right">
+          <span className="meta">SteamID: {maskSteamId(CONTEXT.steamId)}</span>
+          {session ? (
+            <button className="auth-btn" onClick={handleLogout}>
+              Log out
+            </button>
+          ) : (
+            <button className="auth-btn primary" onClick={handleLogin} disabled={authBusy}>
+              {authBusy ? 'Connecting…' : 'Log in with Steam'}
+            </button>
+          )}
+        </div>
       </header>
 
       <nav className="tabs">
@@ -78,7 +108,7 @@ export default function App() {
         <div className="state error">Failed to load profile — {profile.error}</div>
       )}
       {tab === 'suivre' && profile.status === 'ok' && (
-        <SuivreTab profile={profile.profile} />
+        <SuivreTab profile={profile.profile} editable={editable} />
       )}
       {tab === 'compte' && profile.status === 'ok' && (
         <CompteTab profile={profile.profile} />
