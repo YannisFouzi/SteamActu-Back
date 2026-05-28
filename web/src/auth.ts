@@ -98,3 +98,36 @@ export async function unfollowGame(appId: string): Promise<void> {
     throw new Error(`unfollow failed: HTTP ${res.status}`);
   }
 }
+
+export interface NotificationPatch {
+  newsNotifications?: boolean;
+  confirmUnfollowGames?: boolean;
+  libraryFollowMode?: string;
+  wishlistFollowMode?: string;
+}
+
+export async function updateNotifications(patch: NotificationPatch): Promise<void> {
+  const session = getSession();
+  if (!session) throw new Error('not authenticated');
+  const res = await authedFetch(`/api/users/${session.steamId}/notifications`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    throw new Error(`settings update failed: HTTP ${res.status}`);
+  }
+}
+
+export async function updateLanguage(language: string): Promise<void> {
+  const session = getSession();
+  if (!session) throw new Error('not authenticated');
+  const res = await authedFetch(`/api/users/${session.steamId}/language`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language }),
+  });
+  if (!res.ok) {
+    throw new Error(`language update failed: HTTP ${res.status}`);
+  }
+}

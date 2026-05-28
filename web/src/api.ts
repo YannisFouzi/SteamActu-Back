@@ -56,9 +56,44 @@ export interface WebProfile {
     followedCount: number;
     wishlistCount: number;
     newsNotifications: boolean;
+    confirmUnfollowGames: boolean;
     libraryFollowMode: string;
     wishlistFollowMode: string;
   };
+}
+
+export const SUPPORTED_LANGUAGES = ['fr', 'en', 'de', 'es', 'ru', 'zh'] as const;
+export type AppLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+export const LANGUAGE_NATIVE_LABELS: Record<AppLanguage, string> = {
+  fr: 'Français',
+  en: 'English',
+  de: 'Deutsch',
+  es: 'Español',
+  ru: 'Русский',
+  zh: '简体中文',
+};
+
+export async function submitFeedback(payload: {
+  type: 'bug' | 'feature';
+  message: string;
+  email: string;
+  steamId: string;
+}): Promise<void> {
+  const res = await fetch('/api/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const data = (await res.json()) as { message?: string };
+      if (data.message) msg = data.message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
 }
 
 async function getJSON<T>(url: string): Promise<T> {

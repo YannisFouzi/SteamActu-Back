@@ -101,7 +101,7 @@ export default function App() {
         (profile.status === 'error' ? (
           <div className="state error">Failed to load profile — {profile.error}</div>
         ) : profileData ? (
-          <CompteTab profile={profileData} />
+          <CompteTab profile={profileData} editable={editable} />
         ) : (
           <div className="state">Loading profile…</div>
         ))}

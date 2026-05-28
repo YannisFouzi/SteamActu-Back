@@ -99,6 +99,7 @@ router.get('/profile/:steamId', async (req, res) => {
         followedCount: followedGames.length,
         wishlistCount: wishlist.length,
         newsNotifications: Boolean(settings.newsNotifications),
+        confirmUnfollowGames: settings.confirmUnfollowGames !== false,
         libraryFollowMode: settings.libraryFollowMode || 'off',
         wishlistFollowMode: settings.wishlistFollowMode || 'off',
       },
