@@ -66,4 +66,42 @@ router.get('/feed', mobileSessionAuth, requireSelf, async (req, res) => {
   }
 });
 
+// Public read-only feed lookup by SteamID. Used by the standalone web view
+// at GET /feed/:steamId (rendered for Steam Desktop via Millennium and any
+// browser). Followed games and game news are publicly visible on Steam, so
+// we don't expose anything that isn't already on steamcommunity.com.
+router.get('/feed-by-steamid/:steamId', async (req, res) => {
+  try {
+    const {steamId} = req.params;
+    const {limit, perGameLimit, language, favoritesOnly} = req.query;
+
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({message: 'SteamID invalide'});
+    }
+
+    let resolvedLanguage = normalizeAppLanguage(language);
+    if (!language) {
+      const user = await User.findOne({steamId}).select('language').lean();
+      resolvedLanguage = normalizeAppLanguage(user?.language);
+    }
+
+    const feed = await newsFeedService.getNewsFeed({
+      steamId,
+      limit: limit !== undefined ? clampQueryInt(limit, 20, 1, 200) : undefined,
+      perGameLimit:
+        perGameLimit !== undefined ? clampQueryInt(perGameLimit, 3, 1, 20) : undefined,
+      language: resolvedLanguage,
+      favoritesOnly:
+        typeof favoritesOnly === 'string'
+          ? favoritesOnly.toLowerCase() === 'true'
+          : Boolean(favoritesOnly),
+    });
+
+    res.json(feed);
+  } catch (error) {
+    logger.error({err: error}, 'news_feed_by_steamid_failed');
+    res.status(500).json({message: 'Erreur serveur'});
+  }
+});
+
 module.exports = router;

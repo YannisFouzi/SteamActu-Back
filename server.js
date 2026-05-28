@@ -57,6 +57,7 @@ const mobileAdminRoutes = require("./src/routes/mobileAdmin");
 const healthRoutes = require("./src/routes/health");
 const versionRoutes = require("./src/routes/version");
 const legalRoutes = require("./src/routes/legal");
+const feedPageRoutes = require("./src/routes/feedPage");
 const {
   steamLimiter,
   authLimiter,
@@ -99,6 +100,10 @@ app.use("/healthz", healthRoutes);
 // Pages legales publiques (Play Store / RGPD) — pas de rate-limit, pas d'auth
 // URLs stables a soumettre sur Play Console et a ne JAMAIS bouger
 app.use("/", legalRoutes);
+
+// Vue web publique du feed (GET /feed/:steamId) — affichee plein ecran dans
+// Steam Desktop via Millennium + accessible dans tout navigateur. Pas d'auth.
+app.use("/", feedPageRoutes);
 
 // Routes d'authentification (publiques)
 app.use("/auth", authLimiter, authRoutes);

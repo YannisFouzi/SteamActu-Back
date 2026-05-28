@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Game News — Feed</title>
+    <style>
+      :root {
+        --bg: #171a21;
+        --surface: #1b2838;
+        --surface-2: #2a3f5a;
+        --text: #c7d5e0;
+        --text-dim: #8f98a0;
+        --accent: #66c0f4;
+        --accent-hover: #1a9fff;
+        --border: rgba(255, 255, 255, 0.08);
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Motiva Sans", Arial, Helvetica, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .page {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 28px;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+      }
+      header .meta {
+        color: var(--text-dim);
+        font-size: 13px;
+        font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+      }
+      #state {
+        color: var(--text-dim);
+        font-size: 14px;
+        padding: 24px 0;
+        text-align: center;
+      }
+      #state.error {
+        color: #ff7676;
+      }
+      .news-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .news-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 16px 18px;
+        cursor: pointer;
+        transition:
+          border-color 120ms ease,
+          transform 120ms ease;
+      }
+      .news-card:hover {
+        border-color: var(--accent);
+        transform: translateY(-1px);
+      }
+      .news-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+      .news-logo {
+        width: 36px;
+        height: 36px;
+        border-radius: 4px;
+        background: var(--surface-2);
+        background-size: cover;
+        background-position: center;
+        flex-shrink: 0;
+      }
+      .news-game {
+        font-size: 15px;
+        font-weight: 600;
+        color: #fff;
+      }
+      .news-date {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 2px;
+      }
+      .news-title {
+        font-size: 14px;
+        line-height: 1.4;
+        color: var(--text);
+        margin: 4px 0 0;
+      }
+      .news-image {
+        margin-top: 12px;
+        width: 100%;
+        max-height: 260px;
+        object-fit: cover;
+        border-radius: 4px;
+        display: block;
+      }
+      footer {
+        margin-top: 40px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        color: var(--text-dim);
+        font-size: 11px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header>
+        <h1>Game News</h1>
+        <div class="meta" id="meta"></div>
+      </header>
+      <div id="state">Loading feed…</div>
+      <div class="news-list" id="list" hidden></div>
+      <footer>gamenews.up.railway.app — full web view</footer>
+    </main>
+    <script>
+      (function () {
+        const steamId = document.documentElement.dataset.steamId || "";
+        const language = document.documentElement.dataset.language || "";
+        const listEl = document.getElementById("list");
+        const stateEl = document.getElementById("state");
+        const metaEl = document.getElementById("meta");
+
+        function maskSteamId(id) {
+          if (!id || id.length <= 6) return id || "";
+          return id.slice(0, 3) + "***" + id.slice(-2);
+        }
+        metaEl.textContent = "SteamID: " + maskSteamId(steamId);
+
+        function formatDateTime(ms) {
+          if (!ms) return "";
+          const d = new Date(ms);
+          const date = d.toLocaleDateString(language || undefined, {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          });
+          const time = d.toLocaleTimeString(language || undefined, {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          return date + " • " + time;
+        }
+
+        function escapeText(value) {
+          const div = document.createElement("div");
+          div.textContent = value == null ? "" : String(value);
+          return div.innerHTML;
+        }
+
+        function renderItem(item) {
+          const card = document.createElement("div");
+          card.className = "news-card";
+          card.setAttribute("role", "link");
+          card.tabIndex = 0;
+
+          const head = document.createElement("div");
+          head.className = "news-head";
+
+          const logo = document.createElement("div");
+          logo.className = "news-logo";
+          if (item.gameLogoUrl) {
+            logo.style.backgroundImage = "url(" + JSON.stringify(item.gameLogoUrl) + ")";
+          }
+          head.appendChild(logo);
+
+          const info = document.createElement("div");
+          const game = document.createElement("div");
+          game.className = "news-game";
+          game.textContent = item.gameName || "";
+          info.appendChild(game);
+          const dateLine = document.createElement("div");
+          dateLine.className = "news-date";
+          dateLine.textContent = formatDateTime(item.news && item.news.date);
+          info.appendChild(dateLine);
+          head.appendChild(info);
+
+          card.appendChild(head);
+
+          const title = document.createElement("div");
+          title.className = "news-title";
+          title.textContent = (item.news && item.news.title) || "";
+          card.appendChild(title);
+
+          const imgUrl = item.news && item.news.firstImageUrl;
+          if (imgUrl) {
+            const img = document.createElement("img");
+            img.className = "news-image";
+            img.src = imgUrl;
+            img.alt = "";
+            img.loading = "lazy";
+            img.addEventListener("error", () => img.remove());
+            card.appendChild(img);
+          }
+
+          const targetUrl =
+            (item.news && item.news.url) ||
+            (item.appId
+              ? "https://store.steampowered.com/news/app/" + item.appId
+              : null);
+          if (targetUrl) {
+            const open = () => window.open(targetUrl, "_blank", "noopener");
+            card.addEventListener("click", open);
+            card.addEventListener("keydown", (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                open();
+              }
+            });
+          }
+          return card;
+        }
+
+        function render(items) {
+          listEl.innerHTML = "";
+          if (!items || items.length === 0) {
+            stateEl.textContent = "No news yet for the games you follow.";
+            return;
+          }
+          items.forEach((item) => listEl.appendChild(renderItem(item)));
+          stateEl.hidden = true;
+          listEl.hidden = false;
+        }
+
+        async function load() {
+          if (!/^\d{17}$/.test(steamId)) {
+            stateEl.textContent = "Invalid SteamID.";
+            stateEl.classList.add("error");
+            return;
+          }
+          try {
+            const url =
+              "/api/news/feed-by-steamid/" +
+              encodeURIComponent(steamId) +
+              (language ? "?language=" + encodeURIComponent(language) : "");
+            const response = await fetch(url, { credentials: "omit" });
+            if (!response.ok) {
+              throw new Error("HTTP " + response.status);
+            }
+            const payload = await response.json();
+            render(Array.isArray(payload.items) ? payload.items : []);
+          } catch (err) {
+            stateEl.textContent =
+              "Failed to load feed — " + (err && err.message ? err.message : err);
+            stateEl.classList.add("error");
+          }
+        }
+
+        load();
+      })();
+    </script>
+  </body>
+</html>
