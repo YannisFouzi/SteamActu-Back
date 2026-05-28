@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CONTEXT, fetchLibrary, type LibraryGame, type WebProfile } from '../api';
 import { type FollowState } from '../useFollow';
-import { sortLibrary, type LibrarySort } from '../sort';
+import { sortLibrary, sortWishlist, type LibrarySort, type WishlistSort } from '../sort';
 import SubTabs, { type SubTab } from '../components/SubTabs';
 import SortOptions, { type SortOption } from '../components/SortOptions';
 import GamesGrid from '../components/GamesGrid';
@@ -17,6 +17,11 @@ const LIB_SORTS: ReadonlyArray<SortOption<LibrarySort>> = [
   { value: 'lastTwoWeeks', label: 'Top récents' },
   { value: 'default', label: 'A-Z' },
   { value: 'mostPlayed', label: 'Plus joués' },
+];
+
+const WISHLIST_SORTS: ReadonlyArray<SortOption<WishlistSort>> = [
+  { value: 'recent', label: 'Récents' },
+  { value: 'alphabetical', label: 'A-Z' },
 ];
 
 type LibState =
@@ -36,6 +41,7 @@ export default function SuivreSection({
   const [query, setQuery] = useState('');
   const [sub, setSub] = useState<Sub>('mes-jeux');
   const [libSort, setLibSort] = useState<LibrarySort>('lastTwoWeeks');
+  const [wishSort, setWishSort] = useState<WishlistSort>('recent');
   const [lib, setLib] = useState<LibState>({ status: 'loading' });
 
   // Library is needed both by Mes jeux and by the unified search ("Dans mes
@@ -128,16 +134,25 @@ export default function SuivreSection({
             (profile == null ? (
               <div className="state">Chargement…</div>
             ) : (
-              <GamesGrid
-                items={wishlist.map((g) => ({
-                  appId: g.appId,
-                  name: g.name,
-                  image: g.header_image,
-                }))}
-                editable={editable}
-                follow={follow}
-                emptyLabel="Ta wishlist est vide."
-              />
+              <>
+                {wishlist.length > 0 && (
+                  <SortOptions
+                    options={WISHLIST_SORTS}
+                    selected={wishSort}
+                    onSelect={setWishSort}
+                  />
+                )}
+                <GamesGrid
+                  items={sortWishlist(wishlist, wishSort).map((g) => ({
+                    appId: g.appId,
+                    name: g.name,
+                    image: g.header_image,
+                  }))}
+                  editable={editable}
+                  follow={follow}
+                  emptyLabel="Ta wishlist est vide."
+                />
+              </>
             ))}
         </>
       )}

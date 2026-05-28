@@ -1,4 +1,4 @@
-import { type FollowedGame, type LibraryGame } from './api';
+import { type FollowedGame, type LibraryGame, type WishlistGame } from './api';
 
 const byName = (a: string, b: string) =>
   a.localeCompare(b, 'fr', { sensitivity: 'base' });
@@ -51,4 +51,20 @@ export function sortLibrary(
       break;
   }
   return list;
+}
+
+// ── Wishlist (Suivre) — mirrors WishlistScreen.js ──────────────────────────
+export type WishlistSort = 'recent' | 'alphabetical';
+
+export function sortWishlist(
+  games: WishlistGame[],
+  sort: WishlistSort,
+): WishlistGame[] {
+  const list = games.slice();
+  if (sort === 'recent') {
+    return list.sort((a, b) => (b.date_added || 0) - (a.date_added || 0));
+  }
+  return list.sort((a, b) =>
+    (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()),
+  );
 }
