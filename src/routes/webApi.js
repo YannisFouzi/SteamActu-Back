@@ -99,6 +99,7 @@ router.get('/profile/:steamId', async (req, res) => {
         followedCount: followedGames.length,
         wishlistCount: wishlist.length,
         newsNotifications: Boolean(settings.newsNotifications),
+        steamNotifications: settings.steamNotifications !== false,
         confirmUnfollowGames: settings.confirmUnfollowGames !== false,
         libraryFollowMode: settings.libraryFollowMode || 'off',
         wishlistFollowMode: settings.wishlistFollowMode || 'off',
@@ -106,6 +107,30 @@ router.get('/profile/:steamId', async (req, res) => {
     });
   } catch (error) {
     logger.error({ err: error }, 'web_profile_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+/**
+ * Lightweight public read of the notification gates. Polled by the Millennium
+ * plugin before toasting (avoids loading the full profile every 5 min).
+ */
+router.get('/settings/:steamId', async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    const user = await User.findOne({ steamId })
+      .select('notificationSettings.newsNotifications notificationSettings.steamNotifications')
+      .lean();
+    const settings = user?.notificationSettings || {};
+    res.json({
+      newsNotifications: Boolean(settings.newsNotifications),
+      steamNotifications: settings.steamNotifications !== false,
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'web_settings_failed');
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

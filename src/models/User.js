@@ -62,6 +62,13 @@ const UserSchema = new mongoose.Schema({
       type: Boolean,
       default: false,
     },
+    // Toasts d'actualites dans le client Steam Desktop (plugin Millennium).
+    // Independant de newsNotifications (= push FCM mobile). Defaut true :
+    // l'utilisateur a installe le plugin volontairement (opt-out).
+    steamNotifications: {
+      type: Boolean,
+      default: true,
+    },
     followPromptNotifications: {
       type: Boolean,
       default: false,

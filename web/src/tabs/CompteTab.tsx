@@ -94,6 +94,7 @@ export default function CompteTab({
 }) {
   const a = profile.account;
   const [newsNotif, setNewsNotif] = useState(a.newsNotifications);
+  const [steamNotif, setSteamNotif] = useState(a.steamNotifications);
   const [confirmUnfollow, setConfirmUnfollow] = useState(a.confirmUnfollowGames);
   const [libMode, setLibMode] = useState(a.libraryFollowMode);
   const [wishMode, setWishMode] = useState(a.wishlistFollowMode);
@@ -134,7 +135,16 @@ export default function CompteTab({
 
       <div className="settings-group">
         <Toggle
-          label="Notifications d'actualités"
+          label="Notifications d'actualités sur Steam"
+          value={steamNotif}
+          disabled={disabled}
+          onChange={(v) => {
+            setSteamNotif(v);
+            persist({ steamNotifications: v }, () => setSteamNotif(!v));
+          }}
+        />
+        <Toggle
+          label="Notifications d'actualités sur Mobile"
           value={newsNotif}
           disabled={disabled}
           onChange={(v) => {

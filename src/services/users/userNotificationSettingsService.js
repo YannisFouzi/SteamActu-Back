@@ -73,6 +73,7 @@ function buildNotificationSettingsPatch(body) {
   const {
     enabled,
     newsNotifications,
+    steamNotifications,
     followPromptNotifications,
     confirmUnfollowGames,
     libraryFollowMode,
@@ -140,6 +141,21 @@ function buildNotificationSettingsPatch(body) {
   }
   if (resolvedConfirmUnfollow !== undefined) {
     patch.confirmUnfollowGames = resolvedConfirmUnfollow;
+  }
+
+  // steamNotifications : gate des toasts Steam Desktop (plugin Millennium).
+  // Independant de newsNotifications (= push FCM mobile).
+  let resolvedSteamNotifications;
+  try {
+    resolvedSteamNotifications = parseOptionalBoolean(
+      'steamNotifications',
+      steamNotifications
+    );
+  } catch (validationError) {
+    return { ok: false, message: validationError.message };
+  }
+  if (resolvedSteamNotifications !== undefined) {
+    patch.steamNotifications = resolvedSteamNotifications;
   }
 
   return { ok: true, patch };

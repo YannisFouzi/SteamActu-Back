@@ -101,6 +101,7 @@ export async function unfollowGame(appId: string): Promise<void> {
 
 export interface NotificationPatch {
   newsNotifications?: boolean;
+  steamNotifications?: boolean;
   confirmUnfollowGames?: boolean;
   libraryFollowMode?: string;
   wishlistFollowMode?: string;
