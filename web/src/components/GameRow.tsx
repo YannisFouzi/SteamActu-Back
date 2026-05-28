@@ -12,6 +12,7 @@ export interface GameRowProps {
   editable: boolean;
   following: boolean;
   busy: boolean;
+  familyShared?: boolean;
   onToggle: () => void;
 }
 
@@ -22,6 +23,7 @@ export default function GameRow({
   editable,
   following,
   busy,
+  familyShared = false,
   onToggle,
 }: GameRowProps) {
   return (
@@ -44,6 +46,7 @@ export default function GameRow({
         />
         <div style={{ minWidth: 0 }}>
           <div className="game-name">{name}</div>
+          {familyShared && <span className="family-badge">Famille</span>}
           {!editable && following && <span className="badge">followed</span>}
         </div>
       </div>

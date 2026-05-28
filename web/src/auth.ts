@@ -130,6 +130,30 @@ export async function removeFavorite(appId: string, newsId: string): Promise<voi
   }
 }
 
+export async function markNewsFeedSeen(seenAt: number): Promise<void> {
+  const session = getSession();
+  if (!session) throw new Error('not authenticated');
+  const res = await authedFetch(`/api/users/${session.steamId}/news/seen`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ seenAt }),
+  });
+  if (!res.ok) {
+    throw new Error(`mark seen failed: HTTP ${res.status}`);
+  }
+}
+
+export async function deleteAccount(): Promise<void> {
+  const session = getSession();
+  if (!session) throw new Error('not authenticated');
+  const res = await authedFetch(`/api/users/${session.steamId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) {
+    throw new Error(`delete account failed: HTTP ${res.status}`);
+  }
+}
+
 export interface NotificationPatch {
   newsNotifications?: boolean;
   steamNotifications?: boolean;

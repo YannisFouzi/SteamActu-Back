@@ -74,6 +74,7 @@ export default function SuivreSection({
         appId: g.appId,
         name: g.name,
         image: g.header_image,
+        familyShared: g.isFamilyShared,
       })),
     [libraryGames, libSort],
   );

@@ -22,10 +22,12 @@ export default function ActuSection({
   profile,
   editable,
   follow,
+  onNavigateFollow,
 }: {
   profile: WebProfile | null;
   editable: boolean;
   follow: FollowState;
+  onNavigateFollow: () => void;
 }) {
   const [sub, setSub] = useState<Sub>('fil');
   const [sort, setSort] = useState<FollowedSort>('alphabetical');
@@ -50,7 +52,14 @@ export default function ActuSection({
     <div>
       <SubTabs tabs={TABS} active={sub} onChange={setSub} />
 
-      {sub === 'fil' && <ActuTab editable={editable} follow={follow} />}
+      {sub === 'fil' && (
+        <ActuTab
+          editable={editable}
+          follow={follow}
+          hasFollowedGames={followed.length > 0}
+          onNavigateFollow={onNavigateFollow}
+        />
+      )}
 
       {sub === 'jeux-suivis' &&
         (profile == null ? (

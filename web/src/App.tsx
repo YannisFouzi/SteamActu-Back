@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CONTEXT, fetchProfile, type WebProfile } from './api';
-import { ensureSession, getSession, type Session } from './auth';
+import {
+  ensureSession,
+  getSession,
+  logout,
+  updateNotifications,
+  type Session,
+} from './auth';
 import { useFollow } from './useFollow';
+import { useUnfollowGuard } from './useUnfollowGuard';
 import ActuSection from './sections/ActuSection';
 import SuivreSection from './sections/SuivreSection';
 import CompteTab from './tabs/CompteTab';
+import ConfirmDialog from './components/ConfirmDialog';
 
 type Tab = 'actu' | 'suivre' | 'compte';
 
@@ -17,6 +25,8 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('actu');
   const [profile, setProfile] = useState<ProfileState>({ status: 'loading' });
   const [session, setSession] = useState<Session | null>(getSession());
+  const [confirmUnfollow, setConfirmUnfollow] = useState(true);
+  const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,7 +47,10 @@ export default function App() {
 
     fetchProfile(CONTEXT.steamId)
       .then((p) => {
-        if (!cancelled) setProfile({ status: 'ok', profile: p });
+        if (!cancelled) {
+          setProfile({ status: 'ok', profile: p });
+          setConfirmUnfollow(p.account.confirmUnfollowGames);
+        }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
@@ -60,7 +73,28 @@ export default function App() {
     () => (profileData ? profileData.followedGames.map((g) => g.appId) : []),
     [profileData],
   );
-  const follow = useFollow(seedIds);
+  const baseFollow = useFollow(seedIds);
+
+  const persistConfirmUnfollow = (next: boolean) => {
+    if (!editable) return;
+    setConfirmUnfollow(next);
+    updateNotifications({ confirmUnfollowGames: next }).catch((err: unknown) => {
+      console.error('[GameNews] confirmUnfollow save failed', err);
+      setConfirmUnfollow(!next);
+    });
+  };
+
+  const guard = useUnfollowGuard(baseFollow, confirmUnfollow, () =>
+    persistConfirmUnfollow(false),
+  );
+
+  if (deleted) {
+    return (
+      <div className="page">
+        <div className="state">Votre compte a été supprimé.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
@@ -90,19 +124,49 @@ export default function App() {
       </nav>
 
       {tab === 'actu' && (
-        <ActuSection profile={profileData} editable={editable} follow={follow} />
+        <ActuSection
+          profile={profileData}
+          editable={editable}
+          follow={guard.follow}
+          onNavigateFollow={() => setTab('suivre')}
+        />
       )}
       {tab === 'suivre' && (
-        <SuivreSection profile={profileData} editable={editable} follow={follow} />
+        <SuivreSection
+          profile={profileData}
+          editable={editable}
+          follow={guard.follow}
+        />
       )}
       {tab === 'compte' &&
         (profile.status === 'error' ? (
           <div className="state error">Failed to load profile — {profile.error}</div>
         ) : profileData ? (
-          <CompteTab profile={profileData} editable={editable} />
+          <CompteTab
+            profile={profileData}
+            editable={editable}
+            confirmUnfollow={confirmUnfollow}
+            onConfirmUnfollowChange={persistConfirmUnfollow}
+            onAccountDeleted={() => {
+              logout();
+              setDeleted(true);
+            }}
+          />
         ) : (
           <div className="state">Loading profile…</div>
         ))}
+
+      {guard.pending && (
+        <ConfirmDialog
+          title="Ne plus suivre ce jeu ?"
+          message={`Vous ne recevrez plus d'actualités pour « ${guard.pending.name} ».`}
+          confirmLabel="Ne plus suivre"
+          destructive
+          checkboxLabel="Ne plus me demander pour les prochains désabonnements"
+          onConfirm={guard.confirm}
+          onCancel={guard.cancel}
+        />
+      )}
     </div>
   );
 }

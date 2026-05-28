@@ -5,6 +5,7 @@ export interface GridItem {
   appId: string;
   name: string;
   image: string;
+  familyShared?: boolean;
 }
 
 // Pure grid of games. Sorting/filtering is the caller's responsibility.
@@ -33,6 +34,7 @@ export default function GamesGrid({
           editable={editable}
           following={follow.followed.has(item.appId)}
           busy={follow.busy.has(item.appId)}
+          familyShared={item.familyShared}
           onToggle={() => follow.toggle(item.appId, item.name, item.image)}
         />
       ))}

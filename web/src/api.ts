@@ -23,12 +23,21 @@ export interface NewsItem {
   gameName: string;
   gameLogoUrl: string | null;
   isFavorite?: boolean;
+  inFeedAt?: string | null;
   news: {
     id: string;
     title: string;
     url: string;
     date: number;
     firstImageUrl: string | null;
+  };
+}
+
+export interface NewsFeedResult {
+  items?: NewsItem[];
+  metadata?: {
+    favoriteStats?: { hasFavorites?: boolean; favoritesOnly?: boolean; count?: number };
+    lastNewsFeedSeenAt?: number | null;
   };
 }
 
@@ -107,9 +116,18 @@ async function getJSON<T>(url: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function fetchNews(steamId: string, language: string): Promise<{ items: NewsItem[] }> {
-  const q = language ? `?language=${encodeURIComponent(language)}` : '';
-  return getJSON(`/api/news/feed-by-steamid/${encodeURIComponent(steamId)}${q}`);
+export function fetchNews(
+  steamId: string,
+  language: string,
+  favoritesOnly = false,
+): Promise<NewsFeedResult> {
+  const params = new URLSearchParams();
+  if (language) params.set('language', language);
+  if (favoritesOnly) params.set('favoritesOnly', 'true');
+  const q = params.toString();
+  return getJSON(
+    `/api/news/feed-by-steamid/${encodeURIComponent(steamId)}${q ? `?${q}` : ''}`,
+  );
 }
 
 export function fetchProfile(steamId: string): Promise<WebProfile> {

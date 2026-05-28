@@ -8,11 +8,13 @@ import {
   type WebProfile,
 } from '../api';
 import {
+  deleteAccount,
   updateLanguage,
   updateNotifications,
   type NotificationPatch,
 } from '../auth';
 import { openExternal } from '../format';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const FOLLOW_MODES = [
   { value: 'off', label: 'Désactivé' },
@@ -88,19 +90,27 @@ function ModeSelect({
 export default function CompteTab({
   profile,
   editable,
+  confirmUnfollow,
+  onConfirmUnfollowChange,
+  onAccountDeleted,
 }: {
   profile: WebProfile;
   editable: boolean;
+  confirmUnfollow: boolean;
+  onConfirmUnfollowChange: (v: boolean) => void;
+  onAccountDeleted: () => void;
 }) {
   const a = profile.account;
   const [newsNotif, setNewsNotif] = useState(a.newsNotifications);
   const [steamNotif, setSteamNotif] = useState(a.steamNotifications);
   const [preferSteam, setPreferSteam] = useState(a.preferSteamWhenOpen);
-  const [confirmUnfollow, setConfirmUnfollow] = useState(a.confirmUnfollowGames);
   const [libMode, setLibMode] = useState(a.libraryFollowMode);
   const [wishMode, setWishMode] = useState(a.wishlistFollowMode);
   const [language, setLanguage] = useState(profile.language);
   const [saving, setSaving] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const persist = (patch: NotificationPatch, revert: () => void) => {
     if (!editable) return;
@@ -124,6 +134,24 @@ export default function CompteTab({
         setLanguage(prev);
       })
       .finally(() => setSaving(false));
+  };
+
+  const handleDelete = () => {
+    setDeleting(true);
+    setDeleteError(null);
+    deleteAccount()
+      .then(() => {
+        setShowDelete(false);
+        onAccountDeleted();
+      })
+      .catch((err: unknown) => {
+        console.error('[GameNews] delete account failed', err);
+        setShowDelete(false);
+        setDeleting(false);
+        setDeleteError(
+          'Une erreur est survenue lors de la suppression de votre compte. Veuillez réessayer.',
+        );
+      });
   };
 
   const disabled = !editable || saving;
@@ -166,10 +194,7 @@ export default function CompteTab({
           label="Confirmer avant de ne plus suivre"
           value={confirmUnfollow}
           disabled={disabled}
-          onChange={(v) => {
-            setConfirmUnfollow(v);
-            persist({ confirmUnfollowGames: v }, () => setConfirmUnfollow(!v));
-          }}
+          onChange={(v) => onConfirmUnfollowChange(v)}
         />
       </div>
 
@@ -238,6 +263,31 @@ export default function CompteTab({
           </button>
         ))}
       </div>
+
+      <div className="settings-group">
+        <button
+          className="danger-row"
+          disabled={!editable || deleting}
+          onClick={() => setShowDelete(true)}
+        >
+          {deleting ? 'Suppression...' : 'Supprimer mon compte'}
+        </button>
+        {deleteError && <div className="feedback-status err">{deleteError}</div>}
+      </div>
+
+      <div className="settings-footer">Game News v1.0.0</div>
+
+      {showDelete && (
+        <ConfirmDialog
+          title="Supprimer mon compte"
+          message="Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible. Toutes vos données seront définitivement supprimées."
+          confirmLabel="Supprimer"
+          destructive
+          busy={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setShowDelete(false)}
+        />
+      )}
     </div>
   );
 }
