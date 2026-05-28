@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CONTEXT, fetchProfile, type WebProfile } from './api';
 import { ensureSession, getSession, type Session } from './auth';
-import { maskSteamId } from './format';
 import { useFollow } from './useFollow';
 import ActuSection from './sections/ActuSection';
 import SuivreSection from './sections/SuivreSection';
@@ -66,8 +65,7 @@ export default function App() {
   return (
     <div className="page">
       <header className="app-header">
-        <h1>Game News</h1>
-        <span className="meta">SteamID: {maskSteamId(CONTEXT.steamId)}</span>
+        <h1>News</h1>
       </header>
 
       <nav className="tabs">
@@ -105,8 +103,6 @@ export default function App() {
         ) : (
           <div className="state">Loading profile…</div>
         ))}
-
-      <footer>gamenews.up.railway.app — web view</footer>
     </div>
   );
 }
