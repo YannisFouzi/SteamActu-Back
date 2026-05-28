@@ -58,6 +58,7 @@ const healthRoutes = require("./src/routes/health");
 const versionRoutes = require("./src/routes/version");
 const legalRoutes = require("./src/routes/legal");
 const feedPageRoutes = require("./src/routes/feedPage");
+const webApiRoutes = require("./src/routes/webApi");
 const {
   steamLimiter,
   authLimiter,
@@ -103,6 +104,11 @@ app.use("/", legalRoutes);
 
 // Vue web publique du feed (GET /feed/:steamId) — affichee plein ecran dans
 // Steam Desktop via Millennium + accessible dans tout navigateur. Pas d'auth.
+// Les assets buildes du SPA sont servis sous /feed-app (base Vite).
+app.use(
+  "/feed-app",
+  express.static(require("path").join(__dirname, "src", "views", "feed-app")),
+);
 app.use("/", feedPageRoutes);
 
 // Routes d'authentification (publiques)
@@ -115,6 +121,7 @@ app.use("/api/version", apiLimiter, versionRoutes);
 // Routes API (publiques pour l'app mobile)
 app.use("/api/users", apiLimiter, userRoutes);
 app.use("/api/news", apiLimiter, newsRoutes);
+app.use("/api/web", apiLimiter, webApiRoutes);
 app.use("/api/steam", steamLimiter, steamRoutes);
 app.use("/api/feedback", feedbackLimiter, feedbackRoutes);
 app.use("/api/admin", adminLimiter, mobileAdminRoutes);
