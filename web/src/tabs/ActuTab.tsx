@@ -122,7 +122,10 @@ export default function ActuTab({
       );
   };
 
-  const showFilter = hasFavorites || favoritesOnly;
+  // Mirror mobile: the filter shows as soon as there's any favorite, including
+  // ones just starred optimistically (favorites set), not only what the server
+  // reported at load time.
+  const showFilter = hasFavorites || favorites.size > 0 || favoritesOnly;
 
   const filter = showFilter ? (
     <div className="feed-filter">
