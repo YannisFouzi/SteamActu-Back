@@ -160,6 +160,32 @@ body,
   font-size: 12px;
   margin: 2px 2px 12px;
 }
+.sort-options {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.sort-chip {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.sort-chip:hover {
+  color: var(--text);
+}
+.sort-chip.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(102, 192, 244, 0.1);
+  font-weight: 600;
+}
 .state {
   color: var(--text-dim);
   font-size: 14px;

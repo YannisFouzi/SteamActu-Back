@@ -145,7 +145,10 @@ router.get('/library/:steamId', async (req, res) => {
             ? data.header_image
             : '',
           isFamilyShared: Boolean(entry.isFamilyShared),
+          // Playtime fields drive the Mes jeux sorts (Top récents / Plus joués).
           playtimeForever: entry.playtime_forever || 0,
+          playtime2weeks: entry.playtime_2weeks || 0,
+          lastPlayed: Number(entry.rtime_last_played) || 0,
         };
       })
       .sort((a, b) => b.playtimeForever - a.playtimeForever);

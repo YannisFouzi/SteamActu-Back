@@ -1,19 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CONTEXT, fetchLibrary, type LibraryGame, type WebProfile } from '../api';
 import { type FollowState } from '../useFollow';
+import { sortLibrary, type LibrarySort } from '../sort';
 import SubTabs, { type SubTab } from '../components/SubTabs';
+import SortOptions, { type SortOption } from '../components/SortOptions';
 import GamesGrid from '../components/GamesGrid';
-import RechercherTab from '../tabs/RechercherTab';
+import UnifiedSearchView from '../components/UnifiedSearchView';
 
-type Sub = 'mes-jeux' | 'wishlist' | 'rechercher';
+type Sub = 'mes-jeux' | 'wishlist';
 const TABS: ReadonlyArray<SubTab<Sub>> = [
   { key: 'mes-jeux', label: 'Mes jeux' },
   { key: 'wishlist', label: 'Wishlist' },
-  { key: 'rechercher', label: 'Rechercher' },
+];
+
+const LIB_SORTS: ReadonlyArray<SortOption<LibrarySort>> = [
+  { value: 'lastTwoWeeks', label: 'Top récents' },
+  { value: 'default', label: 'A-Z' },
+  { value: 'mostPlayed', label: 'Plus joués' },
 ];
 
 type LibState =
-  | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'error'; error: string }
   | { status: 'ok'; games: LibraryGame[] };
@@ -27,67 +33,114 @@ export default function SuivreSection({
   editable: boolean;
   follow: FollowState;
 }) {
+  const [query, setQuery] = useState('');
   const [sub, setSub] = useState<Sub>('mes-jeux');
-  const [lib, setLib] = useState<LibState>({ status: 'idle' });
+  const [libSort, setLibSort] = useState<LibrarySort>('lastTwoWeeks');
+  const [lib, setLib] = useState<LibState>({ status: 'loading' });
 
-  // Lazy-load the library only when Mes jeux is first opened.
+  // Library is needed both by Mes jeux and by the unified search ("Dans mes
+  // jeux" section), so load it once when the section mounts.
   useEffect(() => {
-    if (sub !== 'mes-jeux' || lib.status !== 'idle') return;
-    setLib({ status: 'loading' });
+    let cancelled = false;
     fetchLibrary(CONTEXT.steamId)
-      .then((games) => setLib({ status: 'ok', games }))
-      .catch((err: unknown) =>
-        setLib({
-          status: 'error',
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
-  }, [sub, lib.status]);
+      .then((games) => {
+        if (!cancelled) setLib({ status: 'ok', games });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setLib({
+            status: 'error',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const wishlistItems = (profile?.wishlist ?? []).map((g) => ({
-    appId: g.appId,
-    name: g.name,
-    image: g.header_image,
-  }));
+  const libraryGames = lib.status === 'ok' ? lib.games : [];
+  const wishlist = profile?.wishlist ?? [];
+
+  const mesJeuxItems = useMemo(
+    () =>
+      sortLibrary(libraryGames, libSort).map((g) => ({
+        appId: g.appId,
+        name: g.name,
+        image: g.header_image,
+      })),
+    [libraryGames, libSort],
+  );
+
+  const isSearching = query.trim().length > 0;
 
   return (
     <div>
-      <SubTabs tabs={TABS} active={sub} onChange={setSub} />
+      <input
+        className="search-input"
+        type="text"
+        placeholder="Rechercher un jeu..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
 
-      {sub === 'mes-jeux' && (
+      {isSearching ? (
+        <UnifiedSearchView
+          query={query}
+          library={libraryGames}
+          wishlist={wishlist}
+          editable={editable}
+          follow={follow}
+        />
+      ) : (
         <>
-          {lib.status === 'loading' && <div className="state">Loading your library…</div>}
-          {lib.status === 'error' && (
-            <div className="state error">Failed to load library — {lib.error}</div>
+          <SubTabs tabs={TABS} active={sub} onChange={setSub} />
+
+          {sub === 'mes-jeux' && (
+            <>
+              {lib.status === 'loading' && (
+                <div className="state">Chargement de ta bibliothèque…</div>
+              )}
+              {lib.status === 'error' && (
+                <div className="state error">
+                  Échec du chargement — {lib.error}
+                </div>
+              )}
+              {lib.status === 'ok' && (
+                <>
+                  <SortOptions
+                    options={LIB_SORTS}
+                    selected={libSort}
+                    onSelect={setLibSort}
+                  />
+                  <GamesGrid
+                    items={mesJeuxItems}
+                    editable={editable}
+                    follow={follow}
+                    emptyLabel="Ta bibliothèque Steam semble vide (profil privé ?)."
+                  />
+                </>
+              )}
+            </>
           )}
-          {lib.status === 'ok' && (
-            <GamesGrid
-              items={lib.games.map((g) => ({
-                appId: g.appId,
-                name: g.name,
-                image: g.header_image,
-              }))}
-              editable={editable}
-              follow={follow}
-              emptyLabel="Your Steam library looks empty (private profile?)."
-            />
-          )}
+
+          {sub === 'wishlist' &&
+            (profile == null ? (
+              <div className="state">Chargement…</div>
+            ) : (
+              <GamesGrid
+                items={wishlist.map((g) => ({
+                  appId: g.appId,
+                  name: g.name,
+                  image: g.header_image,
+                }))}
+                editable={editable}
+                follow={follow}
+                emptyLabel="Ta wishlist est vide."
+              />
+            ))}
         </>
       )}
-
-      {sub === 'wishlist' &&
-        (profile == null ? (
-          <div className="state">Loading…</div>
-        ) : (
-          <GamesGrid
-            items={wishlistItems}
-            editable={editable}
-            follow={follow}
-            emptyLabel="Your wishlist is empty."
-          />
-        ))}
-
-      {sub === 'rechercher' && <RechercherTab editable={editable} follow={follow} />}
     </div>
   );
 }

@@ -91,6 +91,8 @@ export interface LibraryGame {
   header_image: string;
   isFamilyShared: boolean;
   playtimeForever: number;
+  playtime2weeks: number;
+  lastPlayed: number;
 }
 
 export function fetchLibrary(steamId: string): Promise<LibraryGame[]> {
