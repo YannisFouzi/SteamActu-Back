@@ -34,20 +34,22 @@ export default function ActuTab({
     fetchNews(CONTEXT.steamId, CONTEXT.language, favOnly).then((data) => {
       if (cancelledRef?.v) return;
       const list = data.items ?? [];
+      const favIds = list
+        .filter((it) => it.isFavorite)
+        .map((it) => favKey(String(it.appId), it.news.id));
       setItems(list);
-      setHasFavorites(Boolean(data.metadata?.favoriteStats?.hasFavorites));
+      // Mirror mobile: any server-reported favorite OR a currently visible one.
+      // The refetch after every toggle keeps this in sync with the server, so it
+      // correctly drops back to false once the last favorite is removed.
+      setHasFavorites(
+        Boolean(data.metadata?.favoriteStats?.hasFavorites) || favIds.length > 0,
+      );
       setLastSeenAt(
         typeof data.metadata?.lastNewsFeedSeenAt === 'number'
           ? data.metadata.lastNewsFeedSeenAt
           : null,
       );
-      setFavorites(
-        new Set(
-          list
-            .filter((it) => it.isFavorite)
-            .map((it) => favKey(String(it.appId), it.news.id)),
-        ),
-      );
+      setFavorites(new Set(favIds));
       setStatus('ok');
     });
 
@@ -87,13 +89,17 @@ export default function ActuTab({
     const key = favKey(appId, newsId);
     if (favBusy.has(key)) return;
     const isFav = favorites.has(key);
+    // In favorites-only view all favorites are visible, so the set size is the
+    // true count; removing the last one means there are no favorites left.
+    const willBeEmpty = isFav && favoritesOnly && favorites.size - 1 <= 0;
 
     setFavBusy((prev) => new Set(prev).add(key));
     setFavorites((prev) => {
       const next = new Set(prev);
       if (isFav) next.delete(key);
       else next.add(key);
-      return next; // optimistic
+      setHasFavorites(next.size > 0); // optimistic, server reconciles below
+      return next;
     });
 
     const action = isFav
@@ -101,8 +107,15 @@ export default function ActuTab({
       : addFavorite(appId, newsId, item.news.date);
     action
       .then(() => {
-        // In favorites-only view, refetch so an unfavorited item drops out.
-        if (favoritesOnly) return load(true);
+        // Removed the last favorite while filtering → exit the filter so all
+        // news comes back (the favoritesOnly effect reloads show-all).
+        if (willBeEmpty) {
+          setFavoritesOnly(false);
+          return;
+        }
+        // Refetch in the current mode (mirrors mobile): drops an unfavorited
+        // item in favorites-only view and keeps hasFavorites in sync.
+        return load(favoritesOnly);
       })
       .catch((err: unknown) => {
         console.error('[GameNews] toggle favorite failed', err);
@@ -110,6 +123,7 @@ export default function ActuTab({
           const next = new Set(prev);
           if (isFav) next.add(key);
           else next.delete(key);
+          setHasFavorites(next.size > 0);
           return next; // revert
         });
       })
@@ -122,10 +136,9 @@ export default function ActuTab({
       );
   };
 
-  // Mirror mobile: the filter shows as soon as there's any favorite, including
-  // ones just starred optimistically (favorites set), not only what the server
-  // reported at load time.
-  const showFilter = hasFavorites || favorites.size > 0 || favoritesOnly;
+  // The filter shows whenever there's a favorite (server flag, kept fresh by the
+  // post-toggle refetch) or while the filter is active so it can be turned off.
+  const showFilter = hasFavorites || favoritesOnly;
 
   const filter = showFilter ? (
     <div className="feed-filter">
@@ -152,7 +165,14 @@ export default function ActuTab({
     return (
       <>
         {filter}
-        {hasFollowedGames ? (
+        {favoritesOnly ? (
+          <div className="feed-empty">
+            <div className="feed-empty-title">Aucune actualité en favori</div>
+            <div className="feed-empty-text">
+              Mettez une actualité en favori avec l'étoile pour la retrouver ici.
+            </div>
+          </div>
+        ) : hasFollowedGames ? (
           <div className="feed-empty">
             <div className="feed-empty-title">Aucune actualité récente</div>
             <div className="feed-empty-text">
