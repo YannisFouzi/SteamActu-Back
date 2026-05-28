@@ -144,12 +144,15 @@ router.get('/settings/:steamId', async (req, res) => {
 /**
  * Public follow-by-SteamID. Used by the Millennium plugin's "nouveau jeu
  * détecté" toast (click to follow). Trusts the SteamID — same accepted
- * tradeoff as the zero-click session on the Steam Desktop surface. Idempotent:
- * following an already-followed game returns ok without error.
+ * tradeoff as the zero-click session on the Steam Desktop surface. Idempotent.
+ *
+ * Exposed as BOTH GET (query params) and POST (body): the Millennium plugin's
+ * Lua proxy only does http.get reliably (http.request crashes the native
+ * layer), so the plugin calls the GET form.
  */
-router.post('/follow', async (req, res) => {
+async function handleFollow(params, res) {
   try {
-    const { steamId, appId, name, logoUrl } = req.body || {};
+    const { steamId, appId, name, logoUrl } = params;
     if (!isValidSteamId(String(steamId || ''))) {
       return res.status(400).json({ message: 'SteamID invalide' });
     }
@@ -181,7 +184,10 @@ router.post('/follow', async (req, res) => {
     logger.error({ err: error }, 'web_follow_failed');
     res.status(500).json({ message: 'Erreur serveur' });
   }
-});
+}
+
+router.get('/follow', (req, res) => handleFollow(req.query, res));
+router.post('/follow', (req, res) => handleFollow(req.body || {}, res));
 
 /**
  * Public read-only Steam library ("Mes jeux"). Lazy-loaded by the web view's
