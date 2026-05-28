@@ -77,3 +77,23 @@ export function fetchNews(steamId: string, language: string): Promise<{ items: N
 export function fetchProfile(steamId: string): Promise<WebProfile> {
   return getJSON(`/api/web/profile/${encodeURIComponent(steamId)}`);
 }
+
+export interface SearchResult {
+  appid: number;
+  name: string;
+  header_image: string;
+  tiny_image: string;
+}
+
+export async function searchGames(query: string): Promise<SearchResult[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const res = await fetch(`/api/steam/search?q=${encodeURIComponent(q)}&limit=20`, {
+    credentials: 'omit',
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const data = (await res.json()) as SearchResult[];
+  return Array.isArray(data) ? data : [];
+}

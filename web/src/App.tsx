@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CONTEXT, fetchProfile, type WebProfile } from './api';
 import { ensureSession, getSession, type Session } from './auth';
 import { maskSteamId } from './format';
+import { useFollow } from './useFollow';
 import ActuTab from './tabs/ActuTab';
 import SuivreTab from './tabs/SuivreTab';
+import RechercherTab from './tabs/RechercherTab';
 import CompteTab from './tabs/CompteTab';
 
-type Tab = 'actu' | 'suivre' | 'compte';
+type Tab = 'actu' | 'suivre' | 'rechercher' | 'compte';
 
 type ProfileState =
   | { status: 'loading' }
@@ -56,6 +58,16 @@ export default function App() {
   // zero-click auth the session SteamID always matches the injected one.
   const editable = session != null && session.steamId === CONTEXT.steamId;
 
+  // Shared follow state across Suivre + Rechercher, seeded from the profile.
+  const seedIds = useMemo(
+    () =>
+      profile.status === 'ok'
+        ? profile.profile.followedGames.map((g) => g.appId)
+        : [],
+    [profile],
+  );
+  const follow = useFollow(seedIds);
+
   return (
     <div className="page">
       <header className="app-header">
@@ -77,6 +89,12 @@ export default function App() {
           Suivre
         </button>
         <button
+          className={`tab ${tab === 'rechercher' ? 'active' : ''}`}
+          onClick={() => setTab('rechercher')}
+        >
+          Rechercher
+        </button>
+        <button
           className={`tab ${tab === 'compte' ? 'active' : ''}`}
           onClick={() => setTab('compte')}
         >
@@ -86,14 +104,21 @@ export default function App() {
 
       {tab === 'actu' && <ActuTab />}
 
-      {tab !== 'actu' && profile.status === 'loading' && (
-        <div className="state">Loading profile…</div>
-      )}
-      {tab !== 'actu' && profile.status === 'error' && (
+      {tab === 'rechercher' && <RechercherTab editable={editable} follow={follow} />}
+
+      {(tab === 'suivre' || tab === 'compte') &&
+        profile.status === 'loading' && (
+          <div className="state">Loading profile…</div>
+        )}
+      {(tab === 'suivre' || tab === 'compte') && profile.status === 'error' && (
         <div className="state error">Failed to load profile — {profile.error}</div>
       )}
       {tab === 'suivre' && profile.status === 'ok' && (
-        <SuivreTab profile={profile.profile} editable={editable} />
+        <SuivreTab
+          profile={profile.profile}
+          editable={editable}
+          follow={follow}
+        />
       )}
       {tab === 'compte' && profile.status === 'ok' && (
         <CompteTab profile={profile.profile} />
