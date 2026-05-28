@@ -11,8 +11,9 @@ const logger = require('../../utils/logger');
 
 // Fenetre de presence : si Steam Desktop (heartbeat plugin) a ete vu il y a
 // moins que ca, on considere Steam "ouvert" pour la dedup preferSteamWhenOpen.
-// Doit etre >= a l'intervalle de heartbeat du plugin (3 min) avec marge.
-const PREFER_STEAM_PRESENCE_WINDOW_MS = 8 * 60 * 1000;
+// Doit etre >= a l'intervalle de heartbeat du plugin (90s) avec marge : 4 min
+// tolere ~2 heartbeats rates (veille courte, hoquet reseau).
+const PREFER_STEAM_PRESENCE_WINDOW_MS = 4 * 60 * 1000;
 
 /**
  * Envoie une notification a un utilisateur
