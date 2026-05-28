@@ -6,9 +6,15 @@ const Game = require('../models/Game');
 const {
   getFollowedGamesDetailsBySteamId,
 } = require('../services/users/followedGamesDetailsService');
-const { getFollowedAppIds } = require('../utils/followedGamesHelpers');
-const { isValidSteamId } = require('../middleware/steamValidators');
+const {
+  getFollowedAppIds,
+  buildFollowedGamesEntry,
+} = require('../utils/followedGamesHelpers');
+const { isValidSteamId, isValidAppId } = require('../middleware/steamValidators');
 const { createMobileSession } = require('../services/mobileSessionService');
+const {
+  addUserToGameSubscription,
+} = require('../services/users/subscriptionManager');
 const logger = require('../utils/logger');
 
 /**
@@ -131,6 +137,48 @@ router.get('/settings/:steamId', async (req, res) => {
     });
   } catch (error) {
     logger.error({ err: error }, 'web_settings_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+/**
+ * Public follow-by-SteamID. Used by the Millennium plugin's "nouveau jeu
+ * détecté" toast (click to follow). Trusts the SteamID — same accepted
+ * tradeoff as the zero-click session on the Steam Desktop surface. Idempotent:
+ * following an already-followed game returns ok without error.
+ */
+router.post('/follow', async (req, res) => {
+  try {
+    const { steamId, appId, name, logoUrl } = req.body || {};
+    if (!isValidSteamId(String(steamId || ''))) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    if (!isValidAppId(String(appId || ''))) {
+      return res.status(400).json({ message: 'AppID invalide' });
+    }
+    const appIdStr = String(appId);
+
+    const user = await User.findOne({ steamId }).select('followedGames').lean();
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+    if (getFollowedAppIds(user).includes(appIdStr)) {
+      return res.json({ ok: true, alreadyFollowed: true });
+    }
+
+    // Atomic push guarded on absence — no duplicate even under a race.
+    await User.findOneAndUpdate(
+      { steamId, 'followedGames.appId': { $ne: appIdStr } },
+      {
+        $push: { followedGames: buildFollowedGamesEntry(appIdStr) },
+        $set: { gamesVersion: new Date() },
+      },
+    );
+    await addUserToGameSubscription(appIdStr, steamId, name, logoUrl);
+
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error({ err: error }, 'web_follow_failed');
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
