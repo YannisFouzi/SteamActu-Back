@@ -19,6 +19,11 @@ export function formatDateTime(ms: number, language: string): string {
   return `${date} • ${time}`;
 }
 
+// Navigate the CURRENT window instead of opening a popup. The SPA is rendered
+// full-page in Steam's main window (via MainWindowBrowserManager.ShowURL), so
+// assigning location navigates that same window to the target — no popup. The
+// Steam back arrow (and the NEWS header button) return to the feed. Works
+// identically in a standalone browser tab.
 export function openExternal(url: string): void {
-  window.open(url, '_blank', 'noopener');
+  window.location.assign(url);
 }
