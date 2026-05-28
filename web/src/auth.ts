@@ -1,7 +1,8 @@
-// Web auth: reuses the existing Steam OpenID flow (/auth/steam/*). Login opens
-// a popup to Steam, polls /auth/steam/status until it succeeds, and stores the
-// returned session token (the same token mobileSessionAuth validates) so write
-// endpoints (follow/unfollow) work.
+// Web auth (Steam Desktop, zero-click): the Millennium plugin reads the
+// SteamID locally from loginusers.vdf and injects it into the page. We exchange
+// it for a session token via POST /api/web/session — no OpenID re-login, since
+// the user is already logged into the Steam client. The token is the same one
+// mobileSessionAuth validates, so write endpoints (follow/unfollow) work.
 
 const STORAGE_KEY = 'gn_session';
 
@@ -30,64 +31,33 @@ export function logout(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-interface StartResponse {
-  authToken: string;
-  authUrl: string;
+interface SessionResponse {
+  steamId: string;
+  token: string;
 }
 
-interface StatusResponse {
-  status: 'pending' | 'succeeded' | 'expired';
-  steamId?: string;
-  sessionToken?: string;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Opens the Steam login popup and resolves once the OpenID flow completes.
-export async function login(): Promise<Session> {
-  const startRes = await fetch('/auth/steam/start', {
+// Exchanges the injected SteamID for a session token. Reuses a cached session
+// for the same SteamID to avoid issuing a new token on every load.
+export async function ensureSession(steamId: string): Promise<Session> {
+  if (!/^\d{17}$/.test(steamId)) {
+    throw new Error('invalid steamId');
+  }
+  const cached = getSession();
+  if (cached && cached.steamId === steamId) {
+    return cached;
+  }
+  const res = await fetch('/api/web/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ platform: 'web' }),
+    body: JSON.stringify({ steamId }),
   });
-  if (!startRes.ok) {
-    throw new Error(`auth start failed: HTTP ${startRes.status}`);
+  if (!res.ok) {
+    throw new Error(`session failed: HTTP ${res.status}`);
   }
-  const { authToken, authUrl } = (await startRes.json()) as StartResponse;
-
-  // Login popup is the standard OAuth pattern — distinct from content
-  // navigation (which stays in the main window).
-  const popup = window.open(authUrl, 'steam_login', 'width=820,height=680');
-
-  const deadline = Date.now() + 3 * 60 * 1000; // 3 min
-  while (Date.now() < deadline) {
-    await delay(2000);
-    const statusRes = await fetch(
-      `/auth/steam/status/${encodeURIComponent(authToken)}`,
-    );
-    if (!statusRes.ok) continue;
-    const status = (await statusRes.json()) as StatusResponse;
-
-    if (status.status === 'succeeded' && status.sessionToken && status.steamId) {
-      const session: Session = {
-        token: status.sessionToken,
-        steamId: status.steamId,
-      };
-      setSession(session);
-      try {
-        popup?.close();
-      } catch {
-        /* popup may already be closed */
-      }
-      return session;
-    }
-    if (status.status === 'expired') {
-      throw new Error('auth expired');
-    }
-  }
-  throw new Error('auth timed out');
+  const data = (await res.json()) as SessionResponse;
+  const session: Session = { token: data.token, steamId: data.steamId };
+  setSession(session);
+  return session;
 }
 
 async function authedFetch(url: string, init: RequestInit = {}): Promise<Response> {

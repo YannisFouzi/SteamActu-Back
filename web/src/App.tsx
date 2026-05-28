@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CONTEXT, fetchProfile, type WebProfile } from './api';
-import { getSession, login, logout, type Session } from './auth';
+import { ensureSession, getSession, type Session } from './auth';
 import { maskSteamId } from './format';
 import ActuTab from './tabs/ActuTab';
 import SuivreTab from './tabs/SuivreTab';
@@ -17,7 +17,6 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('actu');
   const [profile, setProfile] = useState<ProfileState>({ status: 'loading' });
   const [session, setSession] = useState<Session | null>(getSession());
-  const [authBusy, setAuthBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,6 +24,17 @@ export default function App() {
       setProfile({ status: 'error', error: 'Invalid SteamID' });
       return;
     }
+
+    // Zero-click auth: exchange the plugin-injected SteamID for a session
+    // token so follow/unfollow work without a Steam re-login.
+    ensureSession(CONTEXT.steamId)
+      .then((s) => {
+        if (!cancelled) setSession(s);
+      })
+      .catch((err: unknown) => {
+        console.error('[GameNews] auto-auth failed', err);
+      });
+
     fetchProfile(CONTEXT.steamId)
       .then((p) => {
         if (!cancelled) setProfile({ status: 'ok', profile: p });
@@ -42,40 +52,15 @@ export default function App() {
     };
   }, []);
 
-  // Writes are only allowed for your own account (backend requireSelf).
+  // Writes are only allowed for your own account (backend requireSelf). With
+  // zero-click auth the session SteamID always matches the injected one.
   const editable = session != null && session.steamId === CONTEXT.steamId;
-
-  const handleLogin = () => {
-    setAuthBusy(true);
-    login()
-      .then(setSession)
-      .catch((err: unknown) => {
-        console.error('[GameNews] login failed', err);
-      })
-      .finally(() => setAuthBusy(false));
-  };
-
-  const handleLogout = () => {
-    logout();
-    setSession(null);
-  };
 
   return (
     <div className="page">
       <header className="app-header">
         <h1>Game News</h1>
-        <div className="header-right">
-          <span className="meta">SteamID: {maskSteamId(CONTEXT.steamId)}</span>
-          {session ? (
-            <button className="auth-btn" onClick={handleLogout}>
-              Log out
-            </button>
-          ) : (
-            <button className="auth-btn primary" onClick={handleLogin} disabled={authBusy}>
-              {authBusy ? 'Connecting…' : 'Log in with Steam'}
-            </button>
-          )}
-        </div>
+        <span className="meta">SteamID: {maskSteamId(CONTEXT.steamId)}</span>
       </header>
 
       <nav className="tabs">

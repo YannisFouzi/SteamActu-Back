@@ -131,9 +131,7 @@ export default function SuivreTab({
   return (
     <div>
       {!editable && (
-        <div className="hint">
-          Log in with Steam (top right) to follow / unfollow games here.
-        </div>
+        <div className="hint">Connecting your Steam account…</div>
       )}
 
       <div className="section-title">

@@ -7,7 +7,30 @@ const {
 } = require('../services/users/followedGamesDetailsService');
 const { getFollowedAppIds } = require('../utils/followedGamesHelpers');
 const { isValidSteamId } = require('../middleware/steamValidators');
+const { createMobileSession } = require('../services/mobileSessionService');
 const logger = require('../utils/logger');
+
+/**
+ * Zero-click session for the Steam Desktop web view: issues a session token
+ * for a SteamID supplied by the Millennium plugin (which read it locally from
+ * loginusers.vdf). NOTE: this trusts the SteamID without OpenID verification —
+ * an accepted tradeoff for this surface (writes are low-severity: follow/
+ * unfollow + notif prefs; data is already public-by-steamId on the read side).
+ * The token is the same one mobileSessionAuth validates, so existing write
+ * endpoints (follow/unfollow/settings) work unchanged.
+ */
+router.post('/session', (req, res) => {
+  const steamId = req.body && req.body.steamId;
+  if (!isValidSteamId(String(steamId || ''))) {
+    return res.status(400).json({ message: 'SteamID invalide' });
+  }
+  const session = createMobileSession(steamId);
+  return res.json({
+    steamId,
+    token: session.token,
+    expiresAt: session.expiresAt,
+  });
+});
 
 /**
  * Consolidated public read-only profile for the web view (Suivre + Compte
