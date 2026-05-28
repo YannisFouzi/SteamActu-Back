@@ -74,6 +74,7 @@ function buildNotificationSettingsPatch(body) {
     enabled,
     newsNotifications,
     steamNotifications,
+    preferSteamWhenOpen,
     followPromptNotifications,
     confirmUnfollowGames,
     libraryFollowMode,
@@ -156,6 +157,20 @@ function buildNotificationSettingsPatch(body) {
   }
   if (resolvedSteamNotifications !== undefined) {
     patch.steamNotifications = resolvedSteamNotifications;
+  }
+
+  // preferSteamWhenOpen : dedup notifs (skip FCM mobile si Steam ouvert).
+  let resolvedPreferSteam;
+  try {
+    resolvedPreferSteam = parseOptionalBoolean(
+      'preferSteamWhenOpen',
+      preferSteamWhenOpen
+    );
+  } catch (validationError) {
+    return { ok: false, message: validationError.message };
+  }
+  if (resolvedPreferSteam !== undefined) {
+    patch.preferSteamWhenOpen = resolvedPreferSteam;
   }
 
   return { ok: true, patch };

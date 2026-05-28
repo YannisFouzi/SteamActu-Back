@@ -57,6 +57,7 @@ export interface WebProfile {
     wishlistCount: number;
     newsNotifications: boolean;
     steamNotifications: boolean;
+    preferSteamWhenOpen: boolean;
     confirmUnfollowGames: boolean;
     libraryFollowMode: string;
     wishlistFollowMode: string;

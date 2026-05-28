@@ -9,6 +9,11 @@ const User = require('../../models/User');
 const GameSubscription = require('../../models/GameSubscription');
 const logger = require('../../utils/logger');
 
+// Fenetre de presence : si Steam Desktop (heartbeat plugin) a ete vu il y a
+// moins que ca, on considere Steam "ouvert" pour la dedup preferSteamWhenOpen.
+// Doit etre >= a l'intervalle de heartbeat du plugin (3 min) avec marge.
+const PREFER_STEAM_PRESENCE_WINDOW_MS = 8 * 60 * 1000;
+
 /**
  * Envoie une notification a un utilisateur
  * @param {string} token - Token de notification push du peripherique
@@ -65,6 +70,17 @@ async function sendNewsNotification(
     if (!user.notificationSettings?.newsNotifications) {
       logger.debug({ steamId }, 'news_notification_disabled');
       return false;
+    }
+
+    // Dedup presence : si l'utilisateur a opte pour "eviter les doublons quand
+    // Steam est ouvert" ET que le plugin Millennium a envoye un heartbeat
+    // recemment, le toast Steam couvre la news -> on saute le push FCM mobile.
+    if (user.notificationSettings?.preferSteamWhenOpen && user.lastSteamSeenAt) {
+      const sinceMs = Date.now() - new Date(user.lastSteamSeenAt).getTime();
+      if (sinceMs < PREFER_STEAM_PRESENCE_WINDOW_MS) {
+        logger.debug({ steamId, sinceMs }, 'news_notification_skipped_steam_open');
+        return false;
+      }
     }
 
     const fcmTokens = user.notificationSettings?.fcmTokens || [];

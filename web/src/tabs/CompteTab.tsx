@@ -95,6 +95,7 @@ export default function CompteTab({
   const a = profile.account;
   const [newsNotif, setNewsNotif] = useState(a.newsNotifications);
   const [steamNotif, setSteamNotif] = useState(a.steamNotifications);
+  const [preferSteam, setPreferSteam] = useState(a.preferSteamWhenOpen);
   const [confirmUnfollow, setConfirmUnfollow] = useState(a.confirmUnfollowGames);
   const [libMode, setLibMode] = useState(a.libraryFollowMode);
   const [wishMode, setWishMode] = useState(a.wishlistFollowMode);
@@ -150,6 +151,15 @@ export default function CompteTab({
           onChange={(v) => {
             setNewsNotif(v);
             persist({ newsNotifications: v }, () => setNewsNotif(!v));
+          }}
+        />
+        <Toggle
+          label="Éviter les doublons quand Steam est ouvert"
+          value={preferSteam}
+          disabled={disabled}
+          onChange={(v) => {
+            setPreferSteam(v);
+            persist({ preferSteamWhenOpen: v }, () => setPreferSteam(!v));
           }}
         />
         <Toggle

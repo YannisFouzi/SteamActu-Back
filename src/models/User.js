@@ -69,6 +69,12 @@ const UserSchema = new mongoose.Schema({
       type: Boolean,
       default: true,
     },
+    // Opt-in : si Steam Desktop est ouvert (heartbeat recent), ne PAS envoyer
+    // le push FCM mobile (le toast Steam le couvre) -> evite les doublons.
+    preferSteamWhenOpen: {
+      type: Boolean,
+      default: false,
+    },
     followPromptNotifications: {
       type: Boolean,
       default: false,
@@ -111,6 +117,13 @@ const UserSchema = new mongoose.Schema({
       type: Boolean,
       default: true,
     },
+  },
+
+  // Heartbeat du plugin Millennium : derniere fois ou Steam Desktop a ete vu
+  // ouvert. Utilise par la dedup de notifs (preferSteamWhenOpen).
+  lastSteamSeenAt: {
+    type: Date,
+    default: null,
   },
 
   gameLibrary: {

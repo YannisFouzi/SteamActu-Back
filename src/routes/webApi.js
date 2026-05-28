@@ -106,6 +106,7 @@ router.get('/profile/:steamId', async (req, res) => {
         wishlistCount: wishlist.length,
         newsNotifications: Boolean(settings.newsNotifications),
         steamNotifications: settings.steamNotifications !== false,
+        preferSteamWhenOpen: Boolean(settings.preferSteamWhenOpen),
         confirmUnfollowGames: settings.confirmUnfollowGames !== false,
         libraryFollowMode: settings.libraryFollowMode || 'off',
         wishlistFollowMode: settings.wishlistFollowMode || 'off',
@@ -113,6 +114,26 @@ router.get('/profile/:steamId', async (req, res) => {
     });
   } catch (error) {
     logger.error({ err: error }, 'web_profile_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+/**
+ * Heartbeat from the Millennium plugin — marks Steam Desktop as currently open.
+ * Used by the presence-based dedup: when preferSteamWhenOpen is on and this was
+ * seen recently, the mobile FCM push is skipped (the Steam toast covers it).
+ * GET (not POST) because the plugin's Lua proxy only does http.get reliably.
+ */
+router.get('/heartbeat/:steamId', async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    await User.updateOne({ steamId }, { $set: { lastSteamSeenAt: new Date() } });
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error({ err: error }, 'web_heartbeat_failed');
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
