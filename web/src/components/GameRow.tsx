@@ -1,4 +1,5 @@
 import { openExternal } from '../format';
+import FollowBell from './FollowBell';
 
 function storeUrl(appId: string): string {
   return `https://store.steampowered.com/app/${appId}`;
@@ -47,16 +48,7 @@ export default function GameRow({
         </div>
       </div>
       {editable && (
-        <button
-          className={`follow-btn ${following ? 'on' : ''}`}
-          disabled={busy}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggle();
-          }}
-        >
-          {busy ? '…' : following ? 'Suivi ✓' : '+ Suivre'}
-        </button>
+        <FollowBell following={following} busy={busy} onToggle={onToggle} />
       )}
     </div>
   );

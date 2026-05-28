@@ -224,6 +224,16 @@ body,
   gap: 12px;
   margin-bottom: 10px;
 }
+.news-head-meta {
+  flex: 1;
+  min-width: 0;
+}
+.news-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
 .logo {
   width: 36px;
   height: 36px;
@@ -285,28 +295,64 @@ body,
   flex: 1;
   cursor: pointer;
 }
-.follow-btn {
+/* Follow bell (mirrors mobile FollowToggle) */
+.bell-btn {
   flex-shrink: 0;
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font: inherit;
-  font-size: 12px;
-  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(42, 71, 94, 0.18);
+  background: rgba(42, 71, 94, 0.08);
+  color: #316282;
+  padding: 0;
   cursor: pointer;
-  white-space: nowrap;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease,
+    transform 90ms ease;
 }
-.follow-btn:hover {
-  border-color: var(--accent);
+.bell-btn:hover {
+  transform: scale(1.05);
 }
-.follow-btn.on {
-  color: var(--accent);
-  border-color: var(--accent);
+.bell-btn:active {
+  transform: scale(0.95);
 }
-.follow-btn:disabled {
+.bell-btn.on {
+  border-color: rgba(76, 175, 80, 0.28);
+  background: rgba(76, 175, 80, 0.12);
+  color: #4caf50;
+}
+.bell-btn:disabled {
   opacity: 0.6;
+  cursor: default;
+}
+
+/* Favorite star (bare icon, mirrors mobile) */
+.fav-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  background: transparent;
+  color: #8f98a0;
+  padding: 0;
+  cursor: pointer;
+  transition: color 120ms ease, transform 90ms ease;
+}
+.fav-btn:hover {
+  transform: scale(1.1);
+}
+.fav-btn:active {
+  transform: scale(0.92);
+}
+.fav-btn.on {
+  color: #ffc107;
+}
+.fav-btn:disabled {
   cursor: default;
 }
 .game-thumb {

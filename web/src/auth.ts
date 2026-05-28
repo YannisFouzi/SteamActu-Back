@@ -99,6 +99,37 @@ export async function unfollowGame(appId: string): Promise<void> {
   }
 }
 
+export async function addFavorite(
+  appId: string,
+  newsId: string,
+  newsDate: number,
+): Promise<void> {
+  const session = getSession();
+  if (!session) throw new Error('not authenticated');
+  const res = await authedFetch(`/api/users/${session.steamId}/news-favorites`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ appId, newsId, newsDate }),
+  });
+  if (!res.ok) {
+    throw new Error(`favorite add failed: HTTP ${res.status}`);
+  }
+}
+
+export async function removeFavorite(appId: string, newsId: string): Promise<void> {
+  const session = getSession();
+  if (!session) throw new Error('not authenticated');
+  const res = await authedFetch(
+    `/api/users/${session.steamId}/news-favorites/${encodeURIComponent(
+      appId,
+    )}/${encodeURIComponent(newsId)}`,
+    { method: 'DELETE' },
+  );
+  if (!res.ok) {
+    throw new Error(`favorite remove failed: HTTP ${res.status}`);
+  }
+}
+
 export interface NotificationPatch {
   newsNotifications?: boolean;
   steamNotifications?: boolean;

@@ -22,6 +22,7 @@ export interface NewsItem {
   appId: number | string;
   gameName: string;
   gameLogoUrl: string | null;
+  isFavorite?: boolean;
   news: {
     id: string;
     title: string;

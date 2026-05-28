@@ -50,7 +50,7 @@ export default function ActuSection({
     <div>
       <SubTabs tabs={TABS} active={sub} onChange={setSub} />
 
-      {sub === 'fil' && <ActuTab />}
+      {sub === 'fil' && <ActuTab editable={editable} follow={follow} />}
 
       {sub === 'jeux-suivis' &&
         (profile == null ? (
