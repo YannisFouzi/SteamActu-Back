@@ -130,6 +130,36 @@ body,
   color: #fff;
   border-bottom-color: var(--accent);
 }
+.subtabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.subtab {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.subtab:hover {
+  color: var(--text);
+}
+.subtab.active {
+  color: #0b1218;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.count-line {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin: 2px 2px 12px;
+}
 .state {
   color: var(--text-dim);
   font-size: 14px;

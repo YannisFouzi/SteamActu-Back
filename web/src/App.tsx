@@ -3,12 +3,11 @@ import { CONTEXT, fetchProfile, type WebProfile } from './api';
 import { ensureSession, getSession, type Session } from './auth';
 import { maskSteamId } from './format';
 import { useFollow } from './useFollow';
-import ActuTab from './tabs/ActuTab';
-import SuivreTab from './tabs/SuivreTab';
-import RechercherTab from './tabs/RechercherTab';
+import ActuSection from './sections/ActuSection';
+import SuivreSection from './sections/SuivreSection';
 import CompteTab from './tabs/CompteTab';
 
-type Tab = 'actu' | 'suivre' | 'rechercher' | 'compte';
+type Tab = 'actu' | 'suivre' | 'compte';
 
 type ProfileState =
   | { status: 'loading' }
@@ -54,17 +53,13 @@ export default function App() {
     };
   }, []);
 
-  // Writes are only allowed for your own account (backend requireSelf). With
-  // zero-click auth the session SteamID always matches the injected one.
   const editable = session != null && session.steamId === CONTEXT.steamId;
 
-  // Shared follow state across Suivre + Rechercher, seeded from the profile.
+  const profileData = profile.status === 'ok' ? profile.profile : null;
+
   const seedIds = useMemo(
-    () =>
-      profile.status === 'ok'
-        ? profile.profile.followedGames.map((g) => g.appId)
-        : [],
-    [profile],
+    () => (profileData ? profileData.followedGames.map((g) => g.appId) : []),
+    [profileData],
   );
   const follow = useFollow(seedIds);
 
@@ -86,43 +81,30 @@ export default function App() {
           className={`tab ${tab === 'suivre' ? 'active' : ''}`}
           onClick={() => setTab('suivre')}
         >
-          Suivre
-        </button>
-        <button
-          className={`tab ${tab === 'rechercher' ? 'active' : ''}`}
-          onClick={() => setTab('rechercher')}
-        >
-          Rechercher
+          Suivre un jeu
         </button>
         <button
           className={`tab ${tab === 'compte' ? 'active' : ''}`}
           onClick={() => setTab('compte')}
         >
-          Compte
+          Mon compte
         </button>
       </nav>
 
-      {tab === 'actu' && <ActuTab />}
-
-      {tab === 'rechercher' && <RechercherTab editable={editable} follow={follow} />}
-
-      {(tab === 'suivre' || tab === 'compte') &&
-        profile.status === 'loading' && (
+      {tab === 'actu' && (
+        <ActuSection profile={profileData} editable={editable} follow={follow} />
+      )}
+      {tab === 'suivre' && (
+        <SuivreSection profile={profileData} editable={editable} follow={follow} />
+      )}
+      {tab === 'compte' &&
+        (profile.status === 'error' ? (
+          <div className="state error">Failed to load profile — {profile.error}</div>
+        ) : profileData ? (
+          <CompteTab profile={profileData} />
+        ) : (
           <div className="state">Loading profile…</div>
-        )}
-      {(tab === 'suivre' || tab === 'compte') && profile.status === 'error' && (
-        <div className="state error">Failed to load profile — {profile.error}</div>
-      )}
-      {tab === 'suivre' && profile.status === 'ok' && (
-        <SuivreTab
-          profile={profile.profile}
-          editable={editable}
-          follow={follow}
-        />
-      )}
-      {tab === 'compte' && profile.status === 'ok' && (
-        <CompteTab profile={profile.profile} />
-      )}
+        ))}
 
       <footer>gamenews.up.railway.app — web view</footer>
     </div>

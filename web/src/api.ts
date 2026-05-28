@@ -85,6 +85,18 @@ export interface SearchResult {
   tiny_image: string;
 }
 
+export interface LibraryGame {
+  appId: string;
+  name: string;
+  header_image: string;
+  isFamilyShared: boolean;
+  playtimeForever: number;
+}
+
+export function fetchLibrary(steamId: string): Promise<LibraryGame[]> {
+  return getJSON(`/api/web/library/${encodeURIComponent(steamId)}`);
+}
+
 export async function searchGames(query: string): Promise<SearchResult[]> {
   const q = query.trim();
   if (q.length < 2) return [];

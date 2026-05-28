@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Wishlist = require('../models/Wishlist');
+const Game = require('../models/Game');
 const {
   getFollowedGamesDetailsBySteamId,
 } = require('../services/users/followedGamesDetailsService');
@@ -104,6 +105,54 @@ router.get('/profile/:steamId', async (req, res) => {
     });
   } catch (error) {
     logger.error({ err: error }, 'web_profile_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+/**
+ * Public read-only Steam library ("Mes jeux"). Lazy-loaded by the web view's
+ * Suivre > Mes jeux sub-tab. Lightweight: joins gameLibrary entries with the
+ * Game collection for name/image, no on-demand image enrichment.
+ */
+router.get('/library/:steamId', async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+
+    const user = await User.findOne({ steamId })
+      .select('gameLibrary')
+      .lean();
+    const entries = user?.gameLibrary?.games || [];
+    if (entries.length === 0) {
+      return res.json([]);
+    }
+
+    const gameIds = entries.map((g) => g.gameId);
+    const gamesData = await Game.find({ appId: { $in: gameIds } })
+      .select('appId name header_image img_icon_url')
+      .lean();
+    const byId = new Map(gamesData.map((g) => [g.appId, g]));
+
+    const library = entries
+      .map((entry) => {
+        const data = byId.get(entry.gameId);
+        return {
+          appId: String(entry.gameId),
+          name: data?.name || `Game ${entry.gameId}`,
+          header_image: data?.header_image && data.header_image !== 'none'
+            ? data.header_image
+            : '',
+          isFamilyShared: Boolean(entry.isFamilyShared),
+          playtimeForever: entry.playtime_forever || 0,
+        };
+      })
+      .sort((a, b) => b.playtimeForever - a.playtimeForever);
+
+    res.json(library);
+  } catch (error) {
+    logger.error({ err: error }, 'web_library_failed');
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
