@@ -208,21 +208,30 @@ router.get("/steam/return", validateOpenIdResponse, async (req, res) => {
       });
     }
 
-    // Flow web : pas de deep link mobile. On rend une petite page de succes
-    // auto-fermante ; le SPA recupere le sessionToken via /auth/steam/status.
+    // Flow web (Steam Desktop full-page) : l'assertion OpenID vient d'etre
+    // verifiee par validateOpenIdResponse, donc ce steamId est PROUVE. On mint
+    // la session ici (jamais a partir du seul steamId) et on la depose dans le
+    // localStorage de la web view avant de rediriger vers le feed. Un inconnu ne
+    // peut pas atteindre ce code pour le compte d'autrui : il faudrait passer
+    // l'OpenID Steam a sa place.
     if (req.query.platform === "web") {
-      logAuthServer("Auth web: rendu page de succes", {
+      const session = createMobileSession(steamId);
+      const sessionJson = JSON.stringify({ token: session.token, steamId });
+      const feedUrl = `/feed/${steamId}`;
+      logAuthServer("Auth web: session mintee, redirection feed", {
         steamId: maskSteamId(steamId),
       });
       return res
         .type("html")
         .send(
-          `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Connecté</title>` +
+          `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Connexion…</title>` +
             `<style>body{background:#171a21;color:#c7d5e0;font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}` +
-            `.box{text-align:center}.ok{color:#66c0f4;font-size:20px;font-weight:600}</style></head>` +
-            `<body><div class="box"><div class="ok">Connecté à Steam ✓</div>` +
-            `<p>Vous pouvez fermer cette fenêtre.</p></div>` +
-            `<script>setTimeout(function(){window.close()},800)</script></body></html>`,
+            `.ok{color:#66c0f4;font-size:18px;font-weight:600}</style></head>` +
+            `<body><div class="ok">Connexion à Steam ✓</div>` +
+            `<script>try{localStorage.setItem('gn_session',${JSON.stringify(
+              sessionJson,
+            )})}catch(e){}location.replace(${JSON.stringify(feedUrl)})</script>` +
+            `</body></html>`,
         );
     }
 

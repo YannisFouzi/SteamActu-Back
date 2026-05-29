@@ -1,8 +1,10 @@
-// Web auth (Steam Desktop, zero-click): the Millennium plugin reads the
-// SteamID locally from loginusers.vdf and injects it into the page. We exchange
-// it for a session token via POST /api/web/session — no OpenID re-login, since
-// the user is already logged into the Steam client. The token is the same one
-// mobileSessionAuth validates, so write endpoints (follow/unfollow) work.
+// Web auth (Steam Desktop): the session is obtained ONLY through verified Steam
+// OpenID. A SteamID is public, so we never mint a token from it alone — that let
+// anyone with the /feed/<steamId> URL act on the account. Instead, when there's
+// no valid cached session we send the window through /auth/steam/start
+// (platform=web); the verified /auth/steam/return mints the token and writes it
+// here. Since the Steam client is already logged in, this is near-zero-click; a
+// stranger's browser can't pass OpenID as the owner, so it's blocked.
 
 const STORAGE_KEY = 'gn_session';
 
@@ -11,53 +13,60 @@ export interface Session {
   steamId: string;
 }
 
-export function getSession(): Session | null {
+// Decode the base64url payload of a mobile session token and return its expiry
+// (ms). Lets us treat an expired token as no session and re-auth proactively.
+function tokenExpiry(token: string): number | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Session;
-    if (parsed.token && parsed.steamId) return parsed;
-    return null;
+    const payload = token.split('.')[0] || '';
+    const json = JSON.parse(
+      atob(payload.replace(/-/g, '+').replace(/_/g, '/')),
+    ) as { exp?: number };
+    return typeof json.exp === 'number' ? json.exp : null;
   } catch {
     return null;
   }
 }
 
-function setSession(session: Session): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+export function getSession(): Session | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Session;
+    if (!parsed.token || !parsed.steamId) return null;
+    const exp = tokenExpiry(parsed.token);
+    if (exp !== null && Date.now() >= exp) {
+      localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export function logout(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-interface SessionResponse {
-  steamId: string;
-  token: string;
+interface StartResponse {
+  authUrl: string;
 }
 
-// Exchanges the injected SteamID for a session token. Reuses a cached session
-// for the same SteamID to avoid issuing a new token on every load.
-export async function ensureSession(steamId: string): Promise<Session> {
-  if (!/^\d{17}$/.test(steamId)) {
-    throw new Error('invalid steamId');
-  }
-  const cached = getSession();
-  if (cached && cached.steamId === steamId) {
-    return cached;
-  }
-  const res = await fetch('/api/web/session', {
+// Sends the window to Steam OpenID. Returns a never-resolving promise because
+// the page navigates away; the verified return handler redirects back to /feed
+// with the session already stored.
+export async function startSteamLogin(): Promise<never> {
+  const res = await fetch('/auth/steam/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ steamId }),
+    body: JSON.stringify({ platform: 'web' }),
   });
   if (!res.ok) {
-    throw new Error(`session failed: HTTP ${res.status}`);
+    throw new Error(`login start failed: HTTP ${res.status}`);
   }
-  const data = (await res.json()) as SessionResponse;
-  const session: Session = { token: data.token, steamId: data.steamId };
-  setSession(session);
-  return session;
+  const data = (await res.json()) as StartResponse;
+  window.location.assign(data.authUrl);
+  return new Promise<never>(() => {});
 }
 
 async function authedFetch(url: string, init: RequestInit = {}): Promise<Response> {

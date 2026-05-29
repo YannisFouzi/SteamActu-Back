@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CONTEXT, fetchProfile, type WebProfile } from './api';
 import {
-  ensureSession,
   getSession,
   logout,
+  startSteamLogin,
   updateNotifications,
   type Session,
 } from './auth';
@@ -24,27 +24,28 @@ type ProfileState =
 export default function App() {
   const [tab, setTab] = useState<Tab>('actu');
   const [profile, setProfile] = useState<ProfileState>({ status: 'loading' });
-  const [session, setSession] = useState<Session | null>(getSession());
+  const [session] = useState<Session | null>(getSession());
   const [confirmUnfollow, setConfirmUnfollow] = useState(true);
   const [deleted, setDeleted] = useState(false);
 
+  const authed = session != null && session.steamId === CONTEXT.steamId;
+
+  // Require a verified Steam OpenID session to view the account. With no valid
+  // session, send the window to Steam OpenID (near-zero-click when the Steam
+  // client is logged in) instead of rendering anyone's account from the URL.
   useEffect(() => {
-    let cancelled = false;
     if (!/^\d{17}$/.test(CONTEXT.steamId)) {
       setProfile({ status: 'error', error: 'Invalid SteamID' });
       return;
     }
-
-    // Zero-click auth: exchange the plugin-injected SteamID for a session
-    // token so follow/unfollow work without a Steam re-login.
-    ensureSession(CONTEXT.steamId)
-      .then((s) => {
-        if (!cancelled) setSession(s);
-      })
-      .catch((err: unknown) => {
-        console.error('[GameNews] auto-auth failed', err);
+    if (!authed) {
+      startSteamLogin().catch((err: unknown) => {
+        console.error('[GameNews] steam login start failed', err);
       });
+      return;
+    }
 
+    let cancelled = false;
     fetchProfile(CONTEXT.steamId)
       .then((p) => {
         if (!cancelled) {
@@ -63,9 +64,9 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authed]);
 
-  const editable = session != null && session.steamId === CONTEXT.steamId;
+  const editable = authed;
 
   const profileData = profile.status === 'ok' ? profile.profile : null;
 
@@ -92,6 +93,19 @@ export default function App() {
     return (
       <div className="page">
         <div className="state">Votre compte a été supprimé.</div>
+      </div>
+    );
+  }
+
+  // Not authenticated: the window is being sent to Steam OpenID. Show a brief
+  // connecting state instead of rendering any account data.
+  if (!authed) {
+    return (
+      <div className="page">
+        <header className="app-header">
+          <h1>News</h1>
+        </header>
+        <div className="state">Connexion à Steam…</div>
       </div>
     );
   }

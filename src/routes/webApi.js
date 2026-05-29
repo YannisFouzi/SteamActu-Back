@@ -11,33 +11,19 @@ const {
   buildFollowedGamesEntry,
 } = require('../utils/followedGamesHelpers');
 const { isValidSteamId, isValidAppId } = require('../middleware/steamValidators');
-const { createMobileSession } = require('../services/mobileSessionService');
 const {
   addUserToGameSubscription,
 } = require('../services/users/subscriptionManager');
 const logger = require('../utils/logger');
 
-/**
- * Zero-click session for the Steam Desktop web view: issues a session token
- * for a SteamID supplied by the Millennium plugin (which read it locally from
- * loginusers.vdf). NOTE: this trusts the SteamID without OpenID verification —
- * an accepted tradeoff for this surface (writes are low-severity: follow/
- * unfollow + notif prefs; data is already public-by-steamId on the read side).
- * The token is the same one mobileSessionAuth validates, so existing write
- * endpoints (follow/unfollow/settings) work unchanged.
- */
-router.post('/session', (req, res) => {
-  const steamId = req.body && req.body.steamId;
-  if (!isValidSteamId(String(steamId || ''))) {
-    return res.status(400).json({ message: 'SteamID invalide' });
-  }
-  const session = createMobileSession(steamId);
-  return res.json({
-    steamId,
-    token: session.token,
-    expiresAt: session.expiresAt,
-  });
-});
+// SECURITY: there is intentionally NO steamId->token endpoint here. A SteamID is
+// public, so minting a session from it alone let anyone with the /feed/<steamId>
+// URL act on the account (incl. delete). The web view now obtains its session
+// only through verified Steam OpenID (see /auth/steam/start + /auth/steam/return,
+// platform=web). The endpoints below stay public-by-steamId because the
+// Millennium plugin polls them in the background (no token there) — they are
+// low-severity (read-only mostly-public data + idempotent follow + presence) and
+// can never delete the account or change settings, which require the session.
 
 /**
  * Consolidated public read-only profile for the web view (Suivre + Compte
