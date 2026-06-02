@@ -19,11 +19,22 @@ export function formatDateTime(ms: number, language: string): string {
   return `${date} • ${time}`;
 }
 
-// Navigate the CURRENT window instead of opening a popup. The SPA is rendered
-// full-page in Steam's main window (via MainWindowBrowserManager.ShowURL), so
-// assigning location navigates that same window to the target — no popup. The
-// Steam back arrow (and the NEWS header button) return to the feed. Works
-// identically in a standalone browser tab.
+// Origin of the Steam Desktop client UI — the only host that embeds this SPA in
+// an <iframe> (the Millennium plugin). Standalone (Chrome) is never iframed.
+const STEAM_CLIENT_ORIGIN = 'https://steamloopback.host';
+
+// Opens an external page (a Steam news/community/store URL, a support link…).
+// When the SPA runs inside the Steam client it lives in an <iframe>; navigating
+// that iframe would nest a Steam page inside our feed ("Steam in Steam"), so we
+// ask the host plugin (parent window) to open the URL natively in Steam instead.
+// Standalone in a browser tab, there is no parent → navigate normally.
 export function openExternal(url: string): void {
+  if (window.parent !== window) {
+    window.parent.postMessage(
+      { type: 'gamenews-open-url', url },
+      STEAM_CLIENT_ORIGIN,
+    );
+    return;
+  }
   window.location.assign(url);
 }
