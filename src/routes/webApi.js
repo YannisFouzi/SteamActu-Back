@@ -13,7 +13,17 @@ const {
 const { isValidSteamId, isValidAppId } = require('../middleware/steamValidators');
 const {
   addUserToGameSubscription,
+  removeUserFromGameSubscription,
 } = require('../services/users/subscriptionManager');
+const {
+  buildNotificationSettingsPatch,
+  applyNotificationSettingsPatchToUser,
+} = require('../services/users/userNotificationSettingsService');
+const {
+  isSupportedAppLanguage,
+  normalizeAppLanguage,
+  SUPPORTED_LANGUAGES,
+} = require('../utils/language');
 const logger = require('../utils/logger');
 
 // SECURITY: there is intentionally NO steamId->token endpoint here. A SteamID is
@@ -195,6 +205,174 @@ async function handleFollow(params, res) {
 
 router.get('/follow', (req, res) => handleFollow(req.query, res));
 router.post('/follow', (req, res) => handleFollow(req.body || {}, res));
+
+// ── Public-by-SteamID writes (Steam Desktop / Millennium surface) ───────────
+// The feed runs full-page inside the Steam Desktop client (Millennium plugin),
+// where the user is already authenticated as themselves — so these mirror the
+// session-gated /api/users writes but trust the SteamID, same accepted tradeoff
+// as /follow above. They reuse the exact same services as the authed routes.
+// Account DELETION is intentionally NOT mirrored here (destructive) — it stays
+// session-only on /api/users/:steamId.
+
+// Ne plus suivre un jeu
+router.delete('/follow/:steamId/:appId', async (req, res) => {
+  try {
+    const { steamId, appId } = req.params;
+    if (!isValidSteamId(steamId) || !isValidAppId(String(appId || ''))) {
+      return res.status(400).json({ message: 'Paramètres invalides' });
+    }
+    const updatedUser = await User.findOneAndUpdate(
+      { steamId, 'followedGames.appId': appId },
+      {
+        $pull: { followedGames: { appId } },
+        $set: { gamesVersion: new Date() },
+      },
+      { new: true },
+    );
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Ce jeu n'est pas suivi" });
+    }
+    await removeUserFromGameSubscription(appId, steamId);
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error({ err: error }, 'web_unfollow_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Réglages de notification
+router.put('/notifications/:steamId', async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    const parsed = buildNotificationSettingsPatch(req.body);
+    if (!parsed.ok) {
+      return res.status(400).json({ message: parsed.message });
+    }
+    const user = await User.findOne({ steamId });
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+    applyNotificationSettingsPatchToUser(user, parsed.patch);
+    await user.save();
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error({ err: error }, 'web_notifications_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Langue
+router.put('/language/:steamId', async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    const { language } = req.body || {};
+    if (!isSupportedAppLanguage(language)) {
+      return res.status(400).json({
+        message: `language doit être l'une de: ${SUPPORTED_LANGUAGES.join(', ')}`,
+      });
+    }
+    const user = await User.findOne({ steamId });
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+    user.language = normalizeAppLanguage(language);
+    await user.save();
+    res.json({ ok: true, language: user.language });
+  } catch (error) {
+    logger.error({ err: error }, 'web_language_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Ajouter une news aux favoris
+router.post('/news-favorites/:steamId', async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    const { appId, newsId, newsDate } = req.body || {};
+    if (!isValidSteamId(steamId) || !appId || !newsId || !newsDate) {
+      return res.status(400).json({ message: 'Paramètres invalides' });
+    }
+    const user = await User.findOne({ steamId });
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+    if (!Array.isArray(user.newsFavorites)) {
+      user.newsFavorites = [];
+    }
+    const exists = user.newsFavorites.some(
+      (fav) => fav.appId === appId && fav.newsId === newsId,
+    );
+    if (!exists) {
+      user.newsFavorites.push({
+        appId,
+        newsId,
+        newsDate: new Date(newsDate),
+        createdAt: new Date(),
+      });
+      await user.save();
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error({ err: error }, 'web_favorite_add_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Retirer une news des favoris
+router.delete('/news-favorites/:steamId/:appId/:newsId', async (req, res) => {
+  try {
+    const { steamId, appId, newsId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    const user = await User.findOne({ steamId });
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+    if (Array.isArray(user.newsFavorites) && user.newsFavorites.length > 0) {
+      user.newsFavorites = user.newsFavorites.filter(
+        (fav) => !(fav.appId === appId && fav.newsId === newsId),
+      );
+      await user.save();
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error({ err: error }, 'web_favorite_remove_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// Marquer le fil d'actu comme vu (high-water-mark, ne recule jamais)
+router.put('/news-seen/:steamId', async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    const { seenAt } = req.body || {};
+    const ts = seenAt ? new Date(seenAt) : new Date();
+    if (Number.isNaN(ts.getTime())) {
+      return res.status(400).json({ message: 'seenAt invalide' });
+    }
+    await User.findOneAndUpdate(
+      {
+        steamId,
+        $or: [{ lastNewsFeedSeenAt: null }, { lastNewsFeedSeenAt: { $lt: ts } }],
+      },
+      { $set: { lastNewsFeedSeenAt: ts } },
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    logger.error({ err: error }, 'web_news_seen_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
 
 /**
  * Public read-only Steam library ("Mes jeux"). Lazy-loaded by the web view's

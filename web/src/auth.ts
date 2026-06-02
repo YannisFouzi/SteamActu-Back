@@ -6,6 +6,8 @@
 // here. Since the Steam client is already logged in, this is near-zero-click; a
 // stranger's browser can't pass OpenID as the owner, so it's blocked.
 
+import { CONTEXT } from './api';
+
 const STORAGE_KEY = 'gn_session';
 
 export interface Session {
@@ -79,33 +81,47 @@ async function authedFetch(url: string, init: RequestInit = {}): Promise<Respons
   return fetch(url, { ...init, headers });
 }
 
+// Writes go through the public-by-SteamID /api/web endpoints (no session). The
+// feed runs full-page inside the authenticated Steam Desktop client, where the
+// user is already proven to be themselves; the same endpoints back the
+// Millennium plugin's own follow calls. (Account deletion is the one exception —
+// it stays session-only, see deleteAccount.)
+const STEAM_ID = CONTEXT.steamId;
+
+async function publicWrite(
+  url: string,
+  method: string,
+  body?: unknown,
+): Promise<void> {
+  const init: RequestInit = { method, credentials: 'omit' };
+  if (body !== undefined) {
+    init.headers = { 'Content-Type': 'application/json' };
+    init.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, init);
+  if (!res.ok) {
+    throw new Error(`${method} ${url} failed: HTTP ${res.status}`);
+  }
+}
+
 export async function followGame(
   appId: string,
   name: string,
   logoUrl: string,
 ): Promise<void> {
-  const session = getSession();
-  if (!session) throw new Error('not authenticated');
-  const res = await authedFetch(`/api/users/${session.steamId}/follow`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ appId, name, logoUrl }),
+  await publicWrite('/api/web/follow', 'POST', {
+    steamId: STEAM_ID,
+    appId,
+    name,
+    logoUrl,
   });
-  if (!res.ok) {
-    throw new Error(`follow failed: HTTP ${res.status}`);
-  }
 }
 
 export async function unfollowGame(appId: string): Promise<void> {
-  const session = getSession();
-  if (!session) throw new Error('not authenticated');
-  const res = await authedFetch(
-    `/api/users/${session.steamId}/follow/${encodeURIComponent(appId)}`,
-    { method: 'DELETE' },
+  await publicWrite(
+    `/api/web/follow/${STEAM_ID}/${encodeURIComponent(appId)}`,
+    'DELETE',
   );
-  if (!res.ok) {
-    throw new Error(`unfollow failed: HTTP ${res.status}`);
-  }
 }
 
 export async function addFavorite(
@@ -113,45 +129,28 @@ export async function addFavorite(
   newsId: string,
   newsDate: number,
 ): Promise<void> {
-  const session = getSession();
-  if (!session) throw new Error('not authenticated');
-  const res = await authedFetch(`/api/users/${session.steamId}/news-favorites`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ appId, newsId, newsDate }),
+  await publicWrite(`/api/web/news-favorites/${STEAM_ID}`, 'POST', {
+    appId,
+    newsId,
+    newsDate,
   });
-  if (!res.ok) {
-    throw new Error(`favorite add failed: HTTP ${res.status}`);
-  }
 }
 
 export async function removeFavorite(appId: string, newsId: string): Promise<void> {
-  const session = getSession();
-  if (!session) throw new Error('not authenticated');
-  const res = await authedFetch(
-    `/api/users/${session.steamId}/news-favorites/${encodeURIComponent(
+  await publicWrite(
+    `/api/web/news-favorites/${STEAM_ID}/${encodeURIComponent(
       appId,
     )}/${encodeURIComponent(newsId)}`,
-    { method: 'DELETE' },
+    'DELETE',
   );
-  if (!res.ok) {
-    throw new Error(`favorite remove failed: HTTP ${res.status}`);
-  }
 }
 
 export async function markNewsFeedSeen(seenAt: number): Promise<void> {
-  const session = getSession();
-  if (!session) throw new Error('not authenticated');
-  const res = await authedFetch(`/api/users/${session.steamId}/news/seen`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ seenAt }),
-  });
-  if (!res.ok) {
-    throw new Error(`mark seen failed: HTTP ${res.status}`);
-  }
+  await publicWrite(`/api/web/news-seen/${STEAM_ID}`, 'PUT', { seenAt });
 }
 
+// Destructive — kept session-only (verified Steam OpenID). Not exposed as a
+// public-by-SteamID endpoint so a bare SteamID can never delete an account.
 export async function deleteAccount(): Promise<void> {
   const session = getSession();
   if (!session) throw new Error('not authenticated');
@@ -173,27 +172,9 @@ export interface NotificationPatch {
 }
 
 export async function updateNotifications(patch: NotificationPatch): Promise<void> {
-  const session = getSession();
-  if (!session) throw new Error('not authenticated');
-  const res = await authedFetch(`/api/users/${session.steamId}/notifications`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(patch),
-  });
-  if (!res.ok) {
-    throw new Error(`settings update failed: HTTP ${res.status}`);
-  }
+  await publicWrite(`/api/web/notifications/${STEAM_ID}`, 'PUT', patch);
 }
 
 export async function updateLanguage(language: string): Promise<void> {
-  const session = getSession();
-  if (!session) throw new Error('not authenticated');
-  const res = await authedFetch(`/api/users/${session.steamId}/language`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ language }),
-  });
-  if (!res.ok) {
-    throw new Error(`language update failed: HTTP ${res.status}`);
-  }
+  await publicWrite(`/api/web/language/${STEAM_ID}`, 'PUT', { language });
 }

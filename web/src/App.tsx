@@ -62,7 +62,10 @@ export default function App() {
     };
   }, [authed]);
 
-  const editable = authed;
+  // Writes go through public-by-SteamID endpoints, so the feed is editable even
+  // without a verified session (we're inside the authenticated Steam client).
+  // Only account deletion still needs a real session — gated via `authed`.
+  const editable = true;
 
   const profileData = profile.status === 'ok' ? profile.profile : null;
 
@@ -142,6 +145,7 @@ export default function App() {
           <CompteTab
             profile={profileData}
             editable={editable}
+            canDelete={authed}
             confirmUnfollow={confirmUnfollow}
             onConfirmUnfollowChange={persistConfirmUnfollow}
             onAccountDeleted={() => {

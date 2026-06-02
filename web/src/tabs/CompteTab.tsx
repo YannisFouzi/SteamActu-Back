@@ -90,12 +90,14 @@ function ModeSelect({
 export default function CompteTab({
   profile,
   editable,
+  canDelete,
   confirmUnfollow,
   onConfirmUnfollowChange,
   onAccountDeleted,
 }: {
   profile: WebProfile;
   editable: boolean;
+  canDelete: boolean;
   confirmUnfollow: boolean;
   onConfirmUnfollowChange: (v: boolean) => void;
   onAccountDeleted: () => void;
@@ -267,16 +269,18 @@ export default function CompteTab({
         ))}
       </div>
 
-      <div className="settings-group">
-        <button
-          className="danger-row"
-          disabled={!editable || deleting}
-          onClick={() => setShowDelete(true)}
-        >
-          {deleting ? 'Suppression...' : 'Supprimer mon compte'}
-        </button>
-        {deleteError && <div className="feedback-status err">{deleteError}</div>}
-      </div>
+      {canDelete && (
+        <div className="settings-group">
+          <button
+            className="danger-row"
+            disabled={deleting}
+            onClick={() => setShowDelete(true)}
+          >
+            {deleting ? 'Suppression...' : 'Supprimer mon compte'}
+          </button>
+          {deleteError && <div className="feedback-status err">{deleteError}</div>}
+        </div>
+      )}
 
       <div className="settings-footer">Game News v1.0.0</div>
 
