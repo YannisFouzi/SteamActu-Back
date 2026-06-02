@@ -159,7 +159,10 @@ export default function CompteTab({
   return (
     <div className="settings">
       {!editable && (
-        <div className="hint">Connexion de ton compte Steam en cours…</div>
+        <div className="hint">
+          Lecture seule — connecte-toi depuis l'app mobile pour modifier tes
+          réglages.
+        </div>
       )}
 
       <div className="settings-group">

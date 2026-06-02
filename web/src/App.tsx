@@ -3,7 +3,6 @@ import { CONTEXT, fetchProfile, type WebProfile } from './api';
 import {
   getSession,
   logout,
-  startSteamLogin,
   updateNotifications,
   type Session,
 } from './auth';
@@ -30,18 +29,15 @@ export default function App() {
 
   const authed = session != null && session.steamId === CONTEXT.steamId;
 
-  // Require a verified Steam OpenID session to view the account. With no valid
-  // session, send the window to Steam OpenID (near-zero-click when the Steam
-  // client is logged in) instead of rendering anyone's account from the URL.
+  // The feed is read-only public data keyed by steamId (followed games, news,
+  // wishlist are all public on steamcommunity), so we always render the content
+  // straight from the public /api/web + /api/news endpoints — no login wall.
+  // A verified session only unlocks editing (`editable`); without one the UI is
+  // shown read-only. (This is what made the old in-Steam view feel login-free:
+  // the data never needed auth, only the write actions do.)
   useEffect(() => {
     if (!/^\d{17}$/.test(CONTEXT.steamId)) {
       setProfile({ status: 'error', error: 'Invalid SteamID' });
-      return;
-    }
-    if (!authed) {
-      startSteamLogin().catch((err: unknown) => {
-        console.error('[GameNews] steam login start failed', err);
-      });
       return;
     }
 
@@ -93,19 +89,6 @@ export default function App() {
     return (
       <div className="page">
         <div className="state">Votre compte a été supprimé.</div>
-      </div>
-    );
-  }
-
-  // Not authenticated: the window is being sent to Steam OpenID. Show a brief
-  // connecting state instead of rendering any account data.
-  if (!authed) {
-    return (
-      <div className="page">
-        <header className="app-header">
-          <h1>News</h1>
-        </header>
-        <div className="state">Connexion à Steam…</div>
       </div>
     );
   }
