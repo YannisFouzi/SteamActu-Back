@@ -98,10 +98,6 @@ export default function App() {
 
   return (
     <div className="page">
-      <header className="app-header">
-        <h1>News</h1>
-      </header>
-
       <nav className="tabs">
         <button
           className={`tab ${tab === 'actu' ? 'active' : ''}`}
