@@ -15,11 +15,16 @@ function loadIndex() {
   return cachedIndex;
 }
 
+// Steam Desktop client UI origin. The Millennium plugin renders the feed in an
+// <iframe> inside a plugin-owned SteamUI route, whose document is served from
+// this origin — so the feed must explicitly permit being framed by it.
+const STEAM_CLIENT_ORIGIN = 'https://steamloopback.host';
+
 /**
  * Serves the Game News web SPA (Actu / Suivre / Compte tabs), injecting the
  * target SteamID + language so the client doesn't have to parse them.
- * Rendered full-page inside Steam Desktop via MainWindowBrowserManager.ShowURL
- * and usable in any browser. No auth — read-only public data.
+ * Rendered full-page inside Steam Desktop (Millennium plugin) in an <iframe>,
+ * and usable in any browser. No auth — read-only public data keyed by steamId.
  */
 router.get('/feed/:steamId', (req, res) => {
   const { steamId } = req.params;
@@ -28,6 +33,17 @@ router.get('/feed/:steamId', (req, res) => {
   if (!isValidSteamId(steamId)) {
     return res.status(400).type('text/plain').send('Invalid SteamID');
   }
+
+  // Allow embedding ONLY inside the Steam client (and same-origin). helmet sets a
+  // global `X-Frame-Options: SAMEORIGIN` which would blank the iframe; we scope a
+  // relaxation to this read-only page via CSP frame-ancestors. X-Frame-Options
+  // must be REMOVED (not just overridden) — when present, browsers honour it even
+  // if CSP is more permissive. Mobile/extension/API routes keep helmet's default.
+  res.removeHeader('X-Frame-Options');
+  res.setHeader(
+    'Content-Security-Policy',
+    `frame-ancestors 'self' ${STEAM_CLIENT_ORIGIN}`,
+  );
 
   const injection =
     `<script>window.__GAME_NEWS__=${JSON.stringify({ steamId, language })};</script>`;
