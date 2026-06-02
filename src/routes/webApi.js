@@ -24,6 +24,9 @@ const {
   normalizeAppLanguage,
   SUPPORTED_LANGUAGES,
 } = require('../utils/language');
+const {
+  registerOrUpdateUser,
+} = require('../services/steam/steamUserManager');
 const logger = require('../utils/logger');
 
 // SECURITY: there is intentionally NO steamId->token endpoint here. A SteamID is
@@ -205,6 +208,35 @@ async function handleFollow(params, res) {
 
 router.get('/follow', (req, res) => handleFollow(req.query, res));
 router.post('/follow', (req, res) => handleFollow(req.body || {}, res));
+
+/**
+ * Public, idempotent account provisioning for the Steam Desktop surface.
+ *
+ * Reuses the SAME path as the OpenID/mobile registration (registerOrUpdateUser):
+ * on a brand-new install it creates the account and kicks off the initial Steam
+ * library sync; for an existing user it is a no-op. Trusts the SteamID like the
+ * other /api/web endpoints — being inside the signed-in Steam client is the
+ * proof of identity, so no login is needed (the Millennium plugin calls this
+ * once at boot). GET is exposed because the plugin's Lua proxy only does
+ * http.get reliably (see /follow).
+ *
+ * Provisioning runs in the BACKGROUND and we reply 202 immediately: the first
+ * library sync can exceed the plugin's short HTTP timeout, and the plugin does
+ * not need to wait for it. The call is idempotent and re-issued every boot, so
+ * a transient failure self-heals on the next launch.
+ */
+function handleRegister(steamId, res) {
+  if (!isValidSteamId(String(steamId || ''))) {
+    return res.status(400).json({ message: 'SteamID invalide' });
+  }
+  registerOrUpdateUser(steamId).catch((error) => {
+    logger.error({ err: error }, 'web_register_failed');
+  });
+  return res.status(202).json({ ok: true });
+}
+
+router.get('/register/:steamId', (req, res) => handleRegister(req.params.steamId, res));
+router.post('/register/:steamId', (req, res) => handleRegister(req.params.steamId, res));
 
 // ── Public-by-SteamID writes (Steam Desktop / Millennium surface) ───────────
 // The feed runs full-page inside the Steam Desktop client (Millennium plugin),
