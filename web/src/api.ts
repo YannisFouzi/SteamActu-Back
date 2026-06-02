@@ -134,14 +134,42 @@ export async function submitFeedback(payload: {
   }
 }
 
+// Reads the cached session token directly from localStorage (avoids a circular
+// import with auth.ts). Used to authenticate gated reads in the browser/extension
+// surface (the Millennium plugin uses the pairing secret instead).
+function sessionToken(): string {
+  try {
+    const raw = localStorage.getItem('gn_session');
+    if (!raw) return '';
+    const parsed = JSON.parse(raw) as { token?: string };
+    return parsed.token ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export class HttpError extends Error {
+  status: number;
+  constructor(status: number) {
+    super(`HTTP ${status}`);
+    this.status = status;
+  }
+}
+
 async function getJSON<T>(url: string): Promise<T> {
   const headers: Record<string, string> = {};
+  // Plugin surface: per-install pairing secret. Browser/extension surface:
+  // OpenID Bearer. The server accepts either on the gated reads.
   if (PAIR_SECRET) {
     headers['X-GN-Secret'] = PAIR_SECRET;
   }
+  const token = sessionToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
   const res = await fetch(url, { credentials: 'omit', headers });
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
+    throw new HttpError(res.status);
   }
   return (await res.json()) as T;
 }

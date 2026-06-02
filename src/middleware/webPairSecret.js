@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const User = require('../models/User');
 const { isValidSteamId } = require('./steamValidators');
+const { verifyMobileSessionToken } = require('../services/mobileSessionService');
 const logger = require('../utils/logger');
 
 // Privacy par appairage (TOFU) pour la surface Steam Desktop / Millennium.
@@ -41,11 +42,20 @@ async function requireWebSecretIfPaired(req, res, next) {
     if (!user.webPairSecretHash) {
       return next();
     }
+    // Surface plugin Millennium : secret par-installation (header/query).
     const provided = req.get('x-gn-secret') || req.query.secret;
     if (secretMatches(provided, user.webPairSecretHash)) {
       return next();
     }
-    return res.status(401).json({ message: 'Appairage requis' });
+    // Surface navigateur (extension Chrome / web) : session OpenID verifiee.
+    const authHeader = req.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const session = verifyMobileSessionToken(authHeader.slice(7).trim());
+      if (session && String(session.steamId) === String(steamId)) {
+        return next();
+      }
+    }
+    return res.status(401).json({ message: 'Authentification requise' });
   } catch (error) {
     logger.error({ err: error }, 'web_secret_gate_failed');
     return res.status(500).json({ message: 'Erreur serveur' });

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CONTEXT, fetchProfile, type WebProfile } from './api';
+import { CONTEXT, fetchProfile, HttpError, PAIR_SECRET, type WebProfile } from './api';
 import {
   getSession,
   logout,
+  startSteamLogin,
   updateNotifications,
   type Session,
 } from './auth';
@@ -50,12 +51,21 @@ export default function App() {
         }
       })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          setProfile({
-            status: 'error',
-            error: err instanceof Error ? err.message : String(err),
+        if (cancelled) return;
+        // Gated account (paired): in the browser/extension surface (no plugin
+        // secret) a 401 means we need a verified session → go through Steam
+        // OpenID. The Millennium plugin always carries the secret, so it never
+        // lands here. A stranger without the Steam session can't pass OpenID.
+        if (err instanceof HttpError && err.status === 401 && !PAIR_SECRET && !session) {
+          void startSteamLogin().catch(() => {
+            setProfile({ status: 'error', error: 'Authentification requise' });
           });
+          return;
         }
+        setProfile({
+          status: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
     return () => {
       cancelled = true;
