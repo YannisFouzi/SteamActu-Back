@@ -7,6 +7,7 @@ const { normalizeAppLanguage } = require('../utils/language');
 const { isValidAppId, isValidSteamId, clampQueryInt } = require('../middleware/steamValidators');
 const { mobileSessionAuth } = require('../middleware/mobileSessionAuth');
 const requireSelf = require('../middleware/requireSelf');
+const { requireWebSecretIfPaired } = require('../middleware/webPairSecret');
 const logger = require('../utils/logger');
 
 router.get('/game/:appId', async (req, res) => {
@@ -70,7 +71,7 @@ router.get('/feed', mobileSessionAuth, requireSelf, async (req, res) => {
 // at GET /feed/:steamId (rendered for Steam Desktop via Millennium and any
 // browser). Followed games and game news are publicly visible on Steam, so
 // we don't expose anything that isn't already on steamcommunity.com.
-router.get('/feed-by-steamid/:steamId', async (req, res) => {
+router.get('/feed-by-steamid/:steamId', requireWebSecretIfPaired, async (req, res) => {
   try {
     const {steamId} = req.params;
     const {limit, perGameLimit, language, favoritesOnly} = req.query;

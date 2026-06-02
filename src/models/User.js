@@ -126,6 +126,19 @@ const UserSchema = new mongoose.Schema({
     default: null,
   },
 
+  // Secret d'appairage par-installation du plugin Millennium (TOFU). Le plugin
+  // genere un secret aleatoire au 1er lancement et l'enregistre une fois via
+  // GET /api/web/pair. Tant que ce champ est null, la surface /api/web reste
+  // publique-par-SteamID (compat); des qu'un secret est pose, les lectures
+  // sensibles (profile/library/news) exigent le header X-GN-Secret correspondant
+  // -> le feed n'est plus consultable publiquement avec la seule URL.
+  // On stocke un hash SHA-256 (jamais le secret en clair).
+  webPairSecretHash: {
+    type: String,
+    default: null,
+    select: false,
+  },
+
   gameLibrary: {
     games: [
       {

@@ -38,6 +38,62 @@ const logger = require('../utils/logger');
 // low-severity (read-only mostly-public data + idempotent follow + presence) and
 // can never delete the account or change settings, which require the session.
 
+// ── Privacy par appairage (TOFU) ────────────────────────────────────────────
+// Le token web Steam etant INRECUPERABLE depuis un plugin Millennium, le plugin
+// prouve son identite via un secret par-installation, genere localement et
+// enregistre une fois (GET /pair). Les lectures sensibles (profile/library/news)
+// exigent ensuite le header X-GN-Secret. Tant qu'aucun secret n'est enregistre,
+// la surface reste publique (compat, rollout non-cassant). Voir middleware/
+// webPairSecret.js.
+const {
+  hashSecret,
+  secretMatches,
+  requireWebSecretIfPaired,
+} = require('../middleware/webPairSecret');
+
+// Appairage du plugin : pose le hash du secret au 1er appel (premier arrive
+// gagne, TOFU), accepte les appels suivants si le secret correspond. GET car le
+// proxy Lua du plugin ne fait que http.get.
+async function handlePair(params, res) {
+  const { steamId, secret } = params;
+  if (!isValidSteamId(String(steamId || ''))) {
+    return res.status(400).json({ message: 'SteamID invalide' });
+  }
+  if (typeof secret !== 'string' || secret.length < 16) {
+    return res.status(400).json({ message: 'secret invalide' });
+  }
+  try {
+    const user = await User.findOne({ steamId }).select('+webPairSecretHash');
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+    if (!user.webPairSecretHash) {
+      user.webPairSecretHash = hashSecret(secret);
+      await user.save();
+      return res.json({ ok: true, paired: true });
+    }
+    if (secretMatches(secret, user.webPairSecretHash)) {
+      return res.json({ ok: true, paired: true });
+    }
+    return res.status(403).json({ message: 'secret incorrect (déjà appairé)' });
+  } catch (error) {
+    logger.error({ err: error }, 'web_pair_failed');
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
+}
+
+// Le secret peut arriver en query (?secret=) ou en header X-GN-Secret (le proxy
+// Lua du plugin l'ajoute automatiquement sur tous ses appels).
+router.get('/pair', (req, res) =>
+  handlePair({ steamId: req.query.steamId, secret: req.query.secret || req.get('x-gn-secret') }, res),
+);
+router.post('/pair', (req, res) =>
+  handlePair(
+    { steamId: (req.body || {}).steamId, secret: (req.body || {}).secret || req.get('x-gn-secret') },
+    res,
+  ),
+);
+
 /**
  * Consolidated public read-only profile for the web view (Suivre + Compte
  * tabs). One round-trip returns followed games, wishlist and account basics.
@@ -45,7 +101,7 @@ const logger = require('../utils/logger');
  * steamcommunity.com. News are intentionally NOT here (they require slow live
  * Steam calls — served separately by /api/news/feed-by-steamid).
  */
-router.get('/profile/:steamId', async (req, res) => {
+router.get('/profile/:steamId', requireWebSecretIfPaired, async (req, res) => {
   try {
     const { steamId } = req.params;
     if (!isValidSteamId(steamId)) {
@@ -411,7 +467,7 @@ router.put('/news-seen/:steamId', async (req, res) => {
  * Suivre > Mes jeux sub-tab. Lightweight: joins gameLibrary entries with the
  * Game collection for name/image, no on-demand image enrichment.
  */
-router.get('/library/:steamId', async (req, res) => {
+router.get('/library/:steamId', requireWebSecretIfPaired, async (req, res) => {
   try {
     const { steamId } = req.params;
     if (!isValidSteamId(steamId)) {

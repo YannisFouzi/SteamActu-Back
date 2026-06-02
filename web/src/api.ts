@@ -18,6 +18,32 @@ function readContext(): { steamId: string; language: string } {
 
 export const CONTEXT = readContext();
 
+// Per-install pairing secret, passed by the Millennium plugin via the URL hash
+// (#gn_secret=…). When present, the feed's sensitive reads require it server-side
+// (X-GN-Secret), so the page can't be viewed publicly with just the SteamID URL.
+// We read it once then strip the hash so it isn't persisted/visible.
+function readPairSecret(): string {
+  try {
+    const m = window.location.hash.match(/(?:^|[#&])gn_secret=([^&]+)/);
+    const secret = m && m[1] ? decodeURIComponent(m[1]) : '';
+    if (secret) {
+      try {
+        sessionStorage.setItem('gn_secret', secret);
+      } catch {
+        /* ignore */
+      }
+      // Strip the secret from the visible hash.
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      return secret;
+    }
+    return sessionStorage.getItem('gn_secret') ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export const PAIR_SECRET = readPairSecret();
+
 export interface NewsItem {
   appId: number | string;
   gameName: string;
@@ -109,7 +135,11 @@ export async function submitFeedback(payload: {
 }
 
 async function getJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: 'omit' });
+  const headers: Record<string, string> = {};
+  if (PAIR_SECRET) {
+    headers['X-GN-Secret'] = PAIR_SECRET;
+  }
+  const res = await fetch(url, { credentials: 'omit', headers });
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}`);
   }
