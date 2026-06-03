@@ -15,10 +15,15 @@ function loadIndex() {
   return cachedIndex;
 }
 
-// Steam Desktop client UI origin. The Millennium plugin renders the feed in an
-// <iframe> inside a plugin-owned SteamUI route, whose document is served from
-// this origin — so the feed must explicitly permit being framed by it.
-const STEAM_CLIENT_ORIGIN = 'https://steamloopback.host';
+// Origins allowed to embed the feed in an <iframe>:
+//   - https://steamloopback.host        → the Millennium plugin (Steam Desktop)
+//   - store.steampowered.com / steamcommunity.com → the Chrome extension overlay
+//     on the Steam website.
+const FRAME_ANCESTORS = [
+  'https://steamloopback.host',
+  'https://store.steampowered.com',
+  'https://steamcommunity.com',
+].join(' ');
 
 /**
  * Serves the Game News web SPA (Actu / Suivre / Compte tabs), injecting the
@@ -34,15 +39,16 @@ router.get('/feed/:steamId', (req, res) => {
     return res.status(400).type('text/plain').send('Invalid SteamID');
   }
 
-  // Allow embedding ONLY inside the Steam client (and same-origin). helmet sets a
-  // global `X-Frame-Options: SAMEORIGIN` which would blank the iframe; we scope a
-  // relaxation to this read-only page via CSP frame-ancestors. X-Frame-Options
-  // must be REMOVED (not just overridden) — when present, browsers honour it even
-  // if CSP is more permissive. Mobile/extension/API routes keep helmet's default.
+  // Allow embedding inside the Steam client and the Steam website (extension
+  // overlay) only. helmet sets a global `X-Frame-Options: SAMEORIGIN` which would
+  // blank the iframe; we scope a relaxation to this read-only page via CSP
+  // frame-ancestors. X-Frame-Options must be REMOVED (not just overridden) — when
+  // present, browsers honour it even if CSP is more permissive. Mobile/API routes
+  // keep helmet's default.
   res.removeHeader('X-Frame-Options');
   res.setHeader(
     'Content-Security-Policy',
-    `frame-ancestors 'self' ${STEAM_CLIENT_ORIGIN}`,
+    `frame-ancestors 'self' ${FRAME_ANCESTORS}`,
   );
 
   const injection =
