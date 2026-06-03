@@ -68,21 +68,13 @@ async function fetchAuthUrl(): Promise<string> {
 
 // Standalone web tab: navigate the page to Steam OpenID. Returns a never-
 // resolving promise because the page navigates away; the verified return handler
-// redirects back to /feed with the session stored.
+// redirects back to /feed with the session stored. (The embedded surfaces never
+// reach here: the plugin carries a pairing secret and the Chrome extension
+// injects its session via the URL — both authenticate without this redirect.)
 export async function startSteamLogin(): Promise<never> {
   const authUrl = await fetchAuthUrl();
   window.location.assign(authUrl);
   return new Promise<never>(() => {});
-}
-
-// Embedded surface (Chrome extension): Steam's OpenID page can't be framed, so
-// we open it in a TOP-LEVEL popup. MUST be called from a user gesture (a button
-// click) or the browser's popup blocker stops it. The popup runs OpenID, stores
-// the session under this origin and closes itself (see /auth/steam/return); the
-// feed iframe's `storage` listener (main.tsx) then reloads, now authenticated.
-export async function openSteamLoginPopup(): Promise<void> {
-  const authUrl = await fetchAuthUrl();
-  window.open(authUrl, 'gn_steam_login', 'width=520,height=720');
 }
 
 async function authedFetch(url: string, init: RequestInit = {}): Promise<Response> {

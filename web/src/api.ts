@@ -44,6 +44,32 @@ function readPairSecret(): string {
 
 export const PAIR_SECRET = readPairSecret();
 
+// Session token injected by the Chrome extension via the URL hash (#gn_session=…).
+// The extension obtains it through Steam OpenID (in a popup) and hands it here
+// because the embedded iframe's localStorage is PARTITIONED by Chrome — it can't
+// read a session written by the top-level login window. Read once, cache in
+// sessionStorage, strip the hash. Used as the Bearer credential on gated reads.
+function readInjectedSession(): string {
+  try {
+    const m = window.location.hash.match(/(?:^|[#&])gn_session=([^&]+)/);
+    const token = m && m[1] ? decodeURIComponent(m[1]) : '';
+    if (token) {
+      try {
+        sessionStorage.setItem('gn_injected_session', token);
+      } catch {
+        /* ignore */
+      }
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      return token;
+    }
+    return sessionStorage.getItem('gn_injected_session') ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export const INJECTED_SESSION = readInjectedSession();
+
 export interface NewsItem {
   appId: number | string;
   gameName: string;
@@ -138,6 +164,12 @@ export async function submitFeedback(payload: {
 // import with auth.ts). Used to authenticate gated reads in the browser/extension
 // surface (the Millennium plugin uses the pairing secret instead).
 function sessionToken(): string {
+  // Extension: the token injected via the URL hash wins (partitioned localStorage
+  // can't be shared with the login popup). Standalone web: the OpenID return
+  // stored it in localStorage.
+  if (INJECTED_SESSION) {
+    return INJECTED_SESSION;
+  }
   try {
     const raw = localStorage.getItem('gn_session');
     if (!raw) return '';

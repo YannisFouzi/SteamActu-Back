@@ -81,12 +81,15 @@ router.post("/steam/start", (req, res) => {
   try {
     const attempt = createAttempt();
 
-    // Flow web : on propage platform=web dans le return_to pour que /return
-    // affiche une page de succes (au lieu du deep link mobile steamnotif://).
-    const isWeb = req.body && req.body.platform === "web";
+    // Propage la plateforme dans le return_to pour que /return choisisse la page
+    // de fin : "web" (dépose la session + redirige vers le feed), "extension"
+    // (page de succès auto-fermante — la session est récupérée par polling du
+    // authToken côté content script), sinon deep link mobile steamnotif://.
+    const requested = (req.body && req.body.platform) || "";
+    const platform = requested === "web" || requested === "extension" ? requested : "";
 
     // Construire le return_to avec authToken
-    const returnTo = `${req.protocol}://${req.get("host")}/auth/steam/return?authToken=${attempt.authToken}${isWeb ? "&platform=web" : ""}`;
+    const returnTo = `${req.protocol}://${req.get("host")}/auth/steam/return?authToken=${attempt.authToken}${platform ? `&platform=${platform}` : ""}`;
     const realm = `${req.protocol}://${req.get("host")}/`;
 
     const params = new URLSearchParams({
@@ -214,6 +217,32 @@ router.get("/steam/return", validateOpenIdResponse, async (req, res) => {
     // localStorage de la web view avant de rediriger vers le feed. Un inconnu ne
     // peut pas atteindre ce code pour le compte d'autrui : il faudrait passer
     // l'OpenID Steam a sa place.
+    // Flow extension (Chrome) : popup d'OpenID ouverte par le content script. La
+    // session est récupérée par polling de /auth/steam/status (markSucceeded a
+    // déjà tourné ci-dessus), donc cette page n'a RIEN à déposer — elle confirme
+    // et tente de se fermer. (On ne dépose pas la session en localStorage : il
+    // est cloisonné, l'iframe embarquée ne le verrait pas.)
+    if (req.query.platform === "extension") {
+      logAuthServer("Auth extension: attempt marquee, page de fin", {
+        steamId: maskSteamId(steamId),
+      });
+      return res
+        .type("html")
+        .send(
+          `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Connecté</title>` +
+            `<style>body{background:#171a21;color:#c7d5e0;font-family:Arial,sans-serif;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;height:100vh;margin:0}` +
+            `.ok{color:#66c0f4;font-size:18px;font-weight:600}.sub{font-size:13px;color:#8f98a0}</style></head>` +
+            `<body><div class="ok">Connecté à Steam ✓</div>` +
+            `<div class="sub">Vous pouvez fermer cette fenêtre.</div>` +
+            `<script>try{window.close()}catch(e){}</script>` +
+            `</body></html>`,
+        );
+    }
+
+    // Flow web (page autonome ouverte au top-level) : l'assertion OpenID vient
+    // d'etre verifiee, donc ce steamId est PROUVE. On mint la session, on la
+    // depose dans le localStorage de la web view (top-level, non cloisonne) puis
+    // on redirige vers le feed.
     if (req.query.platform === "web") {
       const session = createMobileSession(steamId);
       const sessionJson = JSON.stringify({ token: session.token, steamId });
@@ -230,14 +259,7 @@ router.get("/steam/return", validateOpenIdResponse, async (req, res) => {
             `<body><div class="ok">Connexion à Steam ✓</div>` +
             `<script>try{localStorage.setItem('gn_session',${JSON.stringify(
               sessionJson,
-            )})}catch(e){}` +
-            // Extension flow: this page was opened as a popup (window.opener set)
-            // by the content script; the session write above fires a `storage`
-            // event in the feed iframe, so we just close. Standalone flow: no
-            // opener → redirect into the feed as before.
-            `if(window.opener){window.close()}else{location.replace(${JSON.stringify(
-              feedUrl,
-            )})}</script>` +
+            )})}catch(e){}location.replace(${JSON.stringify(feedUrl)})</script>` +
             `</body></html>`,
         );
     }

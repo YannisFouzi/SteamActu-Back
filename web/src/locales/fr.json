@@ -196,8 +196,6 @@
     "mobileNewsNotif": "Notifications d'actualités sur Mobile",
     "avoidDuplicates": "Éviter les doublons quand Steam est ouvert",
     "follow": "Suivre",
-    "unfollow": "Ne plus suivre",
-    "loginPrompt": "Connecte-toi à Steam pour afficher ton fil (privé).",
-    "loginButton": "Se connecter avec Steam"
+    "unfollow": "Ne plus suivre"
   }
 }

@@ -28,6 +28,11 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: {message: 'Too many authentication attempts. Try again later.'},
+  // GET /auth/steam/status/<token> is a harmless read the Chrome-extension login
+  // polls repeatedly while waiting for the OpenID popup to complete; it must not
+  // eat the strict 10/min auth budget. (req.path is mount-relative under /auth.)
+  skip: req =>
+    req.method === 'GET' && (req.path || '').startsWith('/steam/status/'),
 });
 
 const apiLimiter = rateLimit({

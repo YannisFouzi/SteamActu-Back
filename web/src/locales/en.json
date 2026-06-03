@@ -196,8 +196,6 @@
     "mobileNewsNotif": "News notifications on Mobile",
     "avoidDuplicates": "Avoid duplicates when Steam is open",
     "follow": "Follow",
-    "unfollow": "Unfollow",
-    "loginPrompt": "Sign in with Steam to view your private feed.",
-    "loginButton": "Sign in with Steam"
+    "unfollow": "Unfollow"
   }
 }

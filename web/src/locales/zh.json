@@ -196,8 +196,6 @@
     "mobileNewsNotif": "在手机上的新闻通知",
     "avoidDuplicates": "当 Steam 打开时避免重复",
     "follow": "关注",
-    "unfollow": "取消关注",
-    "loginPrompt": "使用 Steam 登录以查看你的私人资讯。",
-    "loginButton": "使用 Steam 登录"
+    "unfollow": "取消关注"
   }
 }

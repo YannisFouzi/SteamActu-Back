@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CONTEXT, fetchProfile, HttpError, PAIR_SECRET, type WebProfile } from './api';
+import {
+  CONTEXT,
+  fetchProfile,
+  HttpError,
+  INJECTED_SESSION,
+  PAIR_SECRET,
+  type WebProfile,
+} from './api';
 import {
   getSession,
   logout,
-  openSteamLoginPopup,
   startSteamLogin,
   updateNotifications,
   type Session,
 } from './auth';
-import { isEmbedded } from './host';
 import { useFollow } from './useFollow';
 import { useUnfollowGuard } from './useUnfollowGuard';
 import { LangContext, makeT } from './i18n';
@@ -21,7 +26,6 @@ type Tab = 'actu' | 'suivre' | 'compte';
 
 type ProfileState =
   | { status: 'loading' }
-  | { status: 'login' }
   | { status: 'error'; error: string }
   | { status: 'ok'; profile: WebProfile };
 
@@ -64,18 +68,19 @@ export default function App() {
         // secret) a 401 means we need a verified session → go through Steam
         // OpenID. The Millennium plugin always carries the secret, so it never
         // lands here. A stranger without the Steam session can't pass OpenID.
-        if (err instanceof HttpError && err.status === 401 && !PAIR_SECRET && !session) {
-          // Embedded in the Chrome extension: the OpenID page can't be framed,
-          // so we can't auto-redirect — show a button that opens the login in a
-          // top-level popup (a user gesture, to clear the popup blocker).
-          // Standalone tab: redirect through OpenID directly (near-zero-click).
-          if (isEmbedded()) {
-            setProfile({ status: 'login' });
-          } else {
-            void startSteamLogin().catch(() => {
-              setProfile({ status: 'error', error: 'Authentification requise' });
-            });
-          }
+        if (
+          err instanceof HttpError &&
+          err.status === 401 &&
+          !PAIR_SECRET &&
+          !session &&
+          !INJECTED_SESSION
+        ) {
+          // No credential at all → standalone web tab: redirect through Steam
+          // OpenID (near-zero-click). The plugin (secret) and the extension
+          // (injected session) carry their own credential and never land here.
+          void startSteamLogin().catch(() => {
+            setProfile({ status: 'error', error: 'Authentification requise' });
+          });
           return;
         }
         setProfile({
@@ -118,42 +123,6 @@ export default function App() {
     return (
       <div className="page">
         <div className="state">{t('settings.accountDeleted')}</div>
-      </div>
-    );
-  }
-
-  // Embedded + not yet authenticated (Chrome extension, first open): the feed is
-  // private, so prompt a one-time Steam login that opens in a top-level popup.
-  if (profile.status === 'login') {
-    return (
-      <div className="page">
-        <div
-          className="state"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '16px',
-          }}
-        >
-          <div>{t('web.loginPrompt')}</div>
-          <button
-            type="button"
-            onClick={() => void openSteamLoginPopup()}
-            style={{
-              background: '#1a9fff',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '10px 20px',
-              fontSize: '14px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            {t('web.loginButton')}
-          </button>
-        </div>
       </div>
     );
   }
