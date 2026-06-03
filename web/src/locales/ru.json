@@ -198,6 +198,8 @@
     "mobileNewsNotif": "Уведомления о новостях на телефоне",
     "avoidDuplicates": "Избегать дублей, когда Steam открыт",
     "follow": "Подписаться",
-    "unfollow": "Отписаться"
+    "unfollow": "Отписаться",
+    "loginPrompt": "Войдите через Steam, чтобы открыть свою приватную ленту.",
+    "loginButton": "Войти через Steam"
   }
 }

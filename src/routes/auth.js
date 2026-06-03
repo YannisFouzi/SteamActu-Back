@@ -230,7 +230,14 @@ router.get("/steam/return", validateOpenIdResponse, async (req, res) => {
             `<body><div class="ok">Connexion à Steam ✓</div>` +
             `<script>try{localStorage.setItem('gn_session',${JSON.stringify(
               sessionJson,
-            )})}catch(e){}location.replace(${JSON.stringify(feedUrl)})</script>` +
+            )})}catch(e){}` +
+            // Extension flow: this page was opened as a popup (window.opener set)
+            // by the content script; the session write above fires a `storage`
+            // event in the feed iframe, so we just close. Standalone flow: no
+            // opener → redirect into the feed as before.
+            `if(window.opener){window.close()}else{location.replace(${JSON.stringify(
+              feedUrl,
+            )})}</script>` +
             `</body></html>`,
         );
     }
