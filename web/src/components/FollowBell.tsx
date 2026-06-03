@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { BellIcon } from './Icons';
 
 // Mirrors the mobile FollowToggle: a round bell button, green/filled when the
@@ -14,13 +15,14 @@ export default function FollowBell({
   onToggle: () => void;
   size?: number;
 }) {
+  const { t } = useT();
   return (
     <button
       type="button"
       className={`bell-btn ${following ? 'on' : ''}`}
       disabled={busy}
       aria-pressed={following}
-      aria-label={following ? 'Ne plus suivre' : 'Suivre'}
+      aria-label={following ? t('web.unfollow') : t('web.follow')}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();

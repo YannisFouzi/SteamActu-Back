@@ -3,6 +3,7 @@ import { CONTEXT, fetchNews, type NewsItem } from '../api';
 import { addFavorite, markNewsFeedSeen, removeFavorite } from '../auth';
 import { type FollowState } from '../useFollow';
 import { formatDateTime, openExternal } from '../format';
+import { useT } from '../i18n';
 import FollowBell from '../components/FollowBell';
 import { StarIcon } from '../components/Icons';
 
@@ -21,6 +22,7 @@ export default function ActuTab({
   hasFollowedGames: boolean;
   onNavigateFollow: () => void;
 }) {
+  const { t, lang } = useT();
   const [status, setStatus] = useState<'loading' | 'error' | 'ok'>('loading');
   const [error, setError] = useState('');
   const [items, setItems] = useState<NewsItem[]>([]);
@@ -31,7 +33,7 @@ export default function ActuTab({
   const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   const load = (favOnly: boolean, cancelledRef?: { v: boolean }) =>
-    fetchNews(CONTEXT.steamId, CONTEXT.language, favOnly).then((data) => {
+    fetchNews(CONTEXT.steamId, lang, favOnly).then((data) => {
       if (cancelledRef?.v) return;
       const list = data.items ?? [];
       const favIds = list
@@ -67,7 +69,7 @@ export default function ActuTab({
       cancelledRef.v = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [favoritesOnly]);
+  }, [favoritesOnly, lang]);
 
   // Mark the feed as seen when leaving it (sub-tab/main-tab switch unmounts
   // this component), mirroring the mobile markFeedSeen on blur.
@@ -142,7 +144,7 @@ export default function ActuTab({
 
   const filter = showFilter ? (
     <div className="feed-filter">
-      <span className="feed-filter-label">Afficher uniquement les favoris</span>
+      <span className="feed-filter-label">{t('news.favoritesOnly')}</span>
       <button
         type="button"
         className={`toggle ${favoritesOnly ? 'on' : ''}`}
@@ -156,10 +158,10 @@ export default function ActuTab({
   ) : null;
 
   if (status === 'loading') {
-    return <div className="state">Chargement des actualités…</div>;
+    return <div className="state">{t('news.loadingFeed')}</div>;
   }
   if (status === 'error') {
-    return <div className="state error">Échec du chargement — {error}</div>;
+    return <div className="state error">{t('common.error')} — {error}</div>;
   }
   if (items.length === 0) {
     return (
@@ -167,27 +169,20 @@ export default function ActuTab({
         {filter}
         {favoritesOnly ? (
           <div className="feed-empty">
-            <div className="feed-empty-title">Aucune actualité en favori</div>
-            <div className="feed-empty-text">
-              Mettez une actualité en favori avec l'étoile pour la retrouver ici.
-            </div>
+            <div className="feed-empty-title">{t('news.favoritesEmptyTitle')}</div>
+            <div className="feed-empty-text">{t('news.favoritesEmptyText')}</div>
           </div>
         ) : hasFollowedGames ? (
           <div className="feed-empty">
-            <div className="feed-empty-title">Aucune actualité récente</div>
-            <div className="feed-empty-text">
-              Vos jeux suivis n'ont pas publié de nouvelles actualités. Revenez
-              plus tard ou suivez d'autres jeux pour élargir le flux.
-            </div>
+            <div className="feed-empty-title">{t('news.noRecentNewsTitle')}</div>
+            <div className="feed-empty-text">{t('news.noRecentNewsText')}</div>
           </div>
         ) : (
           <div className="feed-empty">
-            <div className="feed-empty-title">Vous ne suivez aucun jeu</div>
-            <div className="feed-empty-text">
-              Suivez un jeu pour commencer à recevoir des actualités.
-            </div>
+            <div className="feed-empty-title">{t('news.noFollowedGamesTitle')}</div>
+            <div className="feed-empty-text">{t('news.noFollowedGamesText')}</div>
             <button className="feed-empty-action" onClick={onNavigateFollow}>
-              Suivre un jeu
+              {t('news.noFollowedGamesAction')}
             </button>
           </div>
         )}
@@ -237,7 +232,7 @@ export default function ActuTab({
                 <div className="news-head-meta">
                   <div className="news-game">{item.gameName}</div>
                   <div className="news-date">
-                    {formatDateTime(item.news.date, CONTEXT.language)}
+                    {formatDateTime(item.news.date, lang)}
                   </div>
                 </div>
                 {editable && (
@@ -255,7 +250,7 @@ export default function ActuTab({
                       className={`fav-btn ${isFav ? 'on' : ''}`}
                       disabled={favBusy.has(key)}
                       aria-pressed={isFav}
-                      aria-label={isFav ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                      aria-label={isFav ? t('news.removeFavorite') : t('news.addFavorite')}
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleFavorite(item);

@@ -1,4 +1,5 @@
 import { openExternal } from '../format';
+import { useT } from '../i18n';
 import FollowBell from './FollowBell';
 
 function storeUrl(appId: string): string {
@@ -26,6 +27,7 @@ export default function GameRow({
   familyShared = false,
   onToggle,
 }: GameRowProps) {
+  const { t } = useT();
   return (
     <div className="game-row">
       <div
@@ -46,7 +48,7 @@ export default function GameRow({
         />
         <div style={{ minWidth: 0 }}>
           <div className="game-name">{name}</div>
-          {familyShared && <span className="family-badge">Famille</span>}
+          {familyShared && <span className="family-badge">{t('games.familyBadge')}</span>}
           {!editable && following && <span className="badge">followed</span>}
         </div>
       </div>

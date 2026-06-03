@@ -2,27 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { CONTEXT, fetchLibrary, type LibraryGame, type WebProfile } from '../api';
 import { type FollowState } from '../useFollow';
 import { sortLibrary, sortWishlist, type LibrarySort, type WishlistSort } from '../sort';
+import { useT } from '../i18n';
 import SubTabs, { type SubTab } from '../components/SubTabs';
 import SortOptions, { type SortOption } from '../components/SortOptions';
 import GamesGrid from '../components/GamesGrid';
 import UnifiedSearchView from '../components/UnifiedSearchView';
 
 type Sub = 'mes-jeux' | 'wishlist';
-const TABS: ReadonlyArray<SubTab<Sub>> = [
-  { key: 'mes-jeux', label: 'Mes jeux' },
-  { key: 'wishlist', label: 'Wishlist' },
-];
-
-const LIB_SORTS: ReadonlyArray<SortOption<LibrarySort>> = [
-  { value: 'lastTwoWeeks', label: 'Top récents' },
-  { value: 'default', label: 'A-Z' },
-  { value: 'mostPlayed', label: 'Plus joués' },
-];
-
-const WISHLIST_SORTS: ReadonlyArray<SortOption<WishlistSort>> = [
-  { value: 'recent', label: 'Récents' },
-  { value: 'alphabetical', label: 'A-Z' },
-];
 
 type LibState =
   | { status: 'loading' }
@@ -38,11 +24,28 @@ export default function SuivreSection({
   editable: boolean;
   follow: FollowState;
 }) {
+  const { t } = useT();
   const [query, setQuery] = useState('');
   const [sub, setSub] = useState<Sub>('mes-jeux');
   const [libSort, setLibSort] = useState<LibrarySort>('lastTwoWeeks');
   const [wishSort, setWishSort] = useState<WishlistSort>('recent');
   const [lib, setLib] = useState<LibState>({ status: 'loading' });
+
+  const TABS: ReadonlyArray<SubTab<Sub>> = [
+    { key: 'mes-jeux', label: t('nav.myGames') },
+    { key: 'wishlist', label: t('nav.wishlist') },
+  ];
+
+  const LIB_SORTS: ReadonlyArray<SortOption<LibrarySort>> = [
+    { value: 'lastTwoWeeks', label: t('games.recentTwoWeeks') },
+    { value: 'default', label: t('games.sortAZ') },
+    { value: 'mostPlayed', label: t('games.topPlayed') },
+  ];
+
+  const WISHLIST_SORTS: ReadonlyArray<SortOption<WishlistSort>> = [
+    { value: 'recent', label: t('games.recents') },
+    { value: 'alphabetical', label: t('games.sortAZ') },
+  ];
 
   // Library is needed both by Mes jeux and by the unified search ("Dans mes
   // jeux" section), so load it once when the section mounts.
@@ -86,7 +89,7 @@ export default function SuivreSection({
       <input
         className="search-input"
         type="text"
-        placeholder="Rechercher un jeu..."
+        placeholder={t('search.unifiedPlaceholder')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
@@ -106,11 +109,11 @@ export default function SuivreSection({
           {sub === 'mes-jeux' && (
             <>
               {lib.status === 'loading' && (
-                <div className="state">Chargement de ta bibliothèque…</div>
+                <div className="state">{t('games.loadingGames')}</div>
               )}
               {lib.status === 'error' && (
                 <div className="state error">
-                  Échec du chargement — {lib.error}
+                  {t('common.error')} — {lib.error}
                 </div>
               )}
               {lib.status === 'ok' && (
@@ -124,7 +127,7 @@ export default function SuivreSection({
                     items={mesJeuxItems}
                     editable={editable}
                     follow={follow}
-                    emptyLabel="Ta bibliothèque Steam semble vide (profil privé ?)."
+                    emptyLabel={t('games.libraryEmptyShortText')}
                   />
                 </>
               )}
@@ -133,7 +136,7 @@ export default function SuivreSection({
 
           {sub === 'wishlist' &&
             (profile == null ? (
-              <div className="state">Chargement…</div>
+              <div className="state">{t('common.loading')}</div>
             ) : (
               <>
                 {wishlist.length > 0 && (
@@ -151,7 +154,7 @@ export default function SuivreSection({
                   }))}
                   editable={editable}
                   follow={follow}
-                  emptyLabel="Ta wishlist est vide."
+                  emptyLabel={t('games.wishlistEmptyShortText')}
                 />
               </>
             ))}

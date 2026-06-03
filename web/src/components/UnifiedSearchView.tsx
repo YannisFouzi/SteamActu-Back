@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { searchGames, type LibraryGame, type SearchResult, type WishlistGame } from '../api';
 import { type FollowState } from '../useFollow';
+import { useT } from '../i18n';
 import GamesGrid, { type GridItem } from './GamesGrid';
 
 const STORE_MIN_LENGTH = 3;
@@ -20,6 +21,7 @@ export default function UnifiedSearchView({
   editable: boolean;
   follow: FollowState;
 }) {
+  const { t } = useT();
   const [store, setStore] = useState<SearchResult[]>([]);
   const [storeLoading, setStoreLoading] = useState(false);
   const debounceRef = useRef<number | undefined>(undefined);
@@ -78,14 +80,14 @@ export default function UnifiedSearchView({
     <div>
       {myGames.length > 0 && (
         <>
-          <div className="section-title">Dans mes jeux</div>
+          <div className="section-title">{t('unifiedResults.sectionMyGames')}</div>
           <GamesGrid items={myGames} editable={editable} follow={follow} emptyLabel="" />
         </>
       )}
 
       {wish.length > 0 && (
         <>
-          <div className="section-title">Dans la wishlist</div>
+          <div className="section-title">{t('unifiedResults.sectionWishlist')}</div>
           <GamesGrid items={wish} editable={editable} follow={follow} emptyLabel="" />
         </>
       )}
@@ -93,7 +95,7 @@ export default function UnifiedSearchView({
       {!storeTooShort && (storeItems.length > 0 || storeLoading) && (
         <>
           <div className="section-title">
-            Sur la boutique Steam {storeLoading ? '· recherche…' : ''}
+            {t('unifiedResults.sectionStore')} {storeLoading ? `· ${t('search.loading')}` : ''}
           </div>
           {storeItems.length > 0 && (
             <GamesGrid items={storeItems} editable={editable} follow={follow} emptyLabel="" />
@@ -104,7 +106,7 @@ export default function UnifiedSearchView({
       {myGames.length === 0 &&
         wish.length === 0 &&
         storeItems.length === 0 &&
-        !storeLoading && <div className="state">Aucun résultat.</div>}
+        !storeLoading && <div className="state">{t('emptyStates.noResultsTitle')}</div>}
     </div>
   );
 }

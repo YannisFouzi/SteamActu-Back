@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useT } from '../i18n';
 
 // Modal confirmation, mirrors the mobile showDialog: title + message, an
 // optional "don't ask again" checkbox, and a (optionally destructive) confirm
@@ -7,7 +8,7 @@ export default function ConfirmDialog({
   title,
   message,
   confirmLabel,
-  cancelLabel = 'Annuler',
+  cancelLabel,
   destructive = false,
   checkboxLabel,
   busy = false,
@@ -24,6 +25,7 @@ export default function ConfirmDialog({
   onConfirm: (dontAskAgain: boolean) => void;
   onCancel: () => void;
 }) {
+  const { t } = useT();
   const [checked, setChecked] = useState(false);
 
   return (
@@ -48,7 +50,7 @@ export default function ConfirmDialog({
         )}
         <div className="modal-actions">
           <button className="modal-btn ghost" disabled={busy} onClick={onCancel}>
-            {cancelLabel}
+            {cancelLabel ?? t('common.cancel')}
           </button>
           <button
             className={`modal-btn ${destructive ? 'danger' : 'primary'}`}

@@ -9,6 +9,7 @@ import {
 } from './auth';
 import { useFollow } from './useFollow';
 import { useUnfollowGuard } from './useUnfollowGuard';
+import { LangContext, makeT } from './i18n';
 import ActuSection from './sections/ActuSection';
 import SuivreSection from './sections/SuivreSection';
 import CompteTab from './tabs/CompteTab';
@@ -27,6 +28,9 @@ export default function App() {
   const [session] = useState<Session | null>(getSession());
   const [confirmUnfollow, setConfirmUnfollow] = useState(true);
   const [deleted, setDeleted] = useState(false);
+  const [lang, setLang] = useState<string>(CONTEXT.language || 'fr');
+
+  const t = useMemo(() => makeT(lang), [lang]);
 
   const authed = session != null && session.steamId === CONTEXT.steamId;
 
@@ -48,6 +52,7 @@ export default function App() {
         if (!cancelled) {
           setProfile({ status: 'ok', profile: p });
           setConfirmUnfollow(p.account.confirmUnfollowGames);
+          if (p.language) setLang(p.language);
         }
       })
       .catch((err: unknown) => {
@@ -101,31 +106,32 @@ export default function App() {
   if (deleted) {
     return (
       <div className="page">
-        <div className="state">Votre compte a été supprimé.</div>
+        <div className="state">{t('settings.accountDeleted')}</div>
       </div>
     );
   }
 
   return (
+    <LangContext.Provider value={{ lang, setLang, t }}>
     <div className="page">
       <nav className="tabs">
         <button
           className={`tab ${tab === 'actu' ? 'active' : ''}`}
           onClick={() => setTab('actu')}
         >
-          Actu
+          {t('nav.news')}
         </button>
         <button
           className={`tab ${tab === 'suivre' ? 'active' : ''}`}
           onClick={() => setTab('suivre')}
         >
-          Suivre un jeu
+          {t('nav.followGame')}
         </button>
         <button
           className={`tab ${tab === 'compte' ? 'active' : ''}`}
           onClick={() => setTab('compte')}
         >
-          Mon compte
+          {t('nav.account')}
         </button>
       </nav>
 
@@ -146,7 +152,7 @@ export default function App() {
       )}
       {tab === 'compte' &&
         (profile.status === 'error' ? (
-          <div className="state error">Failed to load profile — {profile.error}</div>
+          <div className="state error">{t('common.error')} — {profile.error}</div>
         ) : profileData ? (
           <CompteTab
             profile={profileData}
@@ -160,20 +166,21 @@ export default function App() {
             }}
           />
         ) : (
-          <div className="state">Loading profile…</div>
+          <div className="state">{t('common.loading')}</div>
         ))}
 
       {guard.pending && (
         <ConfirmDialog
-          title="Ne plus suivre ce jeu ?"
-          message={`Vous ne recevrez plus d'actualités pour « ${guard.pending.name} ».`}
-          confirmLabel="Ne plus suivre"
+          title={t('settings.confirmUnfollowTitle')}
+          message={t('settings.confirmUnfollowMessage', { game: guard.pending.name })}
+          confirmLabel={t('settings.confirmUnfollowConfirm')}
           destructive
-          checkboxLabel="Ne plus me demander pour les prochains désabonnements"
+          checkboxLabel={t('settings.confirmUnfollowCheckbox')}
           onConfirm={guard.confirm}
           onCancel={guard.cancel}
         />
       )}
     </div>
+    </LangContext.Provider>
   );
 }

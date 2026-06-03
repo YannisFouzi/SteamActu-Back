@@ -2,21 +2,13 @@ import { useMemo, useState } from 'react';
 import { type WebProfile } from '../api';
 import { type FollowState } from '../useFollow';
 import { sortFollowed, type FollowedSort } from '../sort';
+import { useT } from '../i18n';
 import SubTabs, { type SubTab } from '../components/SubTabs';
 import SortOptions, { type SortOption } from '../components/SortOptions';
 import GamesGrid from '../components/GamesGrid';
 import ActuTab from '../tabs/ActuTab';
 
 type Sub = 'fil' | 'jeux-suivis';
-const TABS: ReadonlyArray<SubTab<Sub>> = [
-  { key: 'fil', label: 'Fil' },
-  { key: 'jeux-suivis', label: 'Jeux suivis' },
-];
-
-const SORTS: ReadonlyArray<SortOption<FollowedSort>> = [
-  { value: 'alphabetical', label: 'A-Z' },
-  { value: 'recent', label: 'Récents' },
-];
 
 export default function ActuSection({
   profile,
@@ -29,9 +21,20 @@ export default function ActuSection({
   follow: FollowState;
   onNavigateFollow: () => void;
 }) {
+  const { t } = useT();
   const [sub, setSub] = useState<Sub>('fil');
   const [sort, setSort] = useState<FollowedSort>('alphabetical');
   const [query, setQuery] = useState('');
+
+  const TABS: ReadonlyArray<SubTab<Sub>> = [
+    { key: 'fil', label: t('nav.feed') },
+    { key: 'jeux-suivis', label: t('nav.followedGames') },
+  ];
+
+  const SORTS: ReadonlyArray<SortOption<FollowedSort>> = [
+    { value: 'alphabetical', label: t('games.sortAZ') },
+    { value: 'recent', label: t('games.recents') },
+  ];
 
   const followed = profile?.followedGames ?? [];
 
@@ -63,13 +66,13 @@ export default function ActuSection({
 
       {sub === 'jeux-suivis' &&
         (profile == null ? (
-          <div className="state">Loading…</div>
+          <div className="state">{t('common.loading')}</div>
         ) : (
           <>
             <input
               className="search-input"
               type="text"
-              placeholder="Rechercher dans les jeux suivis..."
+              placeholder={t('search.placeholderFollowed')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -81,7 +84,7 @@ export default function ActuSection({
               editable={editable}
               follow={follow}
               emptyLabel={
-                query ? 'Aucun résultat.' : "Tu ne suis aucun jeu pour l'instant."
+                query ? t('emptyStates.noResultsTitle') : t('games.followedEmptyText')
               }
             />
           </>

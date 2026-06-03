@@ -14,21 +14,8 @@ import {
   type NotificationPatch,
 } from '../auth';
 import { openExternal } from '../format';
+import { useT } from '../i18n';
 import ConfirmDialog from '../components/ConfirmDialog';
-
-const FOLLOW_MODES = [
-  { value: 'off', label: 'Désactivé' },
-  { value: 'auto', label: 'Ajout automatique' },
-  { value: 'prompt', label: 'Notif. de confirmation' },
-] as const;
-
-const SUPPORT_LINKS = [
-  { label: 'Contact (email)', url: 'mailto:contact@fouzi-dev.fr' },
-  { label: 'GitHub', url: 'https://github.com/YannisFouzi' },
-  { label: 'Site web', url: 'https://fouzi-dev.fr/' },
-  { label: "Conditions d'utilisation", url: '/terms' },
-  { label: 'Politique de confidentialité', url: '/privacy' },
-];
 
 function Toggle({
   label,
@@ -68,6 +55,12 @@ function ModeSelect({
   disabled: boolean;
   onChange: (v: string) => void;
 }) {
+  const { t } = useT();
+  const FOLLOW_MODES = [
+    { value: 'off', label: t('followModes.offTitle') },
+    { value: 'auto', label: t('followModes.autoTitle') },
+    { value: 'prompt', label: t('followModes.promptTitle') },
+  ] as const;
   return (
     <div className="set-block">
       <span className="set-label">{label}</span>
@@ -102,14 +95,22 @@ export default function CompteTab({
   onConfirmUnfollowChange: (v: boolean) => void;
   onAccountDeleted: () => void;
 }) {
+  const { t, lang, setLang } = useT();
   const a = profile.account;
   const [newsNotif, setNewsNotif] = useState(a.newsNotifications);
   const [steamNotif, setSteamNotif] = useState(a.steamNotifications);
   const [preferSteam, setPreferSteam] = useState(a.preferSteamWhenOpen);
   const [libMode, setLibMode] = useState(a.libraryFollowMode);
   const [wishMode, setWishMode] = useState(a.wishlistFollowMode);
-  const [language, setLanguage] = useState(profile.language);
   const [saving, setSaving] = useState(false);
+
+  const supportLinks = [
+    { label: t('contact.email'), url: 'mailto:contact@fouzi-dev.fr' },
+    { label: t('contact.github'), url: 'https://github.com/YannisFouzi' },
+    { label: t('contact.website'), url: 'https://fouzi-dev.fr/' },
+    { label: t('nav.termsOfService'), url: '/terms' },
+    { label: t('nav.privacyPolicy'), url: '/privacy' },
+  ];
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -125,15 +126,15 @@ export default function CompteTab({
       .finally(() => setSaving(false));
   };
 
-  const onLanguage = (lang: AppLanguage) => {
-    if (!editable || lang === language) return;
-    const prev = language;
-    setLanguage(lang);
+  const onLanguage = (code: AppLanguage) => {
+    if (!editable || code === lang) return;
+    const prev = lang;
+    setLang(code); // live UI translation
     setSaving(true);
-    updateLanguage(lang)
+    updateLanguage(code)
       .catch((err: unknown) => {
         console.error('[GameNews] language save failed', err);
-        setLanguage(prev);
+        setLang(prev);
       })
       .finally(() => setSaving(false));
   };
@@ -150,9 +151,7 @@ export default function CompteTab({
         console.error('[GameNews] delete account failed', err);
         setShowDelete(false);
         setDeleting(false);
-        setDeleteError(
-          'Une erreur est survenue lors de la suppression de votre compte. Veuillez réessayer.',
-        );
+        setDeleteError(t('settings.deleteAccountError'));
       });
   };
 
@@ -161,15 +160,12 @@ export default function CompteTab({
   return (
     <div className="settings">
       {!editable && (
-        <div className="hint">
-          Lecture seule — connecte-toi depuis l'app mobile pour modifier tes
-          réglages.
-        </div>
+        <div className="hint">{t('web.readOnlyHint')}</div>
       )}
 
       <div className="settings-group">
         <Toggle
-          label="Notifications d'actualités sur Steam"
+          label={t('web.steamNewsNotif')}
           value={steamNotif}
           disabled={disabled}
           onChange={(v) => {
@@ -178,7 +174,7 @@ export default function CompteTab({
           }}
         />
         <Toggle
-          label="Notifications d'actualités sur Mobile"
+          label={t('web.mobileNewsNotif')}
           value={newsNotif}
           disabled={disabled}
           onChange={(v) => {
@@ -187,7 +183,7 @@ export default function CompteTab({
           }}
         />
         <Toggle
-          label="Éviter les doublons quand Steam est ouvert"
+          label={t('web.avoidDuplicates')}
           value={preferSteam}
           disabled={disabled}
           onChange={(v) => {
@@ -196,7 +192,7 @@ export default function CompteTab({
           }}
         />
         <Toggle
-          label="Confirmer avant de ne plus suivre"
+          label={t('settings.confirmUnfollowLabel')}
           value={confirmUnfollow}
           disabled={disabled}
           onChange={(v) => onConfirmUnfollowChange(v)}
@@ -204,13 +200,10 @@ export default function CompteTab({
       </div>
 
       <div className="settings-group">
-        <div className="settings-group-title">Suivi des nouveaux jeux</div>
-        <div className="settings-group-desc">
-          Choisissez comment gérer le suivi des jeux détectés dans votre
-          bibliothèque et votre wishlist.
-        </div>
+        <div className="settings-group-title">{t('common.autoFollow')}</div>
+        <div className="settings-group-desc">{t('settings.autoFollowDescription')}</div>
         <ModeSelect
-          label="Ma bibliothèque & Steam Famille"
+          label={t('settings.libraryLabel')}
           value={libMode}
           disabled={disabled}
           onChange={(v) => {
@@ -220,7 +213,7 @@ export default function CompteTab({
           }}
         />
         <ModeSelect
-          label="Ma wishlist"
+          label={t('settings.wishlistLabel')}
           value={wishMode}
           disabled={disabled}
           onChange={(v) => {
@@ -232,16 +225,13 @@ export default function CompteTab({
       </div>
 
       <div className="settings-group">
-        <div className="settings-group-title">Langue de l'application</div>
-        <div className="settings-group-desc">
-          Choisissez la langue de l'interface, des actualités jeu demandées et
-          des notifications.
-        </div>
+        <div className="settings-group-title">{t('settings.languageLabel')}</div>
+        <div className="settings-group-desc">{t('settings.languageDescription')}</div>
         <div className="sort-options">
           {SUPPORTED_LANGUAGES.map((code) => (
             <button
               key={code}
-              className={`sort-chip ${language === code ? 'active' : ''}`}
+              className={`sort-chip ${lang === code ? 'active' : ''}`}
               disabled={disabled}
               onClick={() => onLanguage(code)}
             >
@@ -252,13 +242,13 @@ export default function CompteTab({
       </div>
 
       <div className="settings-group">
-        <div className="settings-group-title">Feedback</div>
+        <div className="settings-group-title">{t('settings.feedbackSectionTitle')}</div>
         <FeedbackForm />
       </div>
 
       <div className="settings-group">
-        <div className="settings-group-title">Contact et informations légales</div>
-        {SUPPORT_LINKS.map((link) => (
+        <div className="settings-group-title">{t('settings.sectionSupportTitle')}</div>
+        {supportLinks.map((link) => (
           <button
             key={link.url}
             className="support-row"
@@ -276,19 +266,19 @@ export default function CompteTab({
             disabled={deleting}
             onClick={() => setShowDelete(true)}
           >
-            {deleting ? 'Suppression...' : 'Supprimer mon compte'}
+            {deleting ? t('settings.deleting') : t('settings.deleteAccount')}
           </button>
           {deleteError && <div className="feedback-status err">{deleteError}</div>}
         </div>
       )}
 
-      <div className="settings-footer">Game News v1.0.0</div>
+      <div className="settings-footer">{t('settings.aboutVersion')}</div>
 
       {showDelete && (
         <ConfirmDialog
-          title="Supprimer mon compte"
-          message="Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible. Toutes vos données seront définitivement supprimées."
-          confirmLabel="Supprimer"
+          title={t('settings.deleteAccountConfirmTitle')}
+          message={t('settings.deleteAccountConfirmMessage')}
+          confirmLabel={t('common.delete')}
           destructive
           busy={deleting}
           onConfirm={handleDelete}
@@ -302,6 +292,7 @@ export default function CompteTab({
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function FeedbackForm() {
+  const { t } = useT();
   const [type, setType] = useState<'bug' | 'feature'>('bug');
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
@@ -313,26 +304,23 @@ function FeedbackForm() {
     const msg = message.trim();
     const mail = email.trim();
     if (msg.length < 5) {
-      setStatus({ kind: 'err', text: 'Ajoutez au moins 5 caractères.' });
+      setStatus({ kind: 'err', text: t('feedback.messageTooShort') });
       return;
     }
     if (!EMAIL_REGEX.test(mail)) {
-      setStatus({ kind: 'err', text: 'Entrez un email valide.' });
+      setStatus({ kind: 'err', text: t('feedback.emailInvalid') });
       return;
     }
     setStatus({ kind: 'sending' });
     submitFeedback({ type, message: msg, email: mail, steamId: CONTEXT.steamId })
       .then(() => {
-        setStatus({ kind: 'ok', text: 'Merci, votre retour a bien été envoyé.' });
+        setStatus({ kind: 'ok', text: t('feedback.sentMessage') });
         setMessage('');
       })
       .catch((err: unknown) => {
         setStatus({
           kind: 'err',
-          text:
-            err instanceof Error
-              ? err.message
-              : "Impossible d'envoyer votre message pour le moment.",
+          text: err instanceof Error ? err.message : t('feedback.sendErrorMessage'),
         });
       });
   };
@@ -346,18 +334,18 @@ function FeedbackForm() {
           className={`sort-chip ${type === 'bug' ? 'active' : ''}`}
           onClick={() => setType('bug')}
         >
-          Bug
+          {t('feedback.types.bug')}
         </button>
         <button
           className={`sort-chip ${type === 'feature' ? 'active' : ''}`}
           onClick={() => setType('feature')}
         >
-          Idée
+          {t('feedback.types.feature')}
         </button>
       </div>
       <textarea
         className="feedback-message"
-        placeholder="Décrivez le problème ou votre suggestion..."
+        placeholder={t('feedback.messagePlaceholder')}
         value={message}
         maxLength={5000}
         onChange={(e) => setMessage(e.target.value)}
@@ -365,12 +353,12 @@ function FeedbackForm() {
       <input
         className="search-input"
         type="email"
-        placeholder="Votre email"
+        placeholder={t('feedback.emailPlaceholder')}
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
       <button className="auth-btn primary" disabled={sending} onClick={submit}>
-        {sending ? 'Envoi...' : 'Envoyer'}
+        {sending ? t('feedback.sending') : t('feedback.send')}
       </button>
       {(status.kind === 'ok' || status.kind === 'err') && (
         <div className={`feedback-status ${status.kind}`}>{status.text}</div>
