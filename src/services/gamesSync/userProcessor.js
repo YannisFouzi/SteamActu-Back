@@ -634,6 +634,14 @@ async function syncUserGames(user, options = {}) {
     });
 
     const familyUnionIds = new Set([...previousFamilyIds, ...currentFamilyIds]);
+    // Un jeu POSSEDE n'est jamais Family. Le set Family est sticky
+    // (previousFamilyIds) : si un jeu a un jour ete flagge Family (hoquet de
+    // GetOwnedGames, ou accès anticipé partagé via Family avant achat) puis est
+    // ensuite revenu dans GetOwnedGames, on le retire ici — sinon il est ajoute
+    // une 2e fois en entree Family (doublon + badge "Famille" errone).
+    for (const ownedId of ownedAppIds) {
+      familyUnionIds.delete(ownedId);
+    }
     for (const familyId of familyUnionIds) {
       const previousGame = previousLibraryMap.get(familyId);
       const recentGame = recentlyPlayedMap.get(familyId);
