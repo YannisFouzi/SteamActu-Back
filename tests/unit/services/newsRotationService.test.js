@@ -189,26 +189,39 @@ describe('services/newsRotationService', () => {
       expect(updated.lastNewsTimestamp).toBe(newTs);
     });
 
-    it('skip les subscribers ayant déjà inFeedAt ou pushSentAt pour la même news', async () => {
+    it('skip les subscribers ayant déjà pushSentAt, mais PAS ceux avec seulement inFeedAt', async () => {
+      // inFeedAt ne doit JAMAIS supprimer le push : il est posé dès qu'une
+      // surface (plugin Steam, web feed, app) affiche la news, ce qui ne veut
+      // pas dire que l'utilisateur a été notifié. Seul pushSentAt = déjà notifié.
       const newTs = Math.floor(Date.now() / 1000);
-      const sA = nextSteamId();
-      const sB = nextSteamId();
+      const sA = nextSteamId(); // pushSentAt → skip
+      const sB = nextSteamId(); // rien → notifié
+      const sC = nextSteamId(); // seulement inFeedAt → DOIT être notifié
       await setupSubscriberWithToken(sA);
       await setupSubscriberWithToken(sB);
+      await setupSubscriberWithToken(sC);
 
       await createGameSubscription({
         gameId: '730',
         name: 'CSGO',
         lastNewsTimestamp: newTs - DAY,
-        subscribers: [sA, sB],
+        subscribers: [sA, sB, sC],
       });
 
-      // sA a déjà l'état pushSentAt → doit être skip
+      // sA a déjà pushSentAt → doit être skip
       await UserNewsState.create({
         steamId: sA,
         appId: '730',
         newsId: 'news-1',
         pushSentAt: new Date(),
+        expiresAt: new Date(Date.now() + 90 * DAY),
+      });
+      // sC a seulement inFeedAt (vu via plugin/web feed) → doit quand même être notifié
+      await UserNewsState.create({
+        steamId: sC,
+        appId: '730',
+        newsId: 'news-1',
+        inFeedAt: new Date(),
         expiresAt: new Date(Date.now() + 90 * DAY),
       });
 
@@ -219,11 +232,13 @@ describe('services/newsRotationService', () => {
 
       const stats = await checkNewsRotation();
 
-      expect(stats.notificationsSent).toBe(1);
-      expect(notificationServiceMock.sendNewsNotification).toHaveBeenCalledTimes(1);
-      expect(
-        notificationServiceMock.sendNewsNotification.mock.calls[0][0],
-      ).toBe(sB);
+      expect(stats.notificationsSent).toBe(2);
+      expect(notificationServiceMock.sendNewsNotification).toHaveBeenCalledTimes(2);
+      const notified = notificationServiceMock.sendNewsNotification.mock.calls.map(
+        (c) => c[0],
+      );
+      expect(notified).toEqual(expect.arrayContaining([sB, sC]));
+      expect(notified).not.toContain(sA);
     });
 
     it('écrit pushSentAt UNIQUEMENT pour les subscribers où sendNewsNotification renvoie true', async () => {

@@ -322,15 +322,19 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
   const subscribers = game.subscribers || [];
   const newsGid = String(newsItem.gid);
 
-  // Filtrer les abonnés déjà servis (inFeedAt ou pushSentAt)
+  // Filtrer les abonnés déjà NOTIFIÉS (push FCM réellement envoyé pour cette news).
+  // On NE filtre volontairement PAS sur inFeedAt : ce champ est posé dès qu'une
+  // surface (app mobile, plugin Steam Desktop, web feed) *affiche* la news, ce
+  // qui n'équivaut pas à "l'utilisateur a été notifié". Le filtrer ici laissait
+  // le poll 5 min du plugin "consommer" la news avant le cron (30 min) → le push
+  // mobile n'était jamais envoyé. La dédup desktop/mobile est gérée en aval par
+  // preferSteamWhenOpen (présence via heartbeat) dans notificationService.
+  // inFeedAt conserve son seul rôle : le grisage "vu" du feed.
   const alreadyServed = await UserNewsState.find({
     steamId: { $in: subscribers },
     appId: String(game.gameId),
     newsId: newsGid,
-    $or: [
-      { inFeedAt: { $ne: null } },
-      { pushSentAt: { $ne: null } },
-    ],
+    pushSentAt: { $ne: null },
   }).select('steamId').lean();
 
   const alreadyServedSet = new Set(alreadyServed.map((s) => s.steamId));
