@@ -7,6 +7,7 @@ const { getActiveProvider } = require('./providers');
 const { createNewsNotification, createFollowPromptNotification } = require('./templates');
 const User = require('../../models/User');
 const GameSubscription = require('../../models/GameSubscription');
+const FollowPromptState = require('../../models/FollowPromptState');
 const logger = require('../../utils/logger');
 
 // Fenetre de presence : si Steam Desktop (heartbeat plugin) a ete vu il y a
@@ -189,7 +190,25 @@ async function sendFollowPromptNotifications(steamId, prompts = []) {
     let sentCount = 0;
     const language = user.language || 'fr';
 
-    for (const prompt of prompts) {
+    // Cross-surface dedup: skip games already prompted on ANY surface (mobile
+    // pushedAt or desktop toastedAt) so the Steam plugin and the phone never
+    // double-prompt the same game. See FollowPromptState.
+    const promptAppIds = prompts.map((p) => String(p.appId));
+    const alreadyPrompted = await FollowPromptState.find({
+      steamId,
+      appId: { $in: promptAppIds },
+      $or: [{ pushedAt: { $ne: null } }, { toastedAt: { $ne: null } }],
+    })
+      .select('appId')
+      .lean();
+    const promptedSet = new Set(alreadyPrompted.map((r) => r.appId));
+    const toSend = prompts.filter((p) => !promptedSet.has(String(p.appId)));
+    if (toSend.length === 0) {
+      return 0;
+    }
+    const pushedAppIds = [];
+
+    for (const prompt of toSend) {
       if (activeTokens.length === 0) {
         break;
       }
@@ -236,10 +255,29 @@ async function sendFollowPromptNotifications(steamId, prompts = []) {
 
         if (result.success) {
           sentCount++;
+          pushedAppIds.push(String(prompt.appId));
         }
       } else if (result) {
         sentCount++;
+        pushedAppIds.push(String(prompt.appId));
       }
+    }
+
+    // Record mobile delivery so the desktop plugin won't re-prompt these games.
+    if (pushedAppIds.length > 0) {
+      const now = new Date();
+      await FollowPromptState.bulkWrite(
+        pushedAppIds.map((appId) => ({
+          updateOne: {
+            filter: { steamId, appId },
+            update: { $set: { pushedAt: now } },
+            upsert: true,
+          },
+        })),
+        { ordered: false }
+      ).catch((err) =>
+        logger.error({ err, steamId }, 'follow_prompt_ledger_write_failed')
+      );
     }
 
     return sentCount;

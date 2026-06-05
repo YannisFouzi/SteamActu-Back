@@ -27,6 +27,9 @@ const {
 const {
   registerOrUpdateUser,
 } = require('../services/steam/steamUserManager');
+const {
+  getPendingFollowPrompts,
+} = require('../services/followPromptService');
 const logger = require('../utils/logger');
 
 // SECURITY: there is intentionally NO steamId->token endpoint here. A SteamID is
@@ -189,6 +192,28 @@ router.get('/heartbeat/:steamId', async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     logger.error({ err: error }, 'web_heartbeat_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+/**
+ * Server-authoritative follow-prompt toasts for the Millennium plugin. Returns
+ * ONLY the "nouveau jeu détecté → clic pour suivre" candidates to toast now —
+ * deduped across surfaces (skips games already prompted on mobile `pushedAt` or
+ * desktop `toastedAt`) with a one-time silent seed (`User.followPromptSeededAt`).
+ * Replaces the plugin's local `gamenews_prompted_ids` set. GET with a side
+ * effect (claims/marks the returned games), same pattern as heartbeat/news-seen.
+ */
+router.get('/follow-prompts/:steamId', requireWebSecretIfPaired, async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    const items = await getPendingFollowPrompts(steamId);
+    res.json({ items });
+  } catch (error) {
+    logger.error({ err: error }, 'web_follow_prompts_failed');
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });

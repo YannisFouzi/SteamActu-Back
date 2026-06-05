@@ -10,6 +10,7 @@ const {
   sendFollowPromptNotifications,
 } = require('../../../../src/services/notifications/notificationService');
 const User = require('../../../../src/models/User');
+const FollowPromptState = require('../../../../src/models/FollowPromptState');
 const {
   createUser,
   createGameSubscription,
@@ -275,6 +276,46 @@ describe('services/notifications/notificationService', () => {
       expect(
         await sendFollowPromptNotifications(steamId, [{ appId: '730', name: 'A' }]),
       ).toBe(0);
+    });
+
+    it('skip un jeu déjà poussé sur mobile (pushedAt) — dédup cross-surface', async () => {
+      const steamId = await setupUserWithPrompts();
+      providerMock.mockResolvedValue(true);
+      await FollowPromptState.create({ steamId, appId: '730', pushedAt: new Date() });
+
+      const sent = await sendFollowPromptNotifications(steamId, [
+        { appId: '730', name: 'A', source: 'library' },
+        { appId: '570', name: 'B', source: 'library' },
+      ]);
+
+      expect(sent).toBe(1); // seul 570 part, 730 déjà délivré
+      expect(providerMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('skip un jeu déjà toasté sur DESKTOP (toastedAt) — pas de doublon', async () => {
+      const steamId = await setupUserWithPrompts();
+      providerMock.mockResolvedValue(true);
+      await FollowPromptState.create({ steamId, appId: '730', toastedAt: new Date() });
+
+      const sent = await sendFollowPromptNotifications(steamId, [
+        { appId: '730', name: 'A', source: 'library' },
+      ]);
+
+      expect(sent).toBe(0);
+      expect(providerMock).not.toHaveBeenCalled();
+    });
+
+    it('enregistre pushedAt après envoi (bloque le re-prompt desktop)', async () => {
+      const steamId = await setupUserWithPrompts();
+      providerMock.mockResolvedValue(true);
+
+      await sendFollowPromptNotifications(steamId, [
+        { appId: '730', name: 'A', source: 'library' },
+      ]);
+
+      const row = await FollowPromptState.findOne({ steamId, appId: '730' }).lean();
+      expect(row).toBeTruthy();
+      expect(row.pushedAt).toBeTruthy();
     });
   });
 });

@@ -135,6 +135,14 @@ const UserSchema = new mongoose.Schema({
     default: null,
   },
 
+  // Idem mais pour les follow-prompts desktop (cf. FollowPromptState). Au 1er
+  // appel du plugin, on marque tous les jeux non-suivis courants comme deja
+  // proposes (sans toaster) pour ne pas spammer le backlog.
+  followPromptSeededAt: {
+    type: Date,
+    default: null,
+  },
+
   // Secret d'appairage par-installation du plugin Millennium (TOFU). Le plugin
   // genere un secret aleatoire au 1er lancement et l'enregistre une fois via
   // GET /api/web/pair. Tant que ce champ est null, la surface /api/web reste
