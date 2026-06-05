@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const newsFeedService = require('../services/newsFeedService');
+const { getPendingDesktopToasts } = require('../services/desktopToastService');
 const steamService = require('../services/steamService');
 const { normalizeAppLanguage } = require('../utils/language');
 const { isValidAppId, isValidSteamId, clampQueryInt } = require('../middleware/steamValidators');
@@ -101,6 +102,35 @@ router.get('/feed-by-steamid/:steamId', requireWebSecretIfPaired, async (req, re
     res.json(feed);
   } catch (error) {
     logger.error({err: error}, 'news_feed_by_steamid_failed');
+    res.status(500).json({message: 'Erreur serveur'});
+  }
+});
+
+// Server-authoritative desktop toasts for the Millennium plugin. Returns ONLY
+// the news the plugin should toast now — server-side dedup across surfaces
+// (skips anything already pushed to mobile or already toasted) + a one-time
+// silent seed on first contact. Replaces the plugin's local seen-set. GET with
+// a side effect (it claims/marks the returned news), same pattern as the other
+// plugin-facing writes (heartbeat, news-seen). Same privacy gate as the feed.
+router.get('/desktop-toasts/:steamId', requireWebSecretIfPaired, async (req, res) => {
+  try {
+    const {steamId} = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({message: 'SteamID invalide'});
+    }
+
+    let resolvedLanguage = normalizeAppLanguage(req.query.language);
+    if (!req.query.language) {
+      const user = await User.findOne({steamId}).select('language').lean();
+      resolvedLanguage = normalizeAppLanguage(user?.language);
+    }
+
+    const items = await getPendingDesktopToasts(steamId, {
+      language: resolvedLanguage,
+    });
+    res.json({items});
+  } catch (error) {
+    logger.error({err: error}, 'news_desktop_toasts_failed');
     res.status(500).json({message: 'Erreur serveur'});
   }
 });

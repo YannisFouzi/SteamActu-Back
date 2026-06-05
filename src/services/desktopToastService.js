@@ -1,0 +1,139 @@
+const { getNewsFeed } = require('./newsFeedService');
+const UserNewsState = require('../models/UserNewsState');
+const User = require('../models/User');
+const logger = require('../utils/logger');
+
+const MS_IN_DAY = 24 * 60 * 60 * 1000;
+const RETENTION_DAYS = 90;
+
+function stateKey(appId, newsId) {
+  return `${String(appId)}::${String(newsId)}`;
+}
+
+function toToastShape(item) {
+  return {
+    appId: String(item.appId),
+    gameName: item.gameName,
+    gameLogoUrl: item.gameLogoUrl ?? null,
+    news: {
+      id: String(item.news?.id),
+      title: item.news?.title,
+      url: item.news?.url,
+    },
+  };
+}
+
+/**
+ * Server-authoritative "what should the Steam Desktop plugin toast?" — the
+ * single source of truth that replaces the plugin's local localStorage seen-set
+ * and its silent startup seed.
+ *
+ * Rules:
+ *   - FIRST call ever for a user (no `desktopToastSeededAt`): mark every current
+ *     feed item as toast-delivered (silently) and toast NOTHING. This is the
+ *     server-side equivalent of the old client seed — avoids flooding the
+ *     existing backlog the first time.
+ *   - Afterwards: return only news not yet delivered on ANY surface, i.e. with
+ *     neither `pushSentAt` (mobile FCM) nor `steamToastSentAt` (desktop). This
+ *     is what stops the desktop from re-toasting a news already pushed to the
+ *     phone. The returned news are immediately marked `steamToastSentAt` (claim).
+ *
+ * The mobile cron never reads `steamToastSentAt`, so claiming here can never
+ * suppress a mobile push — a toast that fails to render only loses that one
+ * desktop toast.
+ */
+async function getPendingDesktopToasts(steamId, { language } = {}) {
+  const feed = await getNewsFeed({ steamId, language });
+  const items = (feed && feed.items) || [];
+  if (items.length === 0) {
+    return [];
+  }
+
+  const keys = items
+    .map((it) => ({ appId: String(it.appId), newsId: String(it.news?.id || '') }))
+    .filter((k) => k.appId && k.newsId);
+  if (keys.length === 0) {
+    return [];
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + RETENTION_DAYS * MS_IN_DAY);
+
+  const user = await User.findOne({ steamId })
+    .select('desktopToastSeededAt')
+    .lean();
+  const seeded = Boolean(user && user.desktopToastSeededAt);
+
+  // First contact: silently mark the whole current backlog as delivered.
+  if (!seeded) {
+    const ops = keys.map((k) => ({
+      updateOne: {
+        filter: { steamId, appId: k.appId, newsId: k.newsId },
+        update: {
+          $set: { steamToastSentAt: now },
+          $setOnInsert: { steamId, appId: k.appId, newsId: k.newsId, expiresAt },
+        },
+        upsert: true,
+      },
+    }));
+    try {
+      await UserNewsState.bulkWrite(ops, { ordered: false });
+      await User.updateOne(
+        { steamId },
+        { $set: { desktopToastSeededAt: now } },
+      );
+    } catch (err) {
+      logger.error({ err }, 'desktop_toast_seed_failed');
+    }
+    return [];
+  }
+
+  // Ongoing: which current items were never delivered on any surface?
+  const rows = await UserNewsState.find({ steamId, $or: keys })
+    .select('appId newsId pushSentAt steamToastSentAt')
+    .lean();
+  const stateByKey = new Map(
+    rows.map((r) => [stateKey(r.appId, r.newsId), r]),
+  );
+
+  const toToast = items.filter((it) => {
+    const row = stateByKey.get(stateKey(it.appId, it.news?.id));
+    if (!row) {
+      return true; // brand-new news, never recorded
+    }
+    return !row.pushSentAt && !row.steamToastSentAt;
+  });
+
+  if (toToast.length === 0) {
+    return [];
+  }
+
+  const ops = toToast.map((it) => ({
+    updateOne: {
+      filter: {
+        steamId,
+        appId: String(it.appId),
+        newsId: String(it.news?.id),
+      },
+      update: {
+        $set: { steamToastSentAt: now },
+        $setOnInsert: {
+          steamId,
+          appId: String(it.appId),
+          newsId: String(it.news?.id),
+          expiresAt,
+        },
+      },
+      upsert: true,
+    },
+  }));
+  try {
+    await UserNewsState.bulkWrite(ops, { ordered: false });
+  } catch (err) {
+    logger.error({ err }, 'desktop_toast_claim_failed');
+  }
+
+  return toToast.map(toToastShape);
+}
+
+module.exports = { getPendingDesktopToasts };

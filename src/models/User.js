@@ -126,6 +126,15 @@ const UserSchema = new mongoose.Schema({
     default: null,
   },
 
+  // Premiere fois ou le plugin a demande ses toasts desktop. Sert de "seed" :
+  // au 1er appel, on marque toutes les news courantes comme deja servies (sans
+  // toaster) pour ne pas spammer le backlog existant, exactement comme l'ancien
+  // seed localStorage du plugin -- mais cote serveur, source de verite unique.
+  desktopToastSeededAt: {
+    type: Date,
+    default: null,
+  },
+
   // Secret d'appairage par-installation du plugin Millennium (TOFU). Le plugin
   // genere un secret aleatoire au 1er lancement et l'enregistre une fois via
   // GET /api/web/pair. Tant que ce champ est null, la surface /api/web reste

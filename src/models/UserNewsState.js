@@ -22,6 +22,15 @@ const UserNewsStateSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Desktop (Millennium plugin) toast delivery — the mirror of pushSentAt for
+    // the Steam Desktop surface. Set by the server when the plugin claims a news
+    // to toast. The mobile cron does NOT read this field (so a desktop toast
+    // never suppresses a mobile push); it exists only so the desktop side never
+    // re-toasts a news already delivered on ANY surface.
+    steamToastSentAt: {
+      type: Date,
+      default: null,
+    },
     expiresAt: {
       type: Date,
       required: true,
