@@ -123,6 +123,7 @@ export interface WebProfile {
     confirmUnfollowGames: boolean;
     libraryFollowMode: string;
     wishlistFollowMode: string;
+    isAdmin: boolean;
   };
 }
 
@@ -222,6 +223,28 @@ export function fetchNews(
 
 export function fetchProfile(steamId: string): Promise<WebProfile> {
   return getJSON(`/api/web/profile/${encodeURIComponent(steamId)}`);
+}
+
+// Same auth as getJSON (pairing secret and/or Bearer), POST with no body.
+async function postAction(url: string): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (PAIR_SECRET) {
+    headers['X-GN-Secret'] = PAIR_SECRET;
+  }
+  const token = sessionToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const res = await fetch(url, { method: 'POST', credentials: 'omit', headers });
+  if (!res.ok) {
+    throw new HttpError(res.status);
+  }
+}
+
+// Admin-only: manual library + Steam Family + wishlist re-sync (server runs the
+// same per-user sync as the cron). Gated server-side by secret + ADMIN_STEAM_IDS.
+export function refreshAccount(steamId: string): Promise<void> {
+  return postAction(`/api/web/admin/refresh/${encodeURIComponent(steamId)}`);
 }
 
 export interface SearchResult {

@@ -30,6 +30,7 @@ const {
 const {
   getPendingFollowPrompts,
 } = require('../services/followPromptService');
+const { isAdminSteamId } = require('../utils/adminAccess');
 const logger = require('../utils/logger');
 
 // SECURITY: there is intentionally NO steamId->token endpoint here. A SteamID is
@@ -168,6 +169,7 @@ router.get('/profile/:steamId', requireWebSecretIfPaired, async (req, res) => {
         confirmUnfollowGames: settings.confirmUnfollowGames !== false,
         libraryFollowMode: settings.libraryFollowMode || 'off',
         wishlistFollowMode: settings.wishlistFollowMode || 'off',
+        isAdmin: isAdminSteamId(steamId),
       },
     });
   } catch (error) {
@@ -535,6 +537,34 @@ router.get('/library/:steamId', requireWebSecretIfPaired, async (req, res) => {
   } catch (error) {
     logger.error({ err: error }, 'web_library_failed');
     res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+/**
+ * Admin-only "refresh my account" for the Steam Desktop plugin / web SPA.
+ * Runs the same per-user sync as the cron (library + Steam Family + wishlist),
+ * on demand. Double-gated: the per-install pairing secret (requireWebSecretIfPaired,
+ * proving it's the real paired install) AND the SteamID being in ADMIN_STEAM_IDS.
+ * Non-destructive (only refreshes the caller's own data). POST: the web SPA uses
+ * browser fetch (supports the X-GN-Secret header), so no GET-only constraint here.
+ */
+router.post('/admin/refresh/:steamId', requireWebSecretIfPaired, async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    if (!isAdminSteamId(steamId)) {
+      return res.status(403).json({ message: 'Accès admin refusé' });
+    }
+    // Lazy-require (see mobileAdmin): avoids pulling the Steam sync stack at
+    // module load — only loaded when an admin actually triggers a refresh.
+    const { refreshUserAccount } = require('../services/accountRefreshService');
+    const result = await refreshUserAccount(steamId);
+    return res.status(result.ok ? 200 : 500).json(result);
+  } catch (error) {
+    logger.error({ err: error }, 'web_admin_refresh_failed');
+    return res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 

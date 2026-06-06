@@ -1,5 +1,5 @@
-const { SECURITY_CONFIG } = require('../config/app');
 const { verifyMobileSessionToken } = require('../services/mobileSessionService');
+const { isAdminSteamId } = require('../utils/adminAccess');
 
 const BEARER_PREFIX = 'Bearer ';
 
@@ -22,11 +22,7 @@ function mobileSessionAuth(req, res, next) {
 }
 
 function isMobileAdminSession(session) {
-  const adminSteamIds = Array.isArray(SECURITY_CONFIG.ADMIN_STEAM_IDS)
-    ? SECURITY_CONFIG.ADMIN_STEAM_IDS
-    : [];
-
-  return Boolean(session?.steamId && adminSteamIds.includes(session.steamId));
+  return isAdminSteamId(session?.steamId);
 }
 
 function requireMobileAdmin(req, res, next) {

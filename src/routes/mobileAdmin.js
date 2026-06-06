@@ -60,4 +60,18 @@ router.get(
   })
 );
 
+// Manual "refresh my account" (library + Steam Family + wishlist) for the admin.
+// Runs the same per-user sync as the cron, on demand, for the session's own
+// SteamID. Admin-gated by requireMobileAdmin above.
+router.post(
+  '/refresh-account',
+  asyncHandler(async (req, res) => {
+    // Lazy-require: keeps importing this route module light (the sync stack pulls
+    // the Steam apiClient, which reads config at load time) — loaded on demand.
+    const { refreshUserAccount } = require('../services/accountRefreshService');
+    const result = await refreshUserAccount(req.mobileSession.steamId);
+    res.status(result.ok ? 200 : 500).json(result);
+  })
+);
+
 module.exports = router;

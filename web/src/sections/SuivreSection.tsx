@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CONTEXT, fetchLibrary, type LibraryGame, type WebProfile } from '../api';
+import {
+  CONTEXT,
+  fetchLibrary,
+  refreshAccount,
+  type LibraryGame,
+  type WebProfile,
+} from '../api';
 import { type FollowState } from '../useFollow';
 import { sortLibrary, sortWishlist, type LibrarySort, type WishlistSort } from '../sort';
 import { useT } from '../i18n';
@@ -30,6 +36,22 @@ export default function SuivreSection({
   const [libSort, setLibSort] = useState<LibrarySort>('lastTwoWeeks');
   const [wishSort, setWishSort] = useState<WishlistSort>('recent');
   const [lib, setLib] = useState<LibState>({ status: 'loading' });
+  // Admin-only manual re-scan (library + Steam Family + wishlist), same as the
+  // cron. Visible only when the server flags this SteamID as admin.
+  const [adminState, setAdminState] = useState<'idle' | 'loading' | 'error'>(
+    'idle',
+  );
+  const isAdmin = Boolean(profile?.account.isAdmin);
+
+  const runAdminRefresh = () => {
+    if (adminState === 'loading') {
+      return;
+    }
+    setAdminState('loading');
+    refreshAccount(CONTEXT.steamId)
+      .then(() => window.location.reload()) // reload to show the freshly synced data
+      .catch(() => setAdminState('error'));
+  };
 
   const TABS: ReadonlyArray<SubTab<Sub>> = [
     { key: 'mes-jeux', label: t('nav.myGames') },
@@ -104,6 +126,37 @@ export default function SuivreSection({
         />
       ) : (
         <>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={runAdminRefresh}
+              disabled={adminState === 'loading'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                width: '100%',
+                margin: '0 0 10px',
+                padding: '10px',
+                borderRadius: '8px',
+                border: 'none',
+                background: '#1a9fff',
+                color: '#fff',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: adminState === 'loading' ? 'default' : 'pointer',
+                opacity: adminState === 'loading' ? 0.7 : 1,
+              }}>
+              {adminState === 'loading'
+                ? 'Scan en cours…'
+                : '↻ Rescan biblio + Famille + wishlist'}
+            </button>
+          )}
+          {adminState === 'error' && (
+            <div className="state error">Échec du scan — réessaie.</div>
+          )}
+
           <SubTabs tabs={TABS} active={sub} onChange={setSub} />
 
           {sub === 'mes-jeux' && (
