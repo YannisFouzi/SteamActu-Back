@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CONTEXT, fetchNews, type NewsItem } from '../api';
+import { readNewsCache, writeNewsCache } from '../newsCache';
 import { addFavorite, markNewsFeedSeen, removeFavorite } from '../auth';
 import { type FollowState } from '../useFollow';
 import { formatDateTime, openExternal } from '../format';
@@ -23,12 +24,30 @@ export default function ActuTab({
   onNavigateFollow: () => void;
 }) {
   const { t, lang } = useT();
-  const [status, setStatus] = useState<'loading' | 'error' | 'ok'>('loading');
+  // Hydrate from the local cache so the feed shows instantly (stale-while-
+  // revalidate), like the mobile app — no blocking "loading" on every open.
+  const [cachedSnapshot] = useState(() =>
+    readNewsCache(CONTEXT.steamId, lang, false),
+  );
+  const [status, setStatus] = useState<'loading' | 'error' | 'ok'>(
+    cachedSnapshot ? 'ok' : 'loading',
+  );
   const [error, setError] = useState('');
-  const [items, setItems] = useState<NewsItem[]>([]);
-  const [hasFavorites, setHasFavorites] = useState(false);
-  const [lastSeenAt, setLastSeenAt] = useState<number | null>(null);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [items, setItems] = useState<NewsItem[]>(cachedSnapshot?.items ?? []);
+  const [hasFavorites, setHasFavorites] = useState(
+    cachedSnapshot?.hasFavorites ?? false,
+  );
+  const [lastSeenAt, setLastSeenAt] = useState<number | null>(
+    cachedSnapshot?.lastSeenAt ?? null,
+  );
+  const [favorites, setFavorites] = useState<Set<string>>(
+    () =>
+      new Set(
+        (cachedSnapshot?.items ?? [])
+          .filter((it) => it.isFavorite)
+          .map((it) => favKey(String(it.appId), it.news.id)),
+      ),
+  );
   const [favBusy, setFavBusy] = useState<Set<string>>(new Set());
   const [favoritesOnly, setFavoritesOnly] = useState(false);
 
@@ -39,20 +58,26 @@ export default function ActuTab({
       const favIds = list
         .filter((it) => it.isFavorite)
         .map((it) => favKey(String(it.appId), it.news.id));
-      setItems(list);
       // Mirror mobile: any server-reported favorite OR a currently visible one.
       // The refetch after every toggle keeps this in sync with the server, so it
       // correctly drops back to false once the last favorite is removed.
-      setHasFavorites(
-        Boolean(data.metadata?.favoriteStats?.hasFavorites) || favIds.length > 0,
-      );
-      setLastSeenAt(
+      const nextHasFavorites =
+        Boolean(data.metadata?.favoriteStats?.hasFavorites) || favIds.length > 0;
+      const nextLastSeenAt =
         typeof data.metadata?.lastNewsFeedSeenAt === 'number'
           ? data.metadata.lastNewsFeedSeenAt
-          : null,
-      );
+          : null;
+      setItems(list);
+      setHasFavorites(nextHasFavorites);
+      setLastSeenAt(nextLastSeenAt);
       setFavorites(new Set(favIds));
       setStatus('ok');
+      // Refresh the local cache so the next open is instant (SWR, like mobile).
+      writeNewsCache(CONTEXT.steamId, lang, favOnly, {
+        items: list,
+        hasFavorites: nextHasFavorites,
+        lastSeenAt: nextLastSeenAt,
+      });
     });
 
   // Refetch on filter change (server-side favoritesOnly: favorites use a wider
@@ -60,10 +85,28 @@ export default function ActuTab({
   // refetch; only the very first load shows the loading state.
   useEffect(() => {
     const cancelledRef = { v: false };
+    // Show this mode's cached feed instantly, then revalidate in the background.
+    const cached = readNewsCache(CONTEXT.steamId, lang, favoritesOnly);
+    if (cached) {
+      setItems(cached.items);
+      setHasFavorites(cached.hasFavorites);
+      setLastSeenAt(cached.lastSeenAt);
+      setFavorites(
+        new Set(
+          cached.items
+            .filter((it) => it.isFavorite)
+            .map((it) => favKey(String(it.appId), it.news.id)),
+        ),
+      );
+      setStatus('ok');
+    }
     load(favoritesOnly, cancelledRef).catch((err: unknown) => {
       if (cancelledRef.v) return;
-      setError(err instanceof Error ? err.message : String(err));
-      setStatus('error');
+      // Keep the cached feed on a refresh error; only surface it if we have nothing.
+      if (!cached) {
+        setError(err instanceof Error ? err.message : String(err));
+        setStatus('error');
+      }
     });
     return () => {
       cancelledRef.v = true;
