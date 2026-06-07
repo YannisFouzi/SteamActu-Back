@@ -82,6 +82,7 @@ export interface NewsItem {
     url: string;
     date: number;
     firstImageUrl: string | null;
+    summary?: string;
   };
 }
 

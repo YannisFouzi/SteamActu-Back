@@ -4,6 +4,7 @@
 
 const steamService = require('../steamService');
 const { extractFirstImage } = require('./imageExtractor');
+const { extractSummary } = require('./summaryExtractor');
 const logger = require('../../utils/logger');
 
 // Cap la concurrence des appels Steam par requête /api/news/feed :
@@ -80,6 +81,9 @@ async function processNewsForGames(gamesToProcess, followedSet, options = {}) {
               author: item.author,
               date: newsDate,
               firstImageUrl: extractFirstImage(item.contents),
+              // Derived first-sentence excerpt (Steam has no summary field). Used
+              // by the web/plugin card; the mobile app ignores it.
+              summary: extractSummary(item.contents),
               feedLabel: item.feedlabel,
             },
           };

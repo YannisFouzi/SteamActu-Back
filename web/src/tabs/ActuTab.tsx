@@ -263,51 +263,9 @@ export default function ActuTab({
                 }
               }}
             >
-              <div className="news-head">
-                <div
-                  className="logo"
-                  style={
-                    item.gameLogoUrl
-                      ? { backgroundImage: `url(${JSON.stringify(item.gameLogoUrl)})` }
-                      : undefined
-                  }
-                />
-                <div className="news-head-meta">
-                  <div className="news-game">{item.gameName}</div>
-                  <div className="news-date">
-                    {formatDateTime(item.news.date, lang)}
-                  </div>
-                </div>
-                {editable && (
-                  <div className="news-actions">
-                    <FollowBell
-                      following={follow.followed.has(appId)}
-                      busy={follow.busy.has(appId)}
-                      onToggle={() =>
-                        follow.toggle(appId, item.gameName, item.gameLogoUrl ?? '')
-                      }
-                      size={20}
-                    />
-                    <button
-                      type="button"
-                      className={`fav-btn ${isFav ? 'on' : ''}`}
-                      disabled={favBusy.has(key)}
-                      aria-pressed={isFav}
-                      aria-label={isFav ? t('news.removeFavorite') : t('news.addFavorite')}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(item);
-                      }}
-                    >
-                      <StarIcon size={20} filled={isFav} />
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="news-title">{item.news.title}</div>
               {item.news.firstImageUrl && (
                 <img
-                  className="news-image"
+                  className="news-card-cover"
                   src={item.news.firstImageUrl}
                   alt=""
                   loading="lazy"
@@ -316,6 +274,53 @@ export default function ActuTab({
                   }}
                 />
               )}
+              <div className="news-card-body">
+                <div className="news-card-top">
+                  <div className="news-card-game">
+                    <div
+                      className="logo"
+                      style={
+                        item.gameLogoUrl
+                          ? { backgroundImage: `url(${JSON.stringify(item.gameLogoUrl)})` }
+                          : undefined
+                      }
+                    />
+                    <span className="news-game">{item.gameName}</span>
+                  </div>
+                  {editable && (
+                    <div className="news-actions">
+                      <FollowBell
+                        following={follow.followed.has(appId)}
+                        busy={follow.busy.has(appId)}
+                        onToggle={() =>
+                          follow.toggle(appId, item.gameName, item.gameLogoUrl ?? '')
+                        }
+                        size={20}
+                      />
+                      <button
+                        type="button"
+                        className={`fav-btn ${isFav ? 'on' : ''}`}
+                        disabled={favBusy.has(key)}
+                        aria-pressed={isFav}
+                        aria-label={isFav ? t('news.removeFavorite') : t('news.addFavorite')}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(item);
+                        }}
+                      >
+                        <StarIcon size={20} filled={isFav} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="news-date">
+                  {formatDateTime(item.news.date, lang)}
+                </div>
+                <div className="news-title">{item.news.title}</div>
+                {item.news.summary && (
+                  <div className="news-summary">{item.news.summary}</div>
+                )}
+              </div>
             </div>
           );
         })}
