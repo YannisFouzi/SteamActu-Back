@@ -129,25 +129,9 @@ export default function SuivreSection({
           {isAdmin && (
             <button
               type="button"
+              className="admin-rescan-btn"
               onClick={runAdminRefresh}
-              disabled={adminState === 'loading'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                width: '100%',
-                margin: '0 0 10px',
-                padding: '10px',
-                borderRadius: '8px',
-                border: 'none',
-                background: '#1a9fff',
-                color: '#fff',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: adminState === 'loading' ? 'default' : 'pointer',
-                opacity: adminState === 'loading' ? 0.7 : 1,
-              }}>
+              disabled={adminState === 'loading'}>
               {adminState === 'loading'
                 ? 'Scan en cours…'
                 : '↻ Rescan biblio + Famille + wishlist'}
