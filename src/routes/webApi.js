@@ -293,6 +293,31 @@ router.get('/follow', (req, res) => handleFollow(req.query, res));
 router.post('/follow', (req, res) => handleFollow(req.body || {}, res));
 
 /**
+ * Public follow-state read for ONE game — drives the extension's store-page bell
+ * (empty vs green). Ungated on purpose: it returns a single boolean, strictly
+ * less sensitive than the already-public follow writes above and than /profile
+ * (which exposes the whole followed list + wishlist). It must also work for
+ * accounts pair-locked by the Millennium plugin, which would 403 the secret-less
+ * extension on /profile — so the bell cannot depend on /profile.
+ */
+router.get('/follow-state/:steamId/:appId', async (req, res) => {
+  try {
+    const { steamId, appId } = req.params;
+    if (!isValidSteamId(steamId) || !isValidAppId(String(appId || ''))) {
+      return res.status(400).json({ message: 'Paramètres invalides' });
+    }
+    const user = await User.findOne({ steamId }).select('followedGames').lean();
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé' });
+    }
+    res.json({ followed: getFollowedAppIds(user).includes(String(appId)) });
+  } catch (error) {
+    logger.error({ err: error }, 'web_follow_state_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+/**
  * Public, idempotent account provisioning for the Steam Desktop surface.
  *
  * Reuses the SAME path as the OpenID/mobile registration (registerOrUpdateUser):
@@ -329,10 +354,11 @@ router.post('/register/:steamId', (req, res) => handleRegister(req.params.steamI
 // Account DELETION is intentionally NOT mirrored here (destructive) — it stays
 // session-only on /api/users/:steamId.
 
-// Ne plus suivre un jeu
-router.delete('/follow/:steamId/:appId', async (req, res) => {
+// Ne plus suivre un jeu. Exposé en DELETE (extension/web fetch) ET en GET
+// (/unfollow/:id/:appId) : le proxy Lua du plugin Millennium ne fait que
+// http.get, donc la cloche desktop désuit via le GET — même contrat que /follow.
+async function handleUnfollow(steamId, appId, res) {
   try {
-    const { steamId, appId } = req.params;
     if (!isValidSteamId(steamId) || !isValidAppId(String(appId || ''))) {
       return res.status(400).json({ message: 'Paramètres invalides' });
     }
@@ -353,7 +379,14 @@ router.delete('/follow/:steamId/:appId', async (req, res) => {
     logger.error({ err: error }, 'web_unfollow_failed');
     res.status(500).json({ message: 'Erreur serveur' });
   }
-});
+}
+
+router.delete('/follow/:steamId/:appId', (req, res) =>
+  handleUnfollow(req.params.steamId, req.params.appId, res),
+);
+router.get('/unfollow/:steamId/:appId', (req, res) =>
+  handleUnfollow(req.params.steamId, req.params.appId, res),
+);
 
 // Réglages de notification
 router.put('/notifications/:steamId', async (req, res) => {
