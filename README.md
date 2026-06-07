@@ -145,6 +145,29 @@ POST /api/steam/check-visibility/:steamId           (auth + ownership)
 POST /api/steam/check-wishlist-visibility/:steamId  (auth + ownership)
 ```
 
+### Web (public-par-SteamID — plugin Millennium + extension navigateur)
+
+Surface sans login : tourner dans le client Steam connecte (ou lire un SteamID
+public sur le site) = la preuve d'identite (modele assume). Lectures sensibles
+gardees par le secret d'appairage Millennium (`requireWebSecretIfPaired`) ; les
+writes follow et le read d'etat restent publics. Liste complete : voir
+`.claude/rules/backend.md`.
+
+```
+GET    /api/web/profile/:steamId                 (gate si appaire)
+GET    /api/web/library/:steamId                 (gate si appaire)
+GET    /api/web/settings/:steamId
+GET    /api/web/follow  ?steamId&appId           — suivre (idempotent)
+POST   /api/web/follow
+GET    /api/web/follow-state/:steamId/:appId     — { followed } (cloche store)
+DELETE /api/web/follow/:steamId/:appId           — ne plus suivre
+GET    /api/web/unfollow/:steamId/:appId         — idem en GET (proxy Lua)
+PUT    /api/web/notifications/:steamId
+PUT    /api/web/language/:steamId
+GET    /api/web/heartbeat/:steamId               — presence desktop
+GET|POST /api/web/register/:steamId              — provisioning (202)
+```
+
 ### Feedback (public, rate-limite 3/min)
 
 ```
