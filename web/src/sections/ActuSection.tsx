@@ -47,7 +47,10 @@ export default function ActuSection({
     return filtered.map((g) => ({
       appId: g.appId,
       name: g.name,
-      image: g.imageUrl || g.header_image,
+      // header_image (the full capsule URL) first, like the mobile
+      // getGameImageUrl — the SteamGridDB imageUrl (a square icon) is only a
+      // last resort, otherwise followed games show a stretched square.
+      image: g.header_image || g.imageUrl,
     }));
   }, [followed, sort, query]);
 
