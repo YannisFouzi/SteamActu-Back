@@ -38,6 +38,86 @@ export function BellIcon({ size = 22, filled }: { size?: number; filled: boolean
   );
 }
 
+// Main-nav icons, mirrored from the mobile bottom tab bar (MainTabNavigator):
+// newspaper-outline / game-controller-outline / person-circle-outline. Exact
+// Ionicons v5 path data so the web view shows the same glyphs as the app.
+export function NewspaperIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
+      <path
+        d="M368 415.86V72a24.07 24.07 0 00-24-24H72a24.07 24.07 0 00-24 24v352a40.12 40.12 0 0040 40h328"
+        fill="none"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth={32}
+      />
+      <path
+        d="M416 464h0a48 48 0 01-48-48V128h72a24 24 0 0124 24v264a48 48 0 01-48 48z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth={32}
+      />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={32}
+        d="M240 128h64M240 192h64M112 256h192M112 320h192M112 384h192"
+      />
+      <path
+        fill="currentColor"
+        d="M176 208h-64a16 16 0 01-16-16v-64a16 16 0 0116-16h64a16 16 0 0116 16v64a16 16 0 01-16 16z"
+      />
+    </svg>
+  );
+}
+
+export function GameControllerIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
+      <path
+        d="M467.51 248.83c-18.4-83.18-45.69-136.24-89.43-149.17A91.5 91.5 0 00352 96c-26.89 0-48.11 16-96 16s-69.15-16-96-16a99.09 99.09 0 00-27.2 3.66C89 112.59 61.94 165.7 43.33 248.83c-19 84.91-15.56 152 21.58 164.88 26 9 49.25-9.61 71.27-37 25-31.2 55.79-40.8 119.82-40.8s93.62 9.6 118.66 40.8c22 27.41 46.11 45.79 71.42 37.16 41.02-14.01 40.44-79.13 21.43-165.04z"
+        fill="none"
+        stroke="currentColor"
+        strokeMiterlimit={10}
+        strokeWidth={32}
+      />
+      <circle cx="292" cy="224" r="20" fill="currentColor" />
+      <path
+        fill="currentColor"
+        d="M336 288a20 20 0 1120-19.95A20 20 0 01336 288z"
+      />
+      <circle cx="336" cy="180" r="20" fill="currentColor" />
+      <circle cx="380" cy="224" r="20" fill="currentColor" />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={32}
+        d="M160 176v96M208 224h-96"
+      />
+    </svg>
+  );
+}
+
+export function PersonCircleIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M258.9 48C141.92 46.42 46.42 141.92 48 258.9c1.56 112.19 92.91 203.54 205.1 205.1 117 1.6 212.48-93.9 210.88-210.88C462.44 140.91 371.09 49.56 258.9 48zm126.42 327.25a4 4 0 01-6.14-.32 124.27 124.27 0 00-32.35-29.59C321.37 329 289.11 320 256 320s-65.37 9-90.83 25.34a124.24 124.24 0 00-32.35 29.58 4 4 0 01-6.14.32A175.32 175.32 0 0180 259c-1.63-97.31 78.22-178.76 175.57-179S432 158.81 432 256a175.32 175.32 0 01-46.68 119.25z"
+      />
+      <path
+        fill="currentColor"
+        d="M256 144c-19.72 0-37.55 7.39-50.22 20.82s-19 32-17.57 51.93C191.11 256 221.52 288 256 288s64.83-32 67.79-71.24c1.48-19.74-4.8-38.14-17.68-51.82C293.39 151.44 275.59 144 256 144z"
+      />
+    </svg>
+  );
+}
+
 export function StarIcon({ size = 20, filled }: { size?: number; filled: boolean }) {
   if (filled) {
     return (

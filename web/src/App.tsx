@@ -21,6 +21,11 @@ import ActuSection from './sections/ActuSection';
 import SuivreSection from './sections/SuivreSection';
 import CompteTab from './tabs/CompteTab';
 import ConfirmDialog from './components/ConfirmDialog';
+import {
+  GameControllerIcon,
+  NewspaperIcon,
+  PersonCircleIcon,
+} from './components/Icons';
 
 type Tab = 'actu' | 'suivre' | 'compte';
 
@@ -135,19 +140,22 @@ export default function App() {
           className={`tab ${tab === 'actu' ? 'active' : ''}`}
           onClick={() => setTab('actu')}
         >
-          {t('nav.news')}
+          <NewspaperIcon size={24} />
+          <span>{t('nav.news')}</span>
         </button>
         <button
           className={`tab ${tab === 'suivre' ? 'active' : ''}`}
           onClick={() => setTab('suivre')}
         >
-          {t('nav.followGame')}
+          <GameControllerIcon size={24} />
+          <span>{t('nav.followGame')}</span>
         </button>
         <button
           className={`tab ${tab === 'compte' ? 'active' : ''}`}
           onClick={() => setTab('compte')}
         >
-          {t('nav.account')}
+          <PersonCircleIcon size={24} />
+          <span>{t('nav.account')}</span>
         </button>
       </nav>
 
