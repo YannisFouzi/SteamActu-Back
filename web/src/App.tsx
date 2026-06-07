@@ -11,12 +11,13 @@ import {
   getSession,
   logout,
   startSteamLogin,
+  updateLanguage,
   updateNotifications,
   type Session,
 } from './auth';
 import { useFollow } from './useFollow';
 import { useUnfollowGuard } from './useUnfollowGuard';
-import { LangContext, makeT } from './i18n';
+import { LangContext, detectBrowserLanguage, makeT } from './i18n';
 import ActuSection from './sections/ActuSection';
 import SuivreSection from './sections/SuivreSection';
 import CompteTab from './tabs/CompteTab';
@@ -40,7 +41,13 @@ export default function App() {
   const [session] = useState<Session | null>(getSession());
   const [confirmUnfollow, setConfirmUnfollow] = useState(true);
   const [deleted, setDeleted] = useState(false);
-  const [lang, setLang] = useState<string>(CONTEXT.language || 'fr');
+  // First launch (not yet auto-detected): show the client language right away;
+  // afterwards the stored account language wins (applied once the profile loads).
+  const [lang, setLang] = useState<string>(
+    localStorage.getItem('gn_lang_synced')
+      ? CONTEXT.language || detectBrowserLanguage()
+      : detectBrowserLanguage(),
+  );
 
   const t = useMemo(() => makeT(lang), [lang]);
 
@@ -64,7 +71,33 @@ export default function App() {
         if (!cancelled) {
           setProfile({ status: 'ok', profile: p });
           setConfirmUnfollow(p.account.confirmUnfollowGames);
-          if (p.language) setLang(p.language);
+          // Language, like the mobile app: on first contact adopt the client
+          // language (Steam/browser) and persist it so the display AND the news
+          // filtering follow; afterwards respect the stored/manually-chosen one.
+          let synced = false;
+          try {
+            synced = Boolean(localStorage.getItem('gn_lang_synced'));
+          } catch {
+            /* ignore */
+          }
+          if (synced) {
+            if (p.language) setLang(p.language);
+          } else {
+            const detected = detectBrowserLanguage();
+            if (detected && detected !== p.language) {
+              setLang(detected);
+              updateLanguage(detected).catch((err: unknown) =>
+                console.error('[GameNews] language autodetect save failed', err),
+              );
+            } else if (p.language) {
+              setLang(p.language);
+            }
+            try {
+              localStorage.setItem('gn_lang_synced', '1');
+            } catch {
+              /* ignore */
+            }
+          }
         }
       })
       .catch((err: unknown) => {

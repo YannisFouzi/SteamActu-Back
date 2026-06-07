@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import { SUPPORTED_LANGUAGES } from './api';
 import fr from './locales/fr.json';
 import en from './locales/en.json';
 import de from './locales/de.json';
@@ -9,6 +10,33 @@ import zh from './locales/zh.json';
 // Reuses the mobile app's translations (frontend/src/i18n/locales, regenerated
 // into ./locales) so the web feed UI is localized exactly like the mobile app.
 const LOCALES: Record<string, unknown> = { fr, en, de, es, ru, zh };
+
+// Maps a raw BCP-47 tag (e.g. "en-US", "zh-Hans") to one of our 6 supported
+// languages, or null if unsupported. Mirrors the mobile normalizeLanguage.
+function normalizeLang(raw: string): string | null {
+  const tag = (raw || '').toLowerCase().trim();
+  if (!tag) return null;
+  if (tag.startsWith('zh')) return 'zh';
+  if (tag.startsWith('ru')) return 'ru';
+  const match = SUPPORTED_LANGUAGES.find((code) => tag.startsWith(code));
+  return match ?? null;
+}
+
+// Detects the client's preferred language the way the mobile app reads the
+// device locale (detectDeviceLanguage): in the Millennium plugin's CEF iframe
+// `navigator.language(s)` reflects the Steam client language, in the Chrome
+// extension/browser the browser language. Falls back to English (English-first).
+export function detectBrowserLanguage(): string {
+  const candidates = [
+    ...(typeof navigator !== 'undefined' ? navigator.languages ?? [] : []),
+    typeof navigator !== 'undefined' ? navigator.language : '',
+  ].filter(Boolean) as string[];
+  for (const candidate of candidates) {
+    const normalized = normalizeLang(candidate);
+    if (normalized) return normalized;
+  }
+  return 'en';
+}
 
 export type TFunc = (key: string, vars?: Record<string, string | number>) => string;
 
