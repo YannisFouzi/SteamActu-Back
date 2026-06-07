@@ -12,6 +12,7 @@ function storeUrl(appId: string): string {
 export interface GameRowProps {
   appId: string;
   name: string;
+  image: string;
   editable: boolean;
   following: boolean;
   busy: boolean;
@@ -20,12 +21,14 @@ export interface GameRowProps {
 }
 
 // Mirrors the mobile GameCard: capsule image on the left (Family badge overlaid),
-// game name on the right, follow bell at the far end. The image uses the exact
-// same source chain as the app (header.jpg from the appId → small capsule on
-// error → placeholder), so the artwork matches the mobile app.
+// game name on the right, follow bell at the far end. Image source = the exact
+// same chain as the app's getGameImageUrl: the provided header_image (the full,
+// working Steam URL) first, then the appId header as a fallback, then the small
+// capsule on error, then a placeholder — so the artwork matches the mobile app.
 export default function GameRow({
   appId,
   name,
+  image,
   editable,
   following,
   busy,
@@ -33,19 +36,20 @@ export default function GameRow({
   onToggle,
 }: GameRowProps) {
   const { t } = useT();
-  const [src, setSrc] = useState(gameHeaderUrl(appId));
+  const primary = image || gameHeaderUrl(appId);
+  const [src, setSrc] = useState(primary);
   const [failed, setFailed] = useState(false);
 
   // Reset when the row is reused for a different game (list re-render).
   useEffect(() => {
-    setSrc(gameHeaderUrl(appId));
+    setSrc(image || gameHeaderUrl(appId));
     setFailed(false);
-  }, [appId]);
+  }, [appId, image]);
 
   const handleImgError = () => {
-    const fallback = gameCapsuleFallbackUrl(appId);
-    if (src !== fallback) {
-      setSrc(fallback);
+    const capsule = gameCapsuleFallbackUrl(appId);
+    if (src !== capsule) {
+      setSrc(capsule);
     } else {
       setFailed(true);
     }

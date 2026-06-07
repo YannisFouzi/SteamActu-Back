@@ -30,6 +30,7 @@ export default function GamesGrid({
           key={item.appId}
           appId={item.appId}
           name={item.name}
+          image={item.image}
           editable={editable}
           following={follow.followed.has(item.appId)}
           busy={follow.busy.has(item.appId)}
