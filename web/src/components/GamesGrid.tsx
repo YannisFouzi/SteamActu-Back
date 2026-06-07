@@ -24,13 +24,12 @@ export default function GamesGrid({
     return <div className="state">{emptyLabel}</div>;
   }
   return (
-    <div className="games-grid">
+    <div className="games-list">
       {items.map((item) => (
         <GameRow
           key={item.appId}
           appId={item.appId}
           name={item.name}
-          image={item.image}
           editable={editable}
           following={follow.followed.has(item.appId)}
           busy={follow.busy.has(item.appId)}

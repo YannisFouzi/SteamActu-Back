@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { openExternal } from '../format';
+import { gameCapsuleFallbackUrl, gameHeaderUrl } from '../gameImage';
 import { useT } from '../i18n';
 import FollowBell from './FollowBell';
+import { PeopleIcon } from './Icons';
 
 function storeUrl(appId: string): string {
   return `https://store.steampowered.com/app/${appId}`;
@@ -9,7 +12,6 @@ function storeUrl(appId: string): string {
 export interface GameRowProps {
   appId: string;
   name: string;
-  image: string;
   editable: boolean;
   following: boolean;
   busy: boolean;
@@ -17,10 +19,13 @@ export interface GameRowProps {
   onToggle: () => void;
 }
 
+// Mirrors the mobile GameCard: capsule image on the left (Family badge overlaid),
+// game name on the right, follow bell at the far end. The image uses the exact
+// same source chain as the app (header.jpg from the appId → small capsule on
+// error → placeholder), so the artwork matches the mobile app.
 export default function GameRow({
   appId,
   name,
-  image,
   editable,
   following,
   busy,
@@ -28,28 +33,55 @@ export default function GameRow({
   onToggle,
 }: GameRowProps) {
   const { t } = useT();
+  const [src, setSrc] = useState(gameHeaderUrl(appId));
+  const [failed, setFailed] = useState(false);
+
+  // Reset when the row is reused for a different game (list re-render).
+  useEffect(() => {
+    setSrc(gameHeaderUrl(appId));
+    setFailed(false);
+  }, [appId]);
+
+  const handleImgError = () => {
+    const fallback = gameCapsuleFallbackUrl(appId);
+    if (src !== fallback) {
+      setSrc(fallback);
+    } else {
+      setFailed(true);
+    }
+  };
+
+  const open = () => openExternal(storeUrl(appId));
+
   return (
-    <div className="game-row">
+    <div className="game-card">
       <div
-        className="game-row-main"
+        className="game-card-body"
         role="link"
         tabIndex={0}
-        onClick={() => openExternal(storeUrl(appId))}
+        onClick={open}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            openExternal(storeUrl(appId));
+            open();
           }
         }}
       >
-        <div
-          className="game-thumb"
-          style={image ? { backgroundImage: `url(${JSON.stringify(image)})` } : undefined}
-        />
-        <div style={{ minWidth: 0 }}>
-          <div className="game-name">{name}</div>
-          {familyShared && <span className="family-badge">{t('games.familyBadge')}</span>}
-          {!editable && following && <span className="badge">followed</span>}
+        <div className="game-card-image">
+          {failed ? (
+            <div className="game-card-image-ph" />
+          ) : (
+            <img src={src} alt="" loading="lazy" onError={handleImgError} />
+          )}
+          {familyShared && (
+            <span className="game-card-family">
+              <PeopleIcon size={10} />
+              {t('games.familyBadge')}
+            </span>
+          )}
+        </div>
+        <div className="game-card-info">
+          <div className="game-card-name">{name}</div>
         </div>
       </div>
       {editable && (
