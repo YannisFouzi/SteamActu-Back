@@ -314,8 +314,8 @@ body,
    capsule image left (Family badge overlaid), name right, follow bell at the end.
    Single-column list like the app, not a grid. */
 .games-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 8px;
 }
 .game-card {
