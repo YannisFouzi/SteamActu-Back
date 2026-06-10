@@ -70,9 +70,15 @@ const SECURITY_CONFIG = {
 };
 
 // Configuration CORS
+// `credentials` est volontairement DESACTIVE : l'API s'authentifie uniquement
+// par Bearer token (header Authorization), jamais par cookie cross-origin. Le
+// seul cookie (session /admin) est same-origin + SameSite=Strict, il ne transite
+// donc jamais en cross-origin. Activer `credentials: true` en plus d'une origine
+// `*` est par ailleurs invalide selon la spec CORS (le navigateur rejette la
+// reponse). On le laisse a false pour fermer ce vecteur latent.
 const CORS_OPTIONS = {
   origin: SECURITY_CONFIG.CORS_ORIGINS,
-  credentials: true,
+  credentials: false,
   optionsSuccessStatus: 200,
 };
 
