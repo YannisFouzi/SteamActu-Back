@@ -1,10 +1,14 @@
 /**
- * Script one-shot : répare les GameSubscription dont imageUrl est vide ('').
+ * Script one-shot : répare les GameSubscription dont imageUrl est vide ('')
+ * OU morte (HTTP >= 400 — ex. pattern deviné cdn.cloudflare.../header.jpg
+ * qui 404 pour les jeux récents aux assets hashés).
  *
- * Pour chaque doc concerné :
- *   1. Appelle getGameImage(appId, name) → la cascade complète avec 5ème étage
- *   2. Si une URL est trouvée, met à jour GameSubscription.imageUrl
- *   3. Log le résultat (réparé / toujours introuvable)
+ * Pour chaque doc :
+ *   1. imageUrl vide → re-résolution directe
+ *   2. imageUrl présente → HEAD check ; si 4xx/5xx → re-résolution
+ *   3. Re-résolution = même cascade que addUserToGameSubscription :
+ *      getGameImage (SteamGridDB, 5 étages) → fetchGameDetails (Store, URL hashée)
+ *   4. Log le résultat (réparé / toujours introuvable / sain)
  *
  * Usage:
  *   node scripts/repair-missing-images.js           → dry-run (lecture seule)
@@ -12,13 +16,42 @@
  */
 
 const path = require('path');
+const axios = require('axios');
 const mongoose = require('mongoose');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const GameSubscription = require('../src/models/GameSubscription');
 const { getGameImage } = require('../src/services/steamGridDbService');
+const { fetchGameDetails } = require('../src/services/steam/apiClient');
 
 const APPLY = process.argv.includes('--apply');
+
+/**
+ * Vérifie qu'une URL d'image répond. Retourne :
+ *   'alive'   — 2xx/3xx (ou 405 : HEAD refusé, on ne conclut pas)
+ *   'dead'    — 4xx/5xx
+ *   'unknown' — erreur réseau/timeout : on ne touche pas au doc
+ */
+async function checkImageUrl(url) {
+  try {
+    const res = await axios.head(url, {
+      timeout: 5000,
+      validateStatus: () => true,
+    });
+    if (res.status === 405) return 'alive';
+    return res.status < 400 ? 'alive' : 'dead';
+  } catch (_) {
+    return 'unknown';
+  }
+}
+
+/** Même cascade que subscriptionManager : SGDB → Store header (URL hashée). */
+async function resolveImageUrl(appId, name) {
+  const gridDbIcon = await getGameImage(appId, name).catch(() => null);
+  if (gridDbIcon) return gridDbIcon;
+  const details = await fetchGameDetails(appId).catch(() => null);
+  return details?.header_image || null;
+}
 
 async function run() {
   console.log('='.repeat(70));
@@ -27,21 +60,38 @@ async function run() {
 
   await mongoose.connect(process.env.MONGODB_URI);
 
-  const targets = await GameSubscription.find({
-    $or: [{ imageUrl: '' }, { imageUrl: null }, { imageUrl: { $exists: false } }],
-  })
+  const subs = await GameSubscription.find({})
     .select('gameId name imageUrl')
     .lean();
 
-  console.log(`\n[REPAIR] ${targets.length} doc(s) à réparer\n`);
+  console.log(`\n[REPAIR] ${subs.length} subscription(s) à inspecter\n`);
 
   let repaired = 0;
   let stillMissing = 0;
+  let healthy = 0;
+  let skipped = 0;
 
-  for (const sub of targets) {
-    process.stdout.write(`  - ${sub.gameId} "${sub.name}" → `);
+  for (const sub of subs) {
+    let reason = null;
+    if (!sub.imageUrl) {
+      reason = 'vide';
+    } else {
+      const state = await checkImageUrl(sub.imageUrl);
+      if (state === 'dead') {
+        reason = `morte (${sub.imageUrl.slice(0, 70)}...)`;
+      } else if (state === 'unknown') {
+        skipped++;
+        console.log(`  - ${sub.gameId} "${sub.name}" → SKIP (check réseau indécis)`);
+        continue;
+      } else {
+        healthy++;
+        continue;
+      }
+    }
+
+    process.stdout.write(`  - ${sub.gameId} "${sub.name}" [${reason}] → `);
     try {
-      const url = await getGameImage(sub.gameId, sub.name);
+      const url = await resolveImageUrl(sub.gameId, sub.name);
       if (url) {
         repaired++;
         console.log(`OK ${url.slice(0, 80)}${url.length > 80 ? '...' : ''}`);
@@ -53,7 +103,7 @@ async function run() {
         }
       } else {
         stillMissing++;
-        console.log(`(introuvable, même avec fallback nom)`);
+        console.log(`(introuvable, même via Store)`);
       }
     } catch (err) {
       stillMissing++;
@@ -62,9 +112,11 @@ async function run() {
   }
 
   console.log(`\n[REPAIR] Résumé`);
-  console.log(`  - Réparés : ${repaired}`);
+  console.log(`  - Saines : ${healthy}`);
+  console.log(`  - Réparées : ${repaired}`);
   console.log(`  - Introuvables : ${stillMissing}`);
-  console.log(`  - Total : ${targets.length}`);
+  console.log(`  - Skip (réseau) : ${skipped}`);
+  console.log(`  - Total : ${subs.length}`);
   if (!APPLY && repaired > 0) {
     console.log(`\n  [DRY-RUN] Rien n'a été écrit. Relancer avec --apply pour appliquer.`);
   }

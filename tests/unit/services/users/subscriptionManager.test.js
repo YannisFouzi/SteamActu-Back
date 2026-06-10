@@ -1,6 +1,8 @@
 const steamGridDbMock = { getGameImage: jest.fn() };
+const apiClientMock = { fetchGameDetails: jest.fn() };
 
 jest.doMock('../../../../src/services/steamGridDbService', () => steamGridDbMock);
+jest.doMock('../../../../src/services/steam/apiClient', () => apiClientMock);
 
 const {
   addUserToGameSubscription,
@@ -12,6 +14,8 @@ const { createGameSubscription } = require('../../../helpers/factories');
 describe('services/users/subscriptionManager', () => {
   beforeEach(() => {
     steamGridDbMock.getGameImage.mockReset();
+    apiClientMock.fetchGameDetails.mockReset();
+    apiClientMock.fetchGameDetails.mockResolvedValue(null);
   });
 
   describe('addUserToGameSubscription()', () => {
@@ -115,6 +119,60 @@ describe('services/users/subscriptionManager', () => {
       await addUserToGameSubscription('730', 's1', 'CSGO', 'https://img/1');
       const sub = await GameSubscription.findOne({ gameId: '730' });
       expect(sub.imageUrl).toBe('https://img/1');
+    });
+
+    it('fallback Store header quand SGDB échoue — prioritaire sur le logoUrl client (souvent deviné/mort)', async () => {
+      steamGridDbMock.getGameImage.mockResolvedValue(null);
+      apiClientMock.fetchGameDetails.mockResolvedValue({
+        name: 'WheelMates',
+        header_image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3905450/46df0b/header.jpg',
+      });
+
+      await addUserToGameSubscription(
+        '3905450',
+        's1',
+        'WheelMates',
+        'https://cdn.cloudflare.steamstatic.com/steam/apps/3905450/header.jpg'
+      );
+
+      const sub = await GameSubscription.findOne({ gameId: '3905450' });
+      expect(sub.imageUrl).toBe(
+        'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3905450/46df0b/header.jpg'
+      );
+    });
+
+    it('ne consulte pas le Store quand SGDB a trouvé une icône', async () => {
+      steamGridDbMock.getGameImage.mockResolvedValue('https://grid/730.png');
+      await addUserToGameSubscription('730', 's1', 'CSGO', '');
+
+      expect(apiClientMock.fetchGameDetails).not.toHaveBeenCalled();
+    });
+
+    it('retombe sur le logoUrl client quand SGDB et le Store échouent tous les deux', async () => {
+      steamGridDbMock.getGameImage.mockResolvedValue(null);
+      apiClientMock.fetchGameDetails.mockRejectedValue(new Error('store down'));
+
+      await addUserToGameSubscription('730', 's1', 'CSGO', 'https://img/client.jpg');
+
+      const sub = await GameSubscription.findOne({ gameId: '730' });
+      expect(sub.imageUrl).toBe('https://img/client.jpg');
+    });
+
+    it('remplit imageUrl vide d\'un doc existant avec le Store header', async () => {
+      steamGridDbMock.getGameImage.mockResolvedValue(null);
+      apiClientMock.fetchGameDetails.mockResolvedValue({
+        header_image: 'https://store/header.jpg',
+      });
+      await createGameSubscription({
+        gameId: '730',
+        name: 'CSGO',
+        imageUrl: '',
+        subscribers: ['s1'],
+      });
+
+      await addUserToGameSubscription('730', 's2', 'CSGO', '');
+      const sub = await GameSubscription.findOne({ gameId: '730' });
+      expect(sub.imageUrl).toBe('https://store/header.jpg');
     });
   });
 

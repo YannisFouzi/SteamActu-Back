@@ -4,6 +4,7 @@
 
 const GameSubscription = require('../../models/GameSubscription');
 const { getGameImage } = require('../steamGridDbService');
+const { fetchGameDetails } = require('../steam/apiClient');
 
 // Noms génériques injectés par d'anciens scripts de test ou quand Steam ne renvoie
 // pas le vrai titre (cas "Unknown Game" pour les jeux pré-release vus via Family
@@ -28,7 +29,14 @@ async function addUserToGameSubscription(appId, steamId, name, imageUrl) {
   // Le nom est passé au resolver pour activer le 5ème étage SteamGridDB
   // (search par nom, utile pour les jeux pré-release non liés à l'appId).
   const gridDbIcon = await getGameImage(appId, name).catch(() => null);
-  const bestImageUrl = gridDbIcon || imageUrl || '';
+  // SGDB ne connaît pas le jeu (trop récent) : résoudre l'URL réelle via le
+  // Store. Le `imageUrl` fourni par les clients est souvent un pattern deviné
+  // (cdn.cloudflare.../apps/<id>/header.jpg) qui 404 pour les jeux récents —
+  // Steam sert leurs assets sous des chemins hashés non devinables.
+  const storeHeader = gridDbIcon
+    ? null
+    : (await fetchGameDetails(appId).catch(() => null))?.header_image || null;
+  const bestImageUrl = gridDbIcon || storeHeader || imageUrl || '';
   const firstFollowTimestamp = Math.floor(Date.now() / 1000);
 
   // Upsert atomique : crée le doc s'il n'existe pas, sinon ajoute juste le subscriber.
@@ -53,7 +61,7 @@ async function addUserToGameSubscription(appId, steamId, name, imageUrl) {
   const updates = {};
   if (gridDbIcon && gameSubscription.imageUrl !== bestImageUrl) {
     updates.imageUrl = bestImageUrl;
-  } else if (imageUrl && !gameSubscription.imageUrl) {
+  } else if (bestImageUrl && !gameSubscription.imageUrl) {
     updates.imageUrl = bestImageUrl;
   }
   // Auto-correction du nom : si l'actuel est un placeholder générique
