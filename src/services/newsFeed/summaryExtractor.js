@@ -4,9 +4,6 @@
  * ISteamNews/GetNewsForApp ; cet extrait est donc construit à partir du corps.
  */
 
-const STEAM_CLAN_CDN =
-  'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/clans';
-
 const DEFAULT_MAX_LENGTH = 200;
 
 /**
