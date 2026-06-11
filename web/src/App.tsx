@@ -38,6 +38,9 @@ type ProfileState =
 export default function App() {
   const [tab, setTab] = useState<Tab>('actu');
   const [profile, setProfile] = useState<ProfileState>({ status: 'loading' });
+  // Bumpé après un rescan admin pour re-fetch le profil (wishlist + jeux suivis)
+  // en place, sans recharger toute la page (qui repartait sur l'onglet "Actu").
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [session] = useState<Session | null>(getSession());
   const [confirmUnfollow, setConfirmUnfollow] = useState(true);
   const [deleted, setDeleted] = useState(false);
@@ -129,7 +132,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [authed]);
+  }, [authed, refreshNonce]);
 
   // Writes go through public-by-SteamID endpoints, so the feed is editable even
   // without a verified session (we're inside the authenticated Steam client).
@@ -205,6 +208,7 @@ export default function App() {
           profile={profileData}
           editable={editable}
           follow={guard.follow}
+          onAccountRefreshed={() => setRefreshNonce((n) => n + 1)}
         />
       )}
       {tab === 'compte' &&

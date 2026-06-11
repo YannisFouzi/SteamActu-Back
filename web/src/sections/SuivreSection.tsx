@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CONTEXT,
   fetchLibrary,
@@ -25,10 +25,13 @@ export default function SuivreSection({
   profile,
   editable,
   follow,
+  onAccountRefreshed,
 }: {
   profile: WebProfile | null;
   editable: boolean;
   follow: FollowState;
+  // Re-fetch du profil parent (wishlist + jeux suivis) après un rescan admin.
+  onAccountRefreshed?: () => void;
 }) {
   const { t } = useT();
   const [query, setQuery] = useState('');
@@ -43,13 +46,34 @@ export default function SuivreSection({
   );
   const isAdmin = Boolean(profile?.account.isAdmin);
 
+  // Recharge la bibliothèque (Mes jeux). Réutilisé au montage ET après un rescan
+  // admin — on garde l'ancienne donnée affichée jusqu'à l'arrivée de la nouvelle.
+  const loadLibrary = useCallback(
+    () =>
+      fetchLibrary(CONTEXT.steamId)
+        .then((games) => setLib({ status: 'ok', games }))
+        .catch((err: unknown) =>
+          setLib({
+            status: 'error',
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        ),
+    [],
+  );
+
   const runAdminRefresh = () => {
     if (adminState === 'loading') {
       return;
     }
     setAdminState('loading');
     refreshAccount(CONTEXT.steamId)
-      .then(() => window.location.reload()) // reload to show the freshly synced data
+      .then(() => {
+        // Re-fetch en place (PAS de window.location.reload, qui réinitialisait le
+        // SPA sur l'onglet "Actu" par défaut). On reste sur "Suivre".
+        onAccountRefreshed?.(); // profil parent : wishlist + jeux suivis
+        return loadLibrary(); // bibliothèque locale
+      })
+      .then(() => setAdminState('idle'))
       .catch(() => setAdminState('error'));
   };
 
@@ -72,23 +96,8 @@ export default function SuivreSection({
   // Library is needed both by Mes jeux and by the unified search ("Dans mes
   // jeux" section), so load it once when the section mounts.
   useEffect(() => {
-    let cancelled = false;
-    fetchLibrary(CONTEXT.steamId)
-      .then((games) => {
-        if (!cancelled) setLib({ status: 'ok', games });
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setLib({
-            status: 'error',
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    loadLibrary();
+  }, [loadLibrary]);
 
   const libraryGames = lib.status === 'ok' ? lib.games : [];
   const wishlist = profile?.wishlist ?? [];
