@@ -147,6 +147,24 @@ describe('routes /api/users', () => {
         .set(authHeader(steamId));
       expect(r.status).toBe(200);
       expect(r.body.followedGames.sort()).toEqual(['570', '730']);
+      expect(r.body.mutedGames).toEqual([]); // legacy = tout notifié
+    });
+
+    it('expose mutedGames (suivis silencieux) sans changer followedGames', async () => {
+      const steamId = nextSteamId();
+      await createUser({
+        steamId,
+        followedGames: [
+          { appId: '730', followedAt: new Date(), notifications: false },
+          { appId: '570', followedAt: new Date(), notifications: true },
+        ],
+      });
+      const r = await request(app)
+        .get(`/api/users/${steamId}`)
+        .set(authHeader(steamId));
+      expect(r.status).toBe(200);
+      expect(r.body.followedGames.sort()).toEqual(['570', '730']);
+      expect(r.body.mutedGames).toEqual(['730']);
     });
   });
 

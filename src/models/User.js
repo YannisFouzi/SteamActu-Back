@@ -279,6 +279,18 @@ const UserSchema = new mongoose.Schema({
 UserSchema.set('toJSON', {
   transform(doc, ret) {
     if (Array.isArray(ret.followedGames)) {
+      // mutedGames (suivi silencieux, bouton +) : dérivé AVANT l'aplatissement
+      // de followedGames en strings — c'est la seule source per-game du flag
+      // notifications pour l'app mobile (champ additif, contrat préservé).
+      ret.mutedGames = ret.followedGames
+        .filter(
+          (entry) =>
+            entry &&
+            typeof entry === 'object' &&
+            entry.appId &&
+            entry.notifications === false
+        )
+        .map((entry) => String(entry.appId));
       ret.followedGames = ret.followedGames
         .map((entry) =>
           entry && typeof entry === 'object' && entry.appId
