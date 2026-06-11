@@ -1,6 +1,7 @@
 const {
   getFollowedAppIds,
   buildFollowedGamesEntry,
+  getMutedAppIds,
   hasFollowedGame,
 } = require('../../../src/utils/followedGamesHelpers');
 
@@ -61,12 +62,23 @@ describe('utils/followedGamesHelpers', () => {
   });
 
   describe('buildFollowedGamesEntry()', () => {
-    it('construit { appId: string, followedAt: Date }', () => {
+    it('construit { appId, followedAt, notifications: true } par défaut', () => {
       const entry = buildFollowedGamesEntry('730');
       expect(entry).toEqual({
         appId: '730',
         followedAt: expect.any(Date),
+        notifications: true,
       });
+    });
+
+    it('notifications: false produit un suivi silencieux', () => {
+      expect(buildFollowedGamesEntry('730', false).notifications).toBe(false);
+    });
+
+    it('toute valeur non-false de notifications est coercée à true', () => {
+      expect(buildFollowedGamesEntry('730', undefined).notifications).toBe(true);
+      expect(buildFollowedGamesEntry('730', null).notifications).toBe(true);
+      expect(buildFollowedGamesEntry('730', 'false').notifications).toBe(true);
     });
 
     it('coerce appId number en string', () => {
@@ -80,6 +92,31 @@ describe('utils/followedGamesHelpers', () => {
       const after = Date.now();
       expect(entry.followedAt.getTime()).toBeGreaterThanOrEqual(before);
       expect(entry.followedAt.getTime()).toBeLessThanOrEqual(after);
+    });
+  });
+
+  describe('getMutedAppIds()', () => {
+    it('retourne les appIds avec notifications === false uniquement', () => {
+      const user = {
+        followedGames: [
+          { appId: '730', notifications: false },
+          { appId: '570', notifications: true },
+          { appId: '440' }, // legacy sans le champ → notifié
+          '220', // legacy string → notifié
+        ],
+      };
+      expect(getMutedAppIds(user)).toEqual(new Set(['730']));
+    });
+
+    it('retourne un Set vide pour user null/sans followedGames', () => {
+      expect(getMutedAppIds(null)).toEqual(new Set());
+      expect(getMutedAppIds({})).toEqual(new Set());
+      expect(getMutedAppIds({ followedGames: 'oops' })).toEqual(new Set());
+    });
+
+    it('coerce appId number en string', () => {
+      const user = { followedGames: [{ appId: 730, notifications: false }] };
+      expect(getMutedAppIds(user)).toEqual(new Set(['730']));
     });
   });
 

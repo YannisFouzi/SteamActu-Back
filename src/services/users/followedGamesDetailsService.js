@@ -21,12 +21,14 @@ const isUsableHeaderImage = (imageUrl) =>
 function normalizeEntry(entry) {
   if (!entry) return null;
   if (typeof entry === 'string') {
-    return { appId: entry, followedAt: null };
+    return { appId: entry, followedAt: null, notifications: true };
   }
   if (entry.appId) {
     return {
       appId: String(entry.appId),
       followedAt: entry.followedAt || null,
+      // Seul false explicite = suivi silencieux ; legacy sans champ = notifié.
+      notifications: entry.notifications !== false,
     };
   }
   return null;
@@ -36,7 +38,7 @@ function normalizeEntry(entry) {
  * @param {string} steamId
  * @returns {Promise<
  *   | { type: 'not_found' }
- *   | { type: 'ok'; followedGames: Array<{ appId: string; name: string; header_image: string; imageUrl: string; followedAt: string | null }> }
+ *   | { type: 'ok'; followedGames: Array<{ appId: string; name: string; header_image: string; imageUrl: string; followedAt: string | null; notifications: boolean }> }
  * >}
  */
 async function getFollowedGamesDetailsBySteamId(steamId) {
@@ -55,6 +57,9 @@ async function getFollowedGamesDetailsBySteamId(steamId) {
 
   const followedAtByAppId = new Map(
     normalizedEntries.map((entry) => [entry.appId, entry.followedAt])
+  );
+  const notificationsByAppId = new Map(
+    normalizedEntries.map((entry) => [entry.appId, entry.notifications])
   );
   const followedGameIds = normalizedEntries.map((entry) => entry.appId);
 
@@ -105,6 +110,9 @@ async function getFollowedGamesDetailsBySteamId(steamId) {
       header_image: canonicalHeaderImage,
       imageUrl: subscription?.imageUrl || '',
       followedAt: followedAtRaw ? new Date(followedAtRaw).toISOString() : null,
+      // false = suivi silencieux (bouton + sans cloche) — pilote l'état des
+      // boutons côté UI (mobile + SPA web via /api/web/profile).
+      notifications: notificationsByAppId.get(appId) !== false,
     };
   });
 

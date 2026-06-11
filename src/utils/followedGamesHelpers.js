@@ -31,13 +31,38 @@ function getFollowedAppIds(user) {
 /**
  * Construit une entrée followedGames à pousser dans Mongo.
  * @param {string} appId
- * @returns {{ appId: string, followedAt: Date }}
+ * @param {boolean} [notifications=true] - false = suivi silencieux (fil sans push)
+ * @returns {{ appId: string, followedAt: Date, notifications: boolean }}
  */
-function buildFollowedGamesEntry(appId) {
+function buildFollowedGamesEntry(appId, notifications = true) {
   return {
     appId: String(appId),
     followedAt: new Date(),
+    notifications: notifications !== false,
   };
+}
+
+/**
+ * AppIds suivis en silencieux (notifications coupées). Seul notifications === false
+ * compte : les entrées legacy sans le champ restent notifiées.
+ * @param {Object} user
+ * @returns {Set<string>}
+ */
+function getMutedAppIds(user) {
+  if (!user || !Array.isArray(user.followedGames)) {
+    return new Set();
+  }
+  return new Set(
+    user.followedGames
+      .filter(
+        (entry) =>
+          entry &&
+          typeof entry === 'object' &&
+          entry.appId &&
+          entry.notifications === false
+      )
+      .map((entry) => String(entry.appId))
+  );
 }
 
 /**
@@ -53,5 +78,6 @@ function hasFollowedGame(user, appId) {
 module.exports = {
   getFollowedAppIds,
   buildFollowedGamesEntry,
+  getMutedAppIds,
   hasFollowedGame,
 };

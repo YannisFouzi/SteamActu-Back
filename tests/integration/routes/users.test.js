@@ -411,7 +411,88 @@ describe('routes /api/users', () => {
 
       const reloaded = await User.findOne({ steamId }).lean();
       expect(reloaded.followedGames[0].appId).toBe('730');
+      expect(reloaded.followedGames[0].notifications).toBe(true); // défaut = notifié
       expect(reloaded.gamesVersion).toBeInstanceOf(Date);
+    });
+
+    it('notifications:false crée un suivi silencieux', async () => {
+      const steamId = nextSteamId();
+      await createUser({ steamId });
+      const r = await request(app)
+        .post(`/api/users/${steamId}/follow`)
+        .set(authHeader(steamId))
+        .send({ appId: '730', name: 'CSGO', notifications: false });
+      expect(r.status).toBe(200);
+
+      const reloaded = await User.findOne({ steamId }).lean();
+      expect(reloaded.followedGames[0].notifications).toBe(false);
+    });
+  });
+
+  describe('PUT /:steamId/follow/:appId/notifications', () => {
+    it('401 si pas de header', async () => {
+      const r = await request(app)
+        .put('/api/users/76561197960287930/follow/730/notifications')
+        .send({ enabled: false });
+      expect(r.status).toBe(401);
+    });
+
+    it('403 si mismatch steamId', async () => {
+      const r = await request(app)
+        .put('/api/users/76561197960287930/follow/730/notifications')
+        .set(authHeader('76561197960287777'))
+        .send({ enabled: false });
+      expect(r.status).toBe(403);
+    });
+
+    it('400 si enabled absent ou non booléen', async () => {
+      const steamId = nextSteamId();
+      await createUser({ steamId, followedGames: ['730'] });
+      let r = await request(app)
+        .put(`/api/users/${steamId}/follow/730/notifications`)
+        .set(authHeader(steamId))
+        .send({});
+      expect(r.status).toBe(400);
+
+      r = await request(app)
+        .put(`/api/users/${steamId}/follow/730/notifications`)
+        .set(authHeader(steamId))
+        .send({ enabled: 'false' });
+      expect(r.status).toBe(400);
+    });
+
+    it('404 si le jeu n\'est pas suivi', async () => {
+      const steamId = nextSteamId();
+      await createUser({ steamId });
+      const r = await request(app)
+        .put(`/api/users/${steamId}/follow/730/notifications`)
+        .set(authHeader(steamId))
+        .send({ enabled: false });
+      expect(r.status).toBe(404);
+    });
+
+    it('200 : coupe puis réactive les notifications, persisté en base', async () => {
+      const steamId = nextSteamId();
+      await createUser({ steamId, followedGames: ['730'] });
+
+      let r = await request(app)
+        .put(`/api/users/${steamId}/follow/730/notifications`)
+        .set(authHeader(steamId))
+        .send({ enabled: false });
+      expect(r.status).toBe(200);
+      expect(r.body).toEqual({ ok: true, appId: '730', notifications: false });
+      let reloaded = await User.findOne({ steamId }).lean();
+      expect(reloaded.followedGames[0].notifications).toBe(false);
+
+      r = await request(app)
+        .put(`/api/users/${steamId}/follow/730/notifications`)
+        .set(authHeader(steamId))
+        .send({ enabled: true });
+      expect(r.status).toBe(200);
+      reloaded = await User.findOne({ steamId }).lean();
+      expect(reloaded.followedGames[0].notifications).toBe(true);
+      // Le toggle ne désabonne jamais
+      expect(reloaded.followedGames).toHaveLength(1);
     });
   });
 

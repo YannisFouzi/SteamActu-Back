@@ -1,6 +1,7 @@
 const { getNewsFeed } = require('./newsFeedService');
 const UserNewsState = require('../models/UserNewsState');
 const User = require('../models/User');
+const { getMutedAppIds } = require('../utils/followedGamesHelpers');
 const logger = require('../utils/logger');
 
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
@@ -60,9 +61,14 @@ async function getPendingDesktopToasts(steamId, { language } = {}) {
   const expiresAt = new Date(now.getTime() + RETENTION_DAYS * MS_IN_DAY);
 
   const user = await User.findOne({ steamId })
-    .select('desktopToastSeededAt')
+    .select('desktopToastSeededAt followedGames')
     .lean();
   const seeded = Boolean(user && user.desktopToastSeededAt);
+  // Suivi silencieux (bouton +) : un toast desktop est une notification, même
+  // règle que le push mobile — les jeux mutés restent dans le fil mais ne
+  // toastent pas. (Le seed, lui, marque tout le backlog, jeux mutés inclus :
+  // s'ils repassent en notifié plus tard, on ne re-toaste pas le passé.)
+  const mutedAppIds = getMutedAppIds(user);
 
   // First contact: silently mark the whole current backlog as delivered.
   if (!seeded) {
@@ -96,7 +102,7 @@ async function getPendingDesktopToasts(steamId, { language } = {}) {
     rows.map((r) => [stateKey(r.appId, r.newsId), r]),
   );
 
-  const toToast = items.filter((it) => {
+  const undelivered = items.filter((it) => {
     const row = stateByKey.get(stateKey(it.appId, it.news?.id));
     if (!row) {
       return true; // brand-new news, never recorded
@@ -104,11 +110,20 @@ async function getPendingDesktopToasts(steamId, { language } = {}) {
     return !row.pushSentAt && !row.steamToastSentAt;
   });
 
-  if (toToast.length === 0) {
+  // Suivi silencieux (bouton +) : dans le fil, jamais en toast. On les CLAIM
+  // quand même (steamToastSentAt) : une news arrivée pendant que le jeu était
+  // muté est consommée silencieusement — réactiver la cloche plus tard ne doit
+  // pas faire re-toaster le backlog (parité avec le cron mobile, qui ne
+  // revisite jamais une vieille news).
+  const toToast = undelivered.filter(
+    (it) => !mutedAppIds.has(String(it.appId))
+  );
+
+  if (undelivered.length === 0) {
     return [];
   }
 
-  const ops = toToast.map((it) => ({
+  const ops = undelivered.map((it) => ({
     updateOne: {
       filter: {
         steamId,

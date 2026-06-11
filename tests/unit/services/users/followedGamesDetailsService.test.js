@@ -23,6 +23,24 @@ describe('services/users/followedGamesDetailsService', () => {
       expect(result).toEqual({ type: 'ok', followedGames: [] });
     });
 
+    it('expose notifications par item (false = silencieux, legacy/true = notifié)', async () => {
+      const steamId = nextSteamId();
+      await createUser({
+        steamId,
+        followedGames: [
+          { appId: '730', followedAt: new Date(), notifications: false },
+          { appId: '570', followedAt: new Date(), notifications: true },
+          '440', // legacy string
+        ],
+      });
+
+      const { followedGames } = await getFollowedGamesDetailsBySteamId(steamId);
+      const byAppId = new Map(followedGames.map((g) => [g.appId, g]));
+      expect(byAppId.get('730').notifications).toBe(false);
+      expect(byAppId.get('570').notifications).toBe(true);
+      expect(byAppId.get('440').notifications).toBe(true);
+    });
+
     it('résout name/header/imageUrl en cascade Wishlist > Game > Subscription', async () => {
       const steamId = nextSteamId();
       await createUser({

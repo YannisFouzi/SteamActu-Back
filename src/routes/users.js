@@ -247,7 +247,10 @@ router.put(
 router.post('/:steamId/follow', mobileSessionAuth, requireSelf, validateSteamId, validateUserExists, async (req, res) => {
     try {
       const { steamId } = req.params;
-      const { appId, name, logoUrl } = req.body;
+      // `notifications: false` = suivi silencieux (bouton +) : news dans le fil,
+      // pas de push. Absent ou toute autre valeur = suivi notifié (cloche,
+      // comportement historique — rétrocompat avec les vieux clients).
+      const { appId, name, logoUrl, notifications } = req.body;
 
       if (!isValidAppId(String(appId || ''))) {
         return res.status(400).json({ message: 'AppID invalide' });
@@ -264,7 +267,9 @@ router.post('/:steamId/follow', mobileSessionAuth, requireSelf, validateSteamId,
       const updatedUser = await User.findOneAndUpdate(
         { steamId, 'followedGames.appId': { $ne: appId } },
         {
-          $push: { followedGames: buildFollowedGamesEntry(appId) },
+          $push: {
+            followedGames: buildFollowedGamesEntry(appId, notifications !== false),
+          },
           $set: { gamesVersion: new Date() },
         },
         { new: true }
@@ -322,6 +327,48 @@ router.delete(
       res.json(updatedUser);
     } catch (error) {
       logger.error('Erreur lors du retrait du jeu des suivis:', error);
+      res.status(500).json({ message: 'Erreur serveur' });
+    }
+  }
+);
+
+// Bascule notifications d'un jeu DÉJÀ suivi (cloche on/off sans désabonner).
+// enabled:true = suivi notifié, enabled:false = suivi silencieux (fil sans push).
+router.put(
+  '/:steamId/follow/:appId/notifications',
+  mobileSessionAuth,
+  requireSelf,
+  validateSteamId,
+  validateAppId,
+  async (req, res) => {
+    try {
+      const { steamId, appId } = req.params;
+      const { enabled } = req.body || {};
+
+      if (typeof enabled !== 'boolean') {
+        return res
+          .status(400)
+          .json({ message: 'enabled (booléen) est requis' });
+      }
+
+      // Update positionnel atomique : ne matche que si le jeu est suivi.
+      const result = await User.updateOne(
+        { steamId, 'followedGames.appId': appId },
+        {
+          $set: {
+            'followedGames.$.notifications': enabled,
+            gamesVersion: new Date(),
+          },
+        }
+      );
+
+      if (result.matchedCount === 0) {
+        return res.status(404).json({ message: "Ce jeu n'est pas suivi" });
+      }
+
+      res.json({ ok: true, appId, notifications: enabled });
+    } catch (error) {
+      logger.error('Erreur lors de la bascule notifications du jeu:', error);
       res.status(500).json({ message: 'Erreur serveur' });
     }
   }

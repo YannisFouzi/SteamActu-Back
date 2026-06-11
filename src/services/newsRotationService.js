@@ -13,6 +13,7 @@
  */
 
 const GameSubscription = require('../models/GameSubscription');
+const User = require('../models/User');
 const UserNewsState = require('../models/UserNewsState');
 const steamService = require('./steamService');
 const { SteamApiError } = steamService;
@@ -338,8 +339,23 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
   }).select('steamId').lean();
 
   const alreadyServedSet = new Set(alreadyServed.map((s) => s.steamId));
+
+  // Suivi silencieux (bouton +) : exclure les subscribers qui ont coupé les
+  // notifications pour CE jeu (followedGames.notifications === false). Les
+  // entrées legacy sans le champ ne matchent pas → notifiées (rétrocompat).
+  // Le fil d'actu n'est PAS affecté : un suivi silencieux reste un suivi.
+  const mutedUsers = await User.find({
+    steamId: { $in: subscribers },
+    followedGames: {
+      $elemMatch: { appId: String(game.gameId), notifications: false },
+    },
+  })
+    .select('steamId')
+    .lean();
+  const mutedSet = new Set(mutedUsers.map((u) => u.steamId));
+
   const eligibleSubscribers = subscribers.filter(
-    (sid) => !alreadyServedSet.has(sid)
+    (sid) => !alreadyServedSet.has(sid) && !mutedSet.has(sid)
   );
 
   logger.debug(
@@ -348,6 +364,7 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
       eligible: eligibleSubscribers.length,
       total: subscribers.length,
       alreadyServed: alreadyServedSet.size,
+      muted: mutedSet.size,
     },
     'news_notification_subscribers_filtered'
   );

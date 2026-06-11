@@ -26,6 +26,14 @@ const UserSchema = new mongoose.Schema({
           type: Date,
           default: Date.now,
         },
+        // Suivi à deux niveaux : true = news dans le fil + push/toast (cloche),
+        // false = "suivi silencieux", news dans le fil SEULEMENT (bouton +).
+        // Les entrées existantes n'ont pas le champ → traitées comme true
+        // partout (les filtres ne matchent que notifications === false).
+        notifications: {
+          type: Boolean,
+          default: true,
+        },
       },
     ],
     validate: {

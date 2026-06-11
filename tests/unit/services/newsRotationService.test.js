@@ -241,6 +241,58 @@ describe('services/newsRotationService', () => {
       expect(notified).not.toContain(sA);
     });
 
+    it('skip les subscribers en suivi silencieux (notifications:false), pas les notifiés ni les legacy', async () => {
+      const newTs = Math.floor(Date.now() / 1000);
+      const sMuted = nextSteamId(); // suit 730 avec notifications:false → skip
+      const sNotify = nextSteamId(); // suit 730 avec notifications:true → notifié
+      const sLegacy = nextSteamId(); // entrée sans champ notifications → notifié
+      const sOther = nextSteamId(); // mute un AUTRE jeu → notifié pour 730
+      await createUser({
+        steamId: sMuted,
+        followedGames: [{ appId: '730', followedAt: new Date(), notifications: false }],
+        notificationSettings: { newsNotifications: true, fcmTokens: [{ token: 't', platform: 'android' }] },
+      });
+      await createUser({
+        steamId: sNotify,
+        followedGames: [{ appId: '730', followedAt: new Date(), notifications: true }],
+        notificationSettings: { newsNotifications: true, fcmTokens: [{ token: 't', platform: 'android' }] },
+      });
+      await createUser({
+        steamId: sLegacy,
+        followedGames: [{ appId: '730', followedAt: new Date() }],
+        notificationSettings: { newsNotifications: true, fcmTokens: [{ token: 't', platform: 'android' }] },
+      });
+      await createUser({
+        steamId: sOther,
+        followedGames: [
+          { appId: '730', followedAt: new Date() },
+          { appId: '440', followedAt: new Date(), notifications: false },
+        ],
+        notificationSettings: { newsNotifications: true, fcmTokens: [{ token: 't', platform: 'android' }] },
+      });
+
+      await createGameSubscription({
+        gameId: '730',
+        name: 'CSGO',
+        lastNewsTimestamp: newTs - DAY,
+        subscribers: [sMuted, sNotify, sLegacy, sOther],
+      });
+
+      steamServiceMock.getGameNews.mockResolvedValue([
+        { gid: 'news-1', title: 't', url: 'u', date: newTs, contents: '' },
+      ]);
+      notificationServiceMock.sendNewsNotification.mockResolvedValue(true);
+
+      const stats = await checkNewsRotation();
+
+      expect(stats.notificationsSent).toBe(3);
+      const notified = notificationServiceMock.sendNewsNotification.mock.calls.map(
+        (c) => c[0],
+      );
+      expect(notified).toEqual(expect.arrayContaining([sNotify, sLegacy, sOther]));
+      expect(notified).not.toContain(sMuted);
+    });
+
     it('écrit pushSentAt UNIQUEMENT pour les subscribers où sendNewsNotification renvoie true', async () => {
       const newTs = Math.floor(Date.now() / 1000);
       const sA = nextSteamId();

@@ -57,6 +57,30 @@ describe('services/desktopToastService — getPendingDesktopToasts', () => {
     expect(row.steamToastSentAt).toBeTruthy();
   });
 
+  it('après seed : un jeu en suivi silencieux (notifications:false) ne toaste pas, mais sa news est claim silencieusement', async () => {
+    const steamId = nextSteamId();
+    await createUser({
+      steamId,
+      desktopToastSeededAt: new Date(),
+      followedGames: [
+        { appId: '730', followedAt: new Date(), notifications: false }, // muté
+        { appId: '570', followedAt: new Date() }, // legacy → notifié
+      ],
+    });
+    newsFeedServiceMock.getNewsFeed.mockResolvedValue({
+      items: [feedItem('730', 'muted-news'), feedItem('570', 'normal-news')],
+    });
+
+    const out = await getPendingDesktopToasts(steamId, {});
+    // Seul le jeu non muté toaste
+    expect(out).toHaveLength(1);
+    expect(out[0].appId).toBe('570');
+
+    // La news mutée est quand même claim (pas de re-toast si la cloche se réactive)
+    const mutedRow = await UserNewsState.findOne({ steamId, newsId: 'muted-news' }).lean();
+    expect(mutedRow.steamToastSentAt).toBeTruthy();
+  });
+
   it('après seed : une news déjà poussée sur MOBILE (pushSentAt) n\'est PAS re-toastée sur desktop', async () => {
     const steamId = nextSteamId();
     await createUser({ steamId, desktopToastSeededAt: new Date() });

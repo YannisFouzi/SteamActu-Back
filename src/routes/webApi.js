@@ -9,6 +9,7 @@ const {
 const {
   getFollowedAppIds,
   buildFollowedGamesEntry,
+  getMutedAppIds,
 } = require('../utils/followedGamesHelpers');
 const { isValidSteamId, isValidAppId } = require('../middleware/steamValidators');
 const {
@@ -273,7 +274,7 @@ router.get('/settings/:steamId', async (req, res) => {
  */
 async function handleFollow(params, res) {
   try {
-    const { steamId, appId, name, logoUrl } = params;
+    const { steamId, appId, name, logoUrl, notifications } = params;
     if (!isValidSteamId(String(steamId || ''))) {
       return res.status(400).json({ message: 'SteamID invalide' });
     }
@@ -281,6 +282,11 @@ async function handleFollow(params, res) {
       return res.status(400).json({ message: 'AppID invalide' });
     }
     const appIdStr = String(appId);
+    // `notifications=false` (query string du proxy Lua) ou `false` (body JSON)
+    // = suivi silencieux (bouton +). Absent/autre = notifié (rétrocompat).
+    const wantsNotifications = !(
+      notifications === false || String(notifications).toLowerCase() === 'false'
+    );
 
     const user = await User.findOne({ steamId }).select('followedGames').lean();
     if (!user) {
@@ -294,7 +300,9 @@ async function handleFollow(params, res) {
     await User.findOneAndUpdate(
       { steamId, 'followedGames.appId': { $ne: appIdStr } },
       {
-        $push: { followedGames: buildFollowedGamesEntry(appIdStr) },
+        $push: {
+          followedGames: buildFollowedGamesEntry(appIdStr, wantsNotifications),
+        },
         $set: { gamesVersion: new Date() },
       },
     );
@@ -328,12 +336,85 @@ router.get('/follow-state/:steamId/:appId', async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
-    res.json({ followed: getFollowedAppIds(user).includes(String(appId)) });
+    const appIdStr = String(appId);
+    const followed = getFollowedAppIds(user).includes(appIdStr);
+    res.json({
+      followed,
+      // false = suivi silencieux (bouton + sans cloche). Toujours false si non
+      // suivi — le client lit `followed` d'abord.
+      notifications: followed && !getMutedAppIds(user).has(appIdStr),
+    });
   } catch (error) {
     logger.error({ err: error }, 'web_follow_state_failed');
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
+
+/**
+ * Bascule notifications d'un jeu DÉJÀ suivi (cloche on/off sans désabonner) —
+ * jumeau public-by-SteamID du PUT /api/users/:id/follow/:appId/notifications.
+ * Même modèle de confiance que les writes follow ci-dessus. GET exposé pour le
+ * proxy Lua http.get-only du plugin (`?enabled=true|false`), POST pour le SPA.
+ */
+async function handleFollowNotifications(params, res) {
+  try {
+    const { steamId, appId, enabled } = params;
+    if (!isValidSteamId(String(steamId || ''))) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    if (!isValidAppId(String(appId || ''))) {
+      return res.status(400).json({ message: 'AppID invalide' });
+    }
+    const normalized =
+      enabled === true || String(enabled).toLowerCase() === 'true'
+        ? true
+        : enabled === false || String(enabled).toLowerCase() === 'false'
+        ? false
+        : null;
+    if (normalized === null) {
+      return res
+        .status(400)
+        .json({ message: 'enabled (true|false) est requis' });
+    }
+
+    const appIdStr = String(appId);
+    // Update positionnel atomique : ne matche que si le jeu est suivi.
+    const result = await User.updateOne(
+      { steamId, 'followedGames.appId': appIdStr },
+      {
+        $set: {
+          'followedGames.$.notifications': normalized,
+          gamesVersion: new Date(),
+        },
+      }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "Ce jeu n'est pas suivi" });
+    }
+
+    res.json({ ok: true, appId: appIdStr, notifications: normalized });
+  } catch (error) {
+    logger.error({ err: error }, 'web_follow_notifications_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+}
+
+router.get('/follow-notifications/:steamId/:appId', (req, res) =>
+  handleFollowNotifications(
+    { steamId: req.params.steamId, appId: req.params.appId, enabled: req.query.enabled },
+    res,
+  ),
+);
+router.post('/follow-notifications/:steamId/:appId', (req, res) =>
+  handleFollowNotifications(
+    {
+      steamId: req.params.steamId,
+      appId: req.params.appId,
+      enabled: (req.body || {}).enabled,
+    },
+    res,
+  ),
+);
 
 /**
  * Public, idempotent account provisioning for the Steam Desktop surface.
