@@ -51,6 +51,7 @@ const logger = require('../utils/logger');
 // webPairSecret.js.
 const {
   hashSecret,
+  generatePairSecret,
   secretMatches,
   requireWebSecretIfPaired,
 } = require('../middleware/webPairSecret');
@@ -63,14 +64,31 @@ async function handlePair(params, res) {
   if (!isValidSteamId(String(steamId || ''))) {
     return res.status(400).json({ message: 'SteamID invalide' });
   }
-  if (typeof secret !== 'string' || secret.length < 16) {
-    return res.status(400).json({ message: 'secret invalide' });
-  }
+  // Secret fourni = ancien flux (le plugin envoie toujours ses 40 hex). Absent
+  // = nouveau flux Option A : le backend mint un secret CSPRNG (entropie forte,
+  // independante du sandbox Lua du plugin) et le renvoie une seule fois.
+  const hasSecret = typeof secret === 'string' && secret.length >= 16;
   try {
     const user = await User.findOne({ steamId }).select('+webPairSecretHash');
     if (!user) {
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
+
+    // ── Pas de secret fourni : generation serveur ───────────────────────────
+    if (!hasSecret) {
+      if (!user.webPairSecretHash) {
+        const generated = generatePairSecret();
+        user.webPairSecretHash = hashSecret(generated);
+        await user.save();
+        // Seul moment ou le secret transite : a la creation, en HTTPS. Ensuite
+        // on n'en garde que le hash, donc rien a renvoyer aux appels suivants.
+        return res.json({ ok: true, paired: true, secret: generated });
+      }
+      // Deja appaire : on ne connait que le hash, on ne peut/doit rien renvoyer.
+      return res.json({ ok: true, alreadyPaired: true });
+    }
+
+    // ── Secret fourni : flux TOFU historique (retrocompat plugins existants) ─
     if (!user.webPairSecretHash) {
       user.webPairSecretHash = hashSecret(secret);
       await user.save();

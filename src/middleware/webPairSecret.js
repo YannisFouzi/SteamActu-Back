@@ -13,6 +13,15 @@ function hashSecret(secret) {
   return crypto.createHash('sha256').update(String(secret)).digest('hex');
 }
 
+// Genere un secret d'appairage fort cote serveur (CSPRNG). 20 octets -> 40 hex,
+// meme format que celui historiquement genere par le plugin (qui s'appuyait sur
+// math.random, non-crypto). Utilise par GET /api/web/pair sans secret fourni :
+// le backend mint le secret et le renvoie UNE fois, garantissant une entropie
+// independante du sandbox Lua du plugin.
+function generatePairSecret() {
+  return crypto.randomBytes(20).toString('hex');
+}
+
 function secretMatches(provided, storedHash) {
   if (!provided || !storedHash) {
     return false;
@@ -62,4 +71,9 @@ async function requireWebSecretIfPaired(req, res, next) {
   }
 }
 
-module.exports = { hashSecret, secretMatches, requireWebSecretIfPaired };
+module.exports = {
+  hashSecret,
+  generatePairSecret,
+  secretMatches,
+  requireWebSecretIfPaired,
+};

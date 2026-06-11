@@ -18,7 +18,7 @@ const {
  *
  * @param {Object} opts
  * @param {string[]} [opts.mount] - Liste des routers à monter
- *   ('users'|'news'|'steam'|'auth'|'admin'|'feedback'|'mobileAdmin').
+ *   ('users'|'news'|'steam'|'auth'|'admin'|'feedback'|'mobileAdmin'|'web').
  *   Si vide ou absent, monte TOUS les routers.
  */
 function createTestApp(opts = {}) {
@@ -52,6 +52,10 @@ function createTestApp(opts = {}) {
   if (should('feedback')) {
     const feedbackRoutes = require('../../src/routes/feedback');
     app.use('/api/feedback', feedbackRoutes);
+  }
+  if (should('web')) {
+    const webApiRoutes = require('../../src/routes/webApi');
+    app.use('/api/web', webApiRoutes);
   }
   if (should('mobileAdmin')) {
     const mobileAdminRoutes = require('../../src/routes/mobileAdmin');
