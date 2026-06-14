@@ -121,6 +121,23 @@ describe('webApi — follow à deux niveaux (cloche / +)', () => {
       expect(u.followedGames[0].notifications).toBe(true);
     });
 
+    it('POST ?enabled=false en QUERY coupe les notifs (extension + SPA postent le flag en query)', async () => {
+      const steamId = nextSteamId();
+      await createUser({
+        steamId,
+        followedGames: [{ appId: '730', followedAt: new Date(), notifications: true }],
+      });
+
+      // POST sans body, flag en query — le cas qui renvoyait 400 avant le fix.
+      const r = await request(app).post(
+        `/api/web/follow-notifications/${steamId}/730?enabled=false`,
+      );
+      expect(r.status).toBe(200);
+
+      const u = await User.findOne({ steamId }).lean();
+      expect(u.followedGames[0].notifications).toBe(false);
+    });
+
     it('400 si enabled absent/invalide', async () => {
       const steamId = nextSteamId();
       await createUser({ steamId, followedGames: ['730'] });

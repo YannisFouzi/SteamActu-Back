@@ -414,7 +414,9 @@ router.post('/follow-notifications/:steamId/:appId', (req, res) =>
     {
       steamId: req.params.steamId,
       appId: req.params.appId,
-      enabled: (req.body || {}).enabled,
+      // enabled accepté dans le body (SPA web envoie sans body utile) OU en
+      // query (?enabled=) : l'extension et le SPA postent le flag en query.
+      enabled: (req.body || {}).enabled ?? req.query.enabled,
     },
     res,
   ),
