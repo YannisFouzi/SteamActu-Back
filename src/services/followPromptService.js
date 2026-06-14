@@ -6,98 +6,81 @@ const { getFollowedAppIds } = require('../utils/followedGamesHelpers');
 const logger = require('../utils/logger');
 
 /**
- * Server-authoritative "which follow-prompts should the Steam Desktop plugin
- * toast?" — the single source of truth that replaces the plugin's local
- * `gamenews_prompted_ids` localStorage set and its silent seed.
+ * Follow-prompts ("nouveau jeu détecté → clic pour suivre") — ÉVÉNEMENTIEL.
  *
- * Candidates = unfollowed games from the library (if libraryFollowMode==='prompt')
- * and the wishlist (if wishlistFollowMode==='prompt'). Rules mirror the news
- * desktop toasts:
- *   - FIRST call ever (no `followPromptSeededAt`): mark every current candidate
- *     as delivered (silently), toast nothing — avoids flooding the backlog.
- *   - Afterwards: return only candidates not yet prompted on ANY surface (no
- *     `pushedAt` mobile, no `toastedAt` desktop), and mark them `toastedAt`.
+ * Principe : un follow-prompt existe UNIQUEMENT pour un jeu que le sync de
+ * bibliothèque a vu comme RÉELLEMENT nouveau (`processAutoFollow`, qui appelle
+ * `recordFollowPromptCandidates`). On ne dérive JAMAIS les candidats de la
+ * bibliothèque entière — sinon désuivre un jeu possédé le ferait passer pour un
+ * nouvel achat (bug). `FollowPromptState` est le registre cross-surface : une
+ * row = « ce jeu a été détecté comme nouveau » ; `pushedAt`/`toastedAt` = livré
+ * sur mobile/desktop.
+ */
+
+/**
+ * Enregistre les jeux détectés comme nouveaux (au moment de la détection, côté
+ * sync). Idempotent : `$setOnInsert` ne réécrit jamais une row existante, donc
+ * un jeu déjà livré (pushedAt/toastedAt) ne re-prompte pas.
+ */
+async function recordFollowPromptCandidates(steamId, prompts) {
+  const appIds = (prompts || [])
+    .map((p) => String(p && p.appId ? p.appId : ''))
+    .filter(Boolean);
+  if (appIds.length === 0) {
+    return;
+  }
+  await FollowPromptState.bulkWrite(
+    appIds.map((appId) => ({
+      updateOne: {
+        filter: { steamId, appId },
+        update: { $setOnInsert: { steamId, appId } },
+        upsert: true,
+      },
+    })),
+    { ordered: false }
+  ).catch((err) => logger.error({ err, steamId }, 'follow_prompt_record_failed'));
+}
+
+/**
+ * Ce que poll le plugin Steam Desktop : les candidats détectés non encore
+ * livrés (ni push mobile `pushedAt`, ni toast desktop `toastedAt`) ET toujours
+ * non suivis (détecté nouveau puis suivi entre-temps → on ne prompte plus). Les
+ * renvoyés sont marqués `toastedAt`. AUCUN re-scan de la bibliothèque.
  */
 async function getPendingFollowPrompts(steamId) {
-  const user = await User.findOne({ steamId })
-    .select(
-      'followedGames notificationSettings.libraryFollowMode ' +
-        'notificationSettings.wishlistFollowMode gameLibrary wishlist ' +
-        'followPromptSeededAt'
-    )
-    .lean();
+  const user = await User.findOne({ steamId }).select('followedGames').lean();
   if (!user) {
     return [];
   }
-
-  const settings = user.notificationSettings || {};
   const followed = new Set(getFollowedAppIds(user).map(String));
 
-  const candidateIds = [];
-  const seen = new Set();
-  const addId = (rawId) => {
-    const appId = String(rawId);
-    if (appId && !followed.has(appId) && !seen.has(appId)) {
-      seen.add(appId);
-      candidateIds.push(appId);
-    }
-  };
-  if (settings.libraryFollowMode === 'prompt') {
-    (user.gameLibrary?.games || []).forEach((g) => addId(g.gameId));
-  }
-  if (settings.wishlistFollowMode === 'prompt') {
-    (user.wishlist?.games || []).forEach((g) => addId(g.gameId));
-  }
-  if (candidateIds.length === 0) {
-    return [];
-  }
-
-  const now = new Date();
-  const seeded = Boolean(user.followPromptSeededAt);
-
-  // First contact: silently mark the whole current backlog as delivered.
-  if (!seeded) {
-    await FollowPromptState.bulkWrite(
-      candidateIds.map((appId) => ({
-        updateOne: {
-          filter: { steamId, appId },
-          update: { $set: { toastedAt: now } },
-          upsert: true,
-        },
-      })),
-      { ordered: false }
-    ).catch((err) => logger.error({ err, steamId }, 'follow_prompt_seed_failed'));
-    await User.updateOne(
-      { steamId },
-      { $set: { followPromptSeededAt: now } }
-    );
-    return [];
-  }
-
-  const rows = await FollowPromptState.find({ steamId, appId: { $in: candidateIds } })
-    .select('appId pushedAt toastedAt')
+  const rows = await FollowPromptState.find({
+    steamId,
+    pushedAt: null,
+    toastedAt: null,
+  })
+    .select('appId')
     .lean();
-  const delivered = new Set(
-    rows.filter((r) => r.pushedAt || r.toastedAt).map((r) => r.appId)
-  );
 
-  const toToast = candidateIds.filter((appId) => !delivered.has(appId));
+  const toToast = rows
+    .map((r) => String(r.appId))
+    .filter((appId) => !followed.has(appId));
   if (toToast.length === 0) {
     return [];
   }
 
+  const now = new Date();
   await FollowPromptState.bulkWrite(
     toToast.map((appId) => ({
       updateOne: {
         filter: { steamId, appId },
         update: { $set: { toastedAt: now } },
-        upsert: true,
       },
     })),
     { ordered: false }
   ).catch((err) => logger.error({ err, steamId }, 'follow_prompt_claim_failed'));
 
-  // Resolve name + logo (Game for library entries, Wishlist for wishlist ones).
+  // Résolution nom + logo (Game pour la biblio, Wishlist en repli).
   const [games, wishes] = await Promise.all([
     Game.find({ appId: { $in: toToast } }).select('appId name header_image').lean(),
     Wishlist.find({ appId: { $in: toToast } }).select('appId name header_image').lean(),
@@ -115,4 +98,4 @@ async function getPendingFollowPrompts(steamId) {
   });
 }
 
-module.exports = { getPendingFollowPrompts };
+module.exports = { getPendingFollowPrompts, recordFollowPromptCandidates };

@@ -11,6 +11,7 @@ const Game = require('../../models/Game');
 const GameSubscription = require('../../models/GameSubscription');
 const { addUserToGameSubscription } = require('../users/subscriptionManager');
 const { sendFollowPromptNotifications } = require('../notifications/notificationService');
+const { recordFollowPromptCandidates } = require('../followPromptService');
 const { getGameImage } = require('../steamGridDbService');
 const { fetchGameDetails } = require('../steam/apiClient');
 const {
@@ -713,6 +714,11 @@ async function syncUserGames(user, options = {}) {
 
     if (result.followPrompts && result.followPrompts.length > 0) {
       try {
+        // Enregistre la détection AVANT le push : c'est l'unique source d'un
+        // follow-prompt (le plugin desktop ne livre QUE ces candidats détectés,
+        // il ne re-scanne plus la biblio). Indépendant du mobile : un user
+        // sans token FCM aura quand même son candidat pour le plugin.
+        await recordFollowPromptCandidates(user.steamId, result.followPrompts);
         const sent = await sendFollowPromptNotifications(
           user.steamId,
           result.followPrompts
