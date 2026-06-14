@@ -14,10 +14,11 @@ export interface UnfollowGuard {
   cancel: () => void;
 }
 
-// Wraps a FollowState so that unfollowing (bell tap on an already-followed game)
-// pops a confirmation when confirmEnabled is on, mirroring the mobile
-// FollowToggle. Following stays immediate. onDisableConfirm is called when the
-// user ticks "don't ask again".
+// Wraps a FollowState so that UNFOLLOWING (the [+] tapped on an already-followed
+// game) pops a confirmation when confirmEnabled is on, mirroring the mobile
+// FollowToggle. Silent-follow, notify-follow and the bell's notification toggle
+// stay immediate — only the destructive unfollow is gated. onDisableConfirm is
+// called when the user ticks "don't ask again".
 export function useUnfollowGuard(
   base: FollowState,
   confirmEnabled: boolean,
@@ -25,26 +26,25 @@ export function useUnfollowGuard(
 ): UnfollowGuard {
   const [pending, setPending] = useState<Pending | null>(null);
 
-  const toggle = (appId: string, name: string, image: string) => {
-    const isFollowing = base.followed.has(appId);
-    if (isFollowing && confirmEnabled) {
+  const unfollow = (appId: string, name = '', image = '') => {
+    if (confirmEnabled) {
       setPending({ appId, name, image });
       return;
     }
-    base.toggle(appId, name, image);
+    base.unfollow(appId);
   };
 
   const confirm = (dontAskAgain: boolean) => {
     if (!pending) return;
     if (dontAskAgain) onDisableConfirm();
-    base.toggle(pending.appId, pending.name, pending.image);
+    base.unfollow(pending.appId);
     setPending(null);
   };
 
   const cancel = () => setPending(null);
 
   return {
-    follow: { followed: base.followed, busy: base.busy, toggle },
+    follow: { ...base, unfollow },
     pending,
     confirm,
     cancel,

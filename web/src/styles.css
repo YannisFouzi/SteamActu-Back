@@ -425,12 +425,18 @@ body,
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.game-card .bell-btn {
+/* Two-tier follow controls [+][bell] (mirrors mobile FollowToggle) */
+.follow-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.game-card .follow-controls {
   align-self: center;
   margin: 0 10px;
 }
-/* Follow bell (mirrors mobile FollowToggle) */
-.bell-btn {
+.bell-btn,
+.plus-btn {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -446,18 +452,22 @@ body,
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease,
     transform 90ms ease;
 }
-.bell-btn:hover {
+.bell-btn:hover,
+.plus-btn:hover {
   transform: scale(1.05);
 }
-.bell-btn:active {
+.bell-btn:active,
+.plus-btn:active {
   transform: scale(0.95);
 }
-.bell-btn.on {
+.bell-btn.on,
+.plus-btn.on {
   border-color: rgba(76, 175, 80, 0.28);
   background: rgba(76, 175, 80, 0.12);
   color: #4caf50;
 }
-.bell-btn:disabled {
+.bell-btn:disabled,
+.plus-btn:disabled {
   opacity: 0.6;
   cursor: default;
 }

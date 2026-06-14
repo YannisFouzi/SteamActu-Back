@@ -196,6 +196,9 @@
     "mobileNewsNotif": "在手机上的新闻通知",
     "avoidDuplicates": "当 Steam 打开时避免重复",
     "follow": "关注",
-    "unfollow": "取消关注"
+    "unfollow": "取消关注",
+    "followSilent": "关注但不接收通知",
+    "notificationsOn": "开启通知",
+    "notificationsOff": "关闭通知"
   }
 }

@@ -25,19 +25,32 @@ export default function GamesGrid({
   }
   return (
     <div className="games-list">
-      {items.map((item) => (
-        <GameRow
-          key={item.appId}
-          appId={item.appId}
-          name={item.name}
-          image={item.image}
-          editable={editable}
-          following={follow.followed.has(item.appId)}
-          busy={follow.busy.has(item.appId)}
-          familyShared={item.familyShared}
-          onToggle={() => follow.toggle(item.appId, item.name, item.image)}
-        />
-      ))}
+      {items.map((item) => {
+        const followed = follow.followed.has(item.appId);
+        return (
+          <GameRow
+            key={item.appId}
+            appId={item.appId}
+            name={item.name}
+            image={item.image}
+            editable={editable}
+            followed={followed}
+            notified={follow.notified.has(item.appId)}
+            busy={follow.busy.has(item.appId)}
+            familyShared={item.familyShared}
+            onPlus={() =>
+              followed
+                ? follow.unfollow(item.appId, item.name, item.image)
+                : follow.followSilent(item.appId, item.name, item.image)
+            }
+            onBell={() =>
+              followed
+                ? follow.toggleNotify(item.appId)
+                : follow.followNotify(item.appId, item.name, item.image)
+            }
+          />
+        );
+      })}
     </div>
   );
 }

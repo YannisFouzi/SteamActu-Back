@@ -196,6 +196,9 @@
     "mobileNewsNotif": "News-Benachrichtigungen auf dem Handy",
     "avoidDuplicates": "Duplikate vermeiden, wenn Steam geöffnet ist",
     "follow": "Folgen",
-    "unfollow": "Nicht mehr folgen"
+    "unfollow": "Nicht mehr folgen",
+    "followSilent": "Ohne Benachrichtigungen folgen",
+    "notificationsOn": "Benachrichtigungen aktivieren",
+    "notificationsOff": "Benachrichtigungen ausschalten"
   }
 }

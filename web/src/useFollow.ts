@@ -1,27 +1,57 @@
-import { useEffect, useState } from 'react';
-import { followGame, unfollowGame } from './auth';
+import {
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
+import { followGame, setFollowNotifications, unfollowGame } from './auth';
 
 export interface FollowState {
   followed: Set<string>;
+  notified: Set<string>;
   busy: Set<string>;
-  toggle: (appId: string, name: string, image: string) => void;
+  // [+] sur un jeu non suivi → suivi silencieux (fil, sans notifications).
+  followSilent: (appId: string, name: string, image: string) => void;
+  // cloche sur un jeu non suivi → suit ET notifie d'un coup.
+  followNotify: (appId: string, name: string, image: string) => void;
+  // cloche sur un jeu déjà suivi → bascule les notifications SANS désabonner.
+  toggleNotify: (appId: string) => void;
+  // [+] sur un jeu suivi → désabonne (name/image ignorés, pour signature uniforme
+  // avec le guard de confirmation qui, lui, en a besoin pour la modale).
+  unfollow: (appId: string, name?: string, image?: string) => void;
 }
 
-// Shared follow state so the Suivre and Rechercher tabs stay in sync. Seeded
-// from the loaded profile's followed games; updates optimistically and reverts
-// on failure.
-export function useFollow(seedIds: string[]): FollowState {
-  const [followed, setFollowed] = useState<Set<string>>(() => new Set(seedIds));
+// Two-tier follow state shared across tabs (mirrors the mobile FollowToggle):
+//   [+]   = silent follow (in the feed, no notifications)
+//   bell  = notifications on/off (a notified game is always followed)
+// `followed` = any-level follow; `notified` ⊆ `followed`. Each action is
+// optimistic and reverts the touched sets on failure.
+export function useFollow(
+  seedFollowed: string[],
+  seedNotified: string[],
+): FollowState {
+  const [followed, setFollowed] = useState<Set<string>>(
+    () => new Set(seedFollowed),
+  );
+  const [notified, setNotified] = useState<Set<string>>(
+    () => new Set(seedNotified),
+  );
   const [busy, setBusy] = useState<Set<string>>(new Set());
 
-  const seedKey = seedIds.join(',');
+  const followedKey = seedFollowed.join(',');
+  const notifiedKey = seedNotified.join(',');
   useEffect(() => {
-    setFollowed(new Set(seedIds));
+    setFollowed(new Set(seedFollowed));
+    setNotified(new Set(seedNotified));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedKey]);
+  }, [followedKey, notifiedKey]);
 
-  const setBusyFor = (appId: string, on: boolean) => {
-    setBusy((prev) => {
+  const setFlag = (
+    setter: Dispatch<SetStateAction<Set<string>>>,
+    appId: string,
+    on: boolean,
+  ) => {
+    setter((prev) => {
       const next = new Set(prev);
       if (on) next.add(appId);
       else next.delete(appId);
@@ -29,27 +59,92 @@ export function useFollow(seedIds: string[]): FollowState {
     });
   };
 
-  const flip = (appId: string, follow: boolean) => {
-    setFollowed((prev) => {
-      const next = new Set(prev);
-      if (follow) next.add(appId);
-      else next.delete(appId);
-      return next;
-    });
-  };
-
-  const toggle = (appId: string, name: string, image: string) => {
-    const isFollowing = followed.has(appId);
-    setBusyFor(appId, true);
-    flip(appId, !isFollowing); // optimistic
-    const action = isFollowing ? unfollowGame(appId) : followGame(appId, name, image);
-    action
+  // Apply the optimistic change, fire the request, revert the touched sets on
+  // error. busy is per-appId so both controls of a card disable together.
+  const run = (
+    appId: string,
+    optimistic: () => void,
+    revert: () => void,
+    action: () => Promise<void>,
+  ) => {
+    setFlag(setBusy, appId, true);
+    optimistic();
+    action()
       .catch((err: unknown) => {
-        console.error('[GameNews] toggle follow failed', err);
-        flip(appId, isFollowing); // revert
+        console.error('[GameNews] follow mutation failed', err);
+        revert();
       })
-      .finally(() => setBusyFor(appId, false));
+      .finally(() => setFlag(setBusy, appId, false));
   };
 
-  return { followed, busy, toggle };
+  const followSilent = (appId: string, name: string, image: string) => {
+    const wasFollowed = followed.has(appId);
+    const wasNotified = notified.has(appId);
+    run(
+      appId,
+      () => {
+        setFlag(setFollowed, appId, true);
+        setFlag(setNotified, appId, false);
+      },
+      () => {
+        setFlag(setFollowed, appId, wasFollowed);
+        setFlag(setNotified, appId, wasNotified);
+      },
+      () => followGame(appId, name, image, false),
+    );
+  };
+
+  const followNotify = (appId: string, name: string, image: string) => {
+    const wasFollowed = followed.has(appId);
+    const wasNotified = notified.has(appId);
+    run(
+      appId,
+      () => {
+        setFlag(setFollowed, appId, true);
+        setFlag(setNotified, appId, true);
+      },
+      () => {
+        setFlag(setFollowed, appId, wasFollowed);
+        setFlag(setNotified, appId, wasNotified);
+      },
+      () => followGame(appId, name, image, true),
+    );
+  };
+
+  const toggleNotify = (appId: string) => {
+    const wasNotified = notified.has(appId);
+    run(
+      appId,
+      () => setFlag(setNotified, appId, !wasNotified),
+      () => setFlag(setNotified, appId, wasNotified),
+      () => setFollowNotifications(appId, !wasNotified),
+    );
+  };
+
+  const unfollow = (appId: string) => {
+    const wasFollowed = followed.has(appId);
+    const wasNotified = notified.has(appId);
+    run(
+      appId,
+      () => {
+        setFlag(setFollowed, appId, false);
+        setFlag(setNotified, appId, false);
+      },
+      () => {
+        setFlag(setFollowed, appId, wasFollowed);
+        setFlag(setNotified, appId, wasNotified);
+      },
+      () => unfollowGame(appId),
+    );
+  };
+
+  return {
+    followed,
+    notified,
+    busy,
+    followSilent,
+    followNotify,
+    toggleNotify,
+    unfollow,
+  };
 }

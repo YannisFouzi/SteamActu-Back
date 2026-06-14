@@ -290,10 +290,18 @@ export default function ActuTab({
                   {editable && (
                     <div className="news-actions">
                       <FollowBell
-                        following={follow.followed.has(appId)}
+                        followed={follow.followed.has(appId)}
+                        notified={follow.notified.has(appId)}
                         busy={follow.busy.has(appId)}
-                        onToggle={() =>
-                          follow.toggle(appId, item.gameName, item.gameLogoUrl ?? '')
+                        onPlus={() =>
+                          follow.followed.has(appId)
+                            ? follow.unfollow(appId, item.gameName, item.gameLogoUrl ?? '')
+                            : follow.followSilent(appId, item.gameName, item.gameLogoUrl ?? '')
+                        }
+                        onBell={() =>
+                          follow.followed.has(appId)
+                            ? follow.toggleNotify(appId)
+                            : follow.followNotify(appId, item.gameName, item.gameLogoUrl ?? '')
                         }
                         size={20}
                       />

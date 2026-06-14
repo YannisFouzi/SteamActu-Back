@@ -198,6 +198,9 @@
     "mobileNewsNotif": "Уведомления о новостях на телефоне",
     "avoidDuplicates": "Избегать дублей, когда Steam открыт",
     "follow": "Подписаться",
-    "unfollow": "Отписаться"
+    "unfollow": "Отписаться",
+    "followSilent": "Отслеживать без уведомлений",
+    "notificationsOn": "Включить уведомления",
+    "notificationsOff": "Выключить уведомления"
   }
 }

@@ -114,13 +114,30 @@ export async function followGame(
   appId: string,
   name: string,
   logoUrl: string,
+  notifications = true,
 ): Promise<void> {
   await publicWrite('/api/web/follow', 'POST', {
     steamId: STEAM_ID,
     appId,
     name,
     logoUrl,
+    notifications,
   });
+}
+
+// Toggle the notification flag WITHOUT unfollowing (bell on an already-followed
+// game). Mirrors PUT /:steamId/follow/:appId/notifications — the web surface
+// uses the GET|POST query-param alias.
+export async function setFollowNotifications(
+  appId: string,
+  enabled: boolean,
+): Promise<void> {
+  await publicWrite(
+    `/api/web/follow-notifications/${STEAM_ID}/${encodeURIComponent(
+      appId,
+    )}?enabled=${enabled ? 'true' : 'false'}`,
+    'POST',
+  );
 }
 
 export async function unfollowGame(appId: string): Promise<void> {

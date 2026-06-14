@@ -145,7 +145,18 @@ export default function App() {
     () => (profileData ? profileData.followedGames.map((g) => g.appId) : []),
     [profileData],
   );
-  const baseFollow = useFollow(seedIds);
+  // notified ⊆ followed : un jeu est notifié sauf si notifications === false
+  // (suivi silencieux). Les entrées legacy sans le champ restent notifiées.
+  const seedNotified = useMemo(
+    () =>
+      profileData
+        ? profileData.followedGames
+            .filter((g) => g.notifications !== false)
+            .map((g) => g.appId)
+        : [],
+    [profileData],
+  );
+  const baseFollow = useFollow(seedIds, seedNotified);
 
   const persistConfirmUnfollow = (next: boolean) => {
     if (!editable) return;

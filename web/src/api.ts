@@ -100,6 +100,9 @@ export interface FollowedGame {
   header_image: string;
   imageUrl: string;
   followedAt: string | null;
+  // false = suivi silencieux (bouton +) : dans le fil, sans notifications.
+  // Absent/true = notifié (cloche). Exposé par followedGamesDetailsService.
+  notifications?: boolean;
 }
 
 export interface WishlistGame {

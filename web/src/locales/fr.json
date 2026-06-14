@@ -196,6 +196,9 @@
     "mobileNewsNotif": "Notifications d'actualités sur Mobile",
     "avoidDuplicates": "Éviter les doublons quand Steam est ouvert",
     "follow": "Suivre",
-    "unfollow": "Ne plus suivre"
+    "unfollow": "Ne plus suivre",
+    "followSilent": "Suivre sans notifications",
+    "notificationsOn": "Activer les notifications",
+    "notificationsOff": "Couper les notifications"
   }
 }

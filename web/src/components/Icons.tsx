@@ -38,6 +38,38 @@ export function BellIcon({ size = 22, filled }: { size?: number; filled: boolean
   );
 }
 
+// [+] control (silent follow), mirrors the mobile FollowToggle: a plus when not
+// followed, a checkmark once followed. Ionicons v5 "add" / "checkmark" paths.
+export function AddIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
+      <path
+        d="M256 112v288M400 256H112"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={32}
+      />
+    </svg>
+  );
+}
+
+export function CheckmarkIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
+      <path
+        d="M416 128L192 384l-96-96"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={32}
+      />
+    </svg>
+  );
+}
+
 // Main-nav icons, mirrored from the mobile bottom tab bar (MainTabNavigator):
 // newspaper-outline / game-controller-outline / person-circle-outline. Exact
 // Ionicons v5 path data so the web view shows the same glyphs as the app.

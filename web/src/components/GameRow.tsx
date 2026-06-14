@@ -14,10 +14,12 @@ export interface GameRowProps {
   name: string;
   image: string;
   editable: boolean;
-  following: boolean;
+  followed: boolean;
+  notified: boolean;
   busy: boolean;
   familyShared?: boolean;
-  onToggle: () => void;
+  onPlus: () => void;
+  onBell: () => void;
 }
 
 // Mirrors the mobile GameCard: capsule image on the left (Family badge overlaid),
@@ -30,10 +32,12 @@ export default function GameRow({
   name,
   image,
   editable,
-  following,
+  followed,
+  notified,
   busy,
   familyShared = false,
-  onToggle,
+  onPlus,
+  onBell,
 }: GameRowProps) {
   const { t } = useT();
   const primary = image || gameHeaderUrl(appId);
@@ -89,7 +93,13 @@ export default function GameRow({
         </div>
       </div>
       {editable && (
-        <FollowBell following={following} busy={busy} onToggle={onToggle} />
+        <FollowBell
+          followed={followed}
+          notified={notified}
+          busy={busy}
+          onPlus={onPlus}
+          onBell={onBell}
+        />
       )}
     </div>
   );
