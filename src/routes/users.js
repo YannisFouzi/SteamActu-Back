@@ -264,13 +264,17 @@ router.post('/:steamId/follow', mobileSessionAuth, requireSelf, validateSteamId,
       // Mise à jour atomique : pas de race condition si deux requêtes arrivent en même temps.
       // Le filtre `followedGames.appId` garantit qu'on n'insère pas de doublon même si
       // deux requêtes concurrentes arrivent pour le même jeu.
+      // NB : un suivi ne bumpe PAS gamesVersion. gamesVersion = version de la
+      // BIBLIOTHÈQUE (jeux possédés) ; suivre/désuivre ne la change pas. Le
+      // bumper forçait un rechargement complet des 250 jeux au focus pour une
+      // donnée inchangée (lag). La liste des suivis se met à jour via
+      // user.followedGames (optimiste + fetch du profil), pas via gamesVersion.
       const updatedUser = await User.findOneAndUpdate(
         { steamId, 'followedGames.appId': { $ne: appId } },
         {
           $push: {
             followedGames: buildFollowedGamesEntry(appId, notifications !== false),
           },
-          $set: { gamesVersion: new Date() },
         },
         { new: true }
       );
@@ -307,12 +311,11 @@ router.delete(
         return res.status(400).json({ message: "Ce jeu n'est pas suivi" });
       }
 
-      // Mise à jour atomique
+      // Mise à jour atomique. Pas de bump gamesVersion (cf. POST /follow).
       const updatedUser = await User.findOneAndUpdate(
         { steamId, 'followedGames.appId': appId },
         {
           $pull: { followedGames: { appId } },
-          $set: { gamesVersion: new Date() },
         },
         { new: true }
       );
@@ -352,12 +355,13 @@ router.put(
       }
 
       // Update positionnel atomique : ne matche que si le jeu est suivi.
+      // Pas de bump gamesVersion : un drapeau de notif ne change pas la
+      // bibliothèque (évite un rechargement complet au focus).
       const result = await User.updateOne(
         { steamId, 'followedGames.appId': appId },
         {
           $set: {
             'followedGames.$.notifications': enabled,
-            gamesVersion: new Date(),
           },
         }
       );

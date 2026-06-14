@@ -430,7 +430,9 @@ describe('routes /api/users', () => {
       const reloaded = await User.findOne({ steamId }).lean();
       expect(reloaded.followedGames[0].appId).toBe('730');
       expect(reloaded.followedGames[0].notifications).toBe(true); // défaut = notifié
-      expect(reloaded.gamesVersion).toBeInstanceOf(Date);
+      // gamesVersion N'EST PAS bumpé par un suivi (la bibliothèque ne change
+      // pas) → reste à sa valeur par défaut (null).
+      expect(reloaded.gamesVersion).toBeNull();
     });
 
     it('notifications:false crée un suivi silencieux', async () => {
