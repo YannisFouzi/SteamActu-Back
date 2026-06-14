@@ -71,7 +71,7 @@ router.get('/status/:steamId', apiLimiter, mobileSessionAuth, requireSelf, valid
     const { steamId } = req.params;
 
     const user = await User.findOne({ steamId })
-      .select('gamesVersion wishlistVersion')
+      .select('gamesVersion wishlistVersion followVersion')
       .lean();
 
     if (!user) {
@@ -83,6 +83,9 @@ router.get('/status/:steamId', apiLimiter, mobileSessionAuth, requireSelf, valid
       gamesVersion: user.gamesVersion ? user.gamesVersion.toISOString() : null,
       wishlistVersion: user.wishlistVersion
         ? user.wishlistVersion.toISOString()
+        : null,
+      followVersion: user.followVersion
+        ? user.followVersion.toISOString()
         : null,
     });
   } catch (error) {

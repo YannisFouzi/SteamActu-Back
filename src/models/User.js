@@ -231,16 +231,25 @@ const UserSchema = new mongoose.Schema({
   },
 
   /**
-   * Versioning pour invalidation cache frontend
-   * - gamesVersion : mise à jour à chaque sync de la bibliothèque ou follow/unfollow
-   * - wishlistVersion : mise à jour à chaque sync de la wishlist
-   * Permet au frontend de détecter les changements sans télécharger toutes les données
+   * Versioning pour invalidation cache frontend (le client sonde GET /steam/status
+   * et ne re-fetch que ce qui a changé) :
+   * - gamesVersion : sync de la BIBLIOTHÈQUE (jeux possédés). Un follow ne la
+   *   bumpe PAS (sinon rechargement complet des 250 jeux au focus = lag).
+   * - wishlistVersion : sync de la wishlist.
+   * - followVersion : suivi (follow/unfollow/toggle notifications), sur N'IMPORTE
+   *   quelle surface (mobile, web, plugin, extension). Déclenche un re-fetch du
+   *   PROFIL SEUL côté mobile → propage les follows cross-device sans recharger
+   *   la bibliothèque.
    */
   gamesVersion: {
     type: Date,
     default: null,
   },
   wishlistVersion: {
+    type: Date,
+    default: null,
+  },
+  followVersion: {
     type: Date,
     default: null,
   },

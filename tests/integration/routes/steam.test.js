@@ -76,10 +76,16 @@ describe('routes /api/steam', () => {
       expect(r.status).toBe(404);
     });
 
-    it('renvoie gamesVersion + wishlistVersion (ISO ou null)', async () => {
+    it('renvoie gamesVersion + wishlistVersion + followVersion (ISO ou null)', async () => {
       const steamId = nextSteamId();
       const gv = new Date('2026-05-01T10:00:00.000Z');
-      await createUser({ steamId, gamesVersion: gv, wishlistVersion: null });
+      const fv = new Date('2026-05-02T11:00:00.000Z');
+      await createUser({
+        steamId,
+        gamesVersion: gv,
+        wishlistVersion: null,
+        followVersion: fv,
+      });
       const r = await request(app)
         .get(`/api/steam/status/${steamId}`)
         .set(authHeader(steamId));
@@ -87,6 +93,7 @@ describe('routes /api/steam', () => {
       expect(r.body).toEqual({
         gamesVersion: gv.toISOString(),
         wishlistVersion: null,
+        followVersion: fv.toISOString(),
       });
     });
   });

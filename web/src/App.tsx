@@ -134,6 +134,25 @@ export default function App() {
     };
   }, [authed, refreshNonce]);
 
+  // Re-fetch the profile when the tab/feed regains focus, so a follow made on
+  // ANOTHER surface (a Steam store page bell, the extension/plugin) shows up
+  // without a manual reload. Bumping refreshNonce re-runs the loader above,
+  // which never flips back to a loading state → no flash. (Web twin of the
+  // mobile followVersion poll.)
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        setRefreshNonce((n) => n + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, []);
+
   // Writes go through public-by-SteamID endpoints, so the feed is editable even
   // without a verified session (we're inside the authenticated Steam client).
   // Only account deletion still needs a real session — gated via `authed`.

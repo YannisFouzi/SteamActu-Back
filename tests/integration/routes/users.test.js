@@ -433,6 +433,9 @@ describe('routes /api/users', () => {
       // gamesVersion N'EST PAS bumpé par un suivi (la bibliothèque ne change
       // pas) → reste à sa valeur par défaut (null).
       expect(reloaded.gamesVersion).toBeNull();
+      // followVersion EST bumpé → le mobile re-fetch le profil seul (propagation
+      // cross-surface) sans recharger la bibliothèque.
+      expect(reloaded.followVersion).toBeInstanceOf(Date);
     });
 
     it('notifications:false crée un suivi silencieux', async () => {

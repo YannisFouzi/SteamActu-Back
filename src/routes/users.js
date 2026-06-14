@@ -269,12 +269,15 @@ router.post('/:steamId/follow', mobileSessionAuth, requireSelf, validateSteamId,
       // bumper forçait un rechargement complet des 250 jeux au focus pour une
       // donnée inchangée (lag). La liste des suivis se met à jour via
       // user.followedGames (optimiste + fetch du profil), pas via gamesVersion.
+      // followVersion bumpé (pas gamesVersion) : signale au client qu'un SUIVI a
+      // changé → re-fetch du profil seul, pas le reload des 250 jeux.
       const updatedUser = await User.findOneAndUpdate(
         { steamId, 'followedGames.appId': { $ne: appId } },
         {
           $push: {
             followedGames: buildFollowedGamesEntry(appId, notifications !== false),
           },
+          $set: { followVersion: new Date() },
         },
         { new: true }
       );
@@ -311,11 +314,12 @@ router.delete(
         return res.status(400).json({ message: "Ce jeu n'est pas suivi" });
       }
 
-      // Mise à jour atomique. Pas de bump gamesVersion (cf. POST /follow).
+      // Pas de bump gamesVersion (cf. POST /follow) ; followVersion bumpé.
       const updatedUser = await User.findOneAndUpdate(
         { steamId, 'followedGames.appId': appId },
         {
           $pull: { followedGames: { appId } },
+          $set: { followVersion: new Date() },
         },
         { new: true }
       );
@@ -355,13 +359,14 @@ router.put(
       }
 
       // Update positionnel atomique : ne matche que si le jeu est suivi.
-      // Pas de bump gamesVersion : un drapeau de notif ne change pas la
-      // bibliothèque (évite un rechargement complet au focus).
+      // Pas de bump gamesVersion (un drapeau de notif ne change pas la
+      // bibliothèque) ; followVersion bumpé pour propager le changement.
       const result = await User.updateOne(
         { steamId, 'followedGames.appId': appId },
         {
           $set: {
             'followedGames.$.notifications': enabled,
+            followVersion: new Date(),
           },
         }
       );

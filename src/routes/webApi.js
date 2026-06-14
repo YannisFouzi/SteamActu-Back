@@ -297,14 +297,16 @@ async function handleFollow(params, res) {
     }
 
     // Atomic push guarded on absence — no duplicate even under a race.
-    // Pas de bump gamesVersion : un suivi ne change pas la bibliothèque
-    // (cf. /api/users follow — évite un rechargement complet côté app).
+    // Pas de bump gamesVersion (un suivi ne change pas la bibliothèque) ;
+    // followVersion bumpé pour propager le suivi aux autres surfaces (le mobile
+    // re-fetch son profil sans recharger la bibliothèque).
     await User.findOneAndUpdate(
       { steamId, 'followedGames.appId': { $ne: appIdStr } },
       {
         $push: {
           followedGames: buildFollowedGamesEntry(appIdStr, wantsNotifications),
         },
+        $set: { followVersion: new Date() },
       },
     );
     await addUserToGameSubscription(appIdStr, steamId, name, logoUrl);
@@ -380,11 +382,13 @@ async function handleFollowNotifications(params, res) {
 
     const appIdStr = String(appId);
     // Update positionnel atomique : ne matche que si le jeu est suivi.
+    // followVersion bumpé pour propager le changement aux autres surfaces.
     const result = await User.updateOne(
       { steamId, 'followedGames.appId': appIdStr },
       {
         $set: {
           'followedGames.$.notifications': normalized,
+          followVersion: new Date(),
         },
       }
     );
@@ -465,6 +469,7 @@ async function handleUnfollow(steamId, appId, res) {
       { steamId, 'followedGames.appId': appId },
       {
         $pull: { followedGames: { appId } },
+        $set: { followVersion: new Date() },
       },
       { new: true },
     );
