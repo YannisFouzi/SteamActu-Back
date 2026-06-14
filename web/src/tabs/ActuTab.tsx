@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CONTEXT, fetchNews, type NewsItem } from '../api';
 import { readNewsCache, writeNewsCache } from '../newsCache';
 import { addFavorite, markNewsFeedSeen, removeFavorite } from '../auth';
@@ -200,13 +200,23 @@ export default function ActuTab({
     </div>
   ) : null;
 
+  // Le fil ne montre que les news des jeux ACTUELLEMENT suivis : désuivre depuis
+  // une card (bouton +) la fait disparaître instantanément, comme l'app mobile
+  // (removeNewsByAppId). `follow.followed` change de référence à chaque toggle →
+  // recalcul réactif. (Le fil = news des jeux suivis, donc le + ne fait
+  // qu'unfollow ici.)
+  const visibleItems = useMemo(
+    () => items.filter((it) => follow.followed.has(String(it.appId))),
+    [items, follow.followed],
+  );
+
   if (status === 'loading') {
     return <div className="state">{t('news.loadingFeed')}</div>;
   }
   if (status === 'error') {
     return <div className="state error">{t('common.error')} — {error}</div>;
   }
-  if (items.length === 0) {
+  if (visibleItems.length === 0) {
     return (
       <>
         {filter}
@@ -237,7 +247,7 @@ export default function ActuTab({
     <>
       {filter}
       <div className="news-list">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const appId = String(item.appId);
           const key = favKey(appId, item.news.id);
           const isFav = favorites.has(key);
