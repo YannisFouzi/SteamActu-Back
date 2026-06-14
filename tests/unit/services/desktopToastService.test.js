@@ -12,12 +12,17 @@ const {
   nextSteamId,
 } = require('../../helpers/factories');
 
-function feedItem(appId, newsId) {
+function feedItem(appId, newsId, dateMs) {
   return {
     appId,
     gameName: `Game ${appId}`,
     gameLogoUrl: null,
-    news: { id: newsId, title: `t-${newsId}`, url: `https://x/${newsId}` },
+    news: {
+      id: newsId,
+      title: `t-${newsId}`,
+      url: `https://x/${newsId}`,
+      ...(dateMs !== undefined ? { date: dateMs } : {}),
+    },
   };
 }
 
@@ -79,6 +84,44 @@ describe('services/desktopToastService — getPendingDesktopToasts', () => {
     // La news mutée est quand même claim (pas de re-toast si la cloche se réactive)
     const mutedRow = await UserNewsState.findOne({ steamId, newsId: 'muted-news' }).lean();
     expect(mutedRow.steamToastSentAt).toBeTruthy();
+  });
+
+  it('après seed : une news ANTÉRIEURE au follow (backlog d\'un re-follow) n\'est pas toastée mais est claim', async () => {
+    const steamId = nextSteamId();
+    const followedAt = new Date('2026-06-12T00:00:00Z');
+    const oldNewsMs = new Date('2026-06-06T00:00:00Z').getTime(); // 6 jours avant
+    await createUser({
+      steamId,
+      desktopToastSeededAt: new Date('2026-06-01T00:00:00Z'),
+      followedGames: [{ appId: '730', followedAt }],
+    });
+    newsFeedServiceMock.getNewsFeed.mockResolvedValue({
+      items: [feedItem('730', 'old-backlog', oldNewsMs)],
+    });
+
+    const out = await getPendingDesktopToasts(steamId, {});
+    expect(out).toEqual([]); // pré-follow → jamais toasté
+
+    // mais consommée silencieusement (pas de re-toast plus tard)
+    const row = await UserNewsState.findOne({ steamId, newsId: 'old-backlog' }).lean();
+    expect(row.steamToastSentAt).toBeTruthy();
+  });
+
+  it('après seed : une news POSTÉRIEURE au follow est toastée normalement', async () => {
+    const steamId = nextSteamId();
+    const followedAt = new Date('2026-06-06T00:00:00Z');
+    const freshNewsMs = new Date('2026-06-12T00:00:00Z').getTime(); // après le follow
+    await createUser({
+      steamId,
+      desktopToastSeededAt: new Date('2026-06-01T00:00:00Z'),
+      followedGames: [{ appId: '730', followedAt }],
+    });
+    newsFeedServiceMock.getNewsFeed.mockResolvedValue({
+      items: [feedItem('730', 'after-follow', freshNewsMs)],
+    });
+
+    const out = await getPendingDesktopToasts(steamId, {});
+    expect(out.map((i) => i.news.id)).toEqual(['after-follow']);
   });
 
   it('après seed : une news déjà poussée sur MOBILE (pushSentAt) n\'est PAS re-toastée sur desktop', async () => {

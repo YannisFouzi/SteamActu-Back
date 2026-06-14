@@ -462,6 +462,30 @@ async function syncUserGames(user, options = {}) {
     logger.info(`  - Jeux récupérés: ${userGames.length}`);
     logger.info(`  - Jeux récemment lancés (2 semaines): ${recentlyPlayedGames.length}`);
 
+    // Garde anti-wipe : GetOwnedGames renvoie 200 + `[]` quand le profil passe
+    // privé ou sur un hoquet Steam (≠ vraie erreur, qui throw et abort via le
+    // catch). Un array vide passerait `Array.isArray` et DÉTRUIRAIT la baseline :
+    // detectRemovedGames désabonnerait toute la biblio, le rebuild la viderait,
+    // et le sync suivant re-détecterait tous les jeux comme "nouveaux" → flood de
+    // follow_prompt / auto-follow (BUG-7 "250 nouveaux jeux", BUG-8 prompt sur un
+    // jeu possédé). On ne peut pas réellement vider sa biblio Steam possédée →
+    // 0 jeu alors qu'on en avait = réponse transitoire à ignorer. lastChecked
+    // n'est pas bumpé → le prochain run éligible retentera.
+    const previousOwnedCount = (user.gameLibrary?.games || []).filter(
+      (g) => !g.isFamilyShared
+    ).length;
+    if (userGames.length === 0 && previousOwnedCount > 0) {
+      logger.warn(
+        `[SYNC] GetOwnedGames a renvoyé 0 jeu alors que la biblio en comptait ${previousOwnedCount} — réponse transitoire (profil privé/hoquet Steam) ignorée : pas de rebuild, pas d'unfollow, pas de prompt`
+      );
+      logger.info(`[SYNC] syncUserGames() - SKIPPED (réponse Steam vide, baseline préservée)\n`);
+      return {
+        ...result,
+        skipped: true,
+        message: 'Réponse Steam vide ignorée (baseline préservée)',
+      };
+    }
+
     // ---- Détection Steam Family ---------------------------------------
     // L'API GetRecentlyPlayedGames renvoie aussi les jeux lancés depuis
     // une Family Library Sharing (non possédés par l'user). On isole ces

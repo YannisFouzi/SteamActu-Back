@@ -293,6 +293,52 @@ describe('services/newsRotationService', () => {
       expect(notified).not.toContain(sMuted);
     });
 
+    it('skip un subscriber dont le follow est POSTÉRIEUR à la news (pas de backlog au (re)follow)', async () => {
+      // news détectée maintenant, mais un subscriber a suivi le jeu 1h APRÈS la
+      // date de la news (cas : news publiée dans la fenêtre entre 2 checks, puis
+      // re-follow). Il ne doit PAS recevoir ce backlog ; l'autre, qui suivait
+      // avant, oui.
+      const newsTs = Math.floor(Date.now() / 1000);
+      const newsDate = new Date(newsTs * 1000);
+      const sBefore = nextSteamId(); // a suivi avant la news → notifié
+      const sAfter = nextSteamId(); // a suivi après la news → skip
+      await createUser({
+        steamId: sBefore,
+        followedGames: [
+          { appId: '730', followedAt: new Date(newsDate.getTime() - 3 * HOUR) },
+        ],
+        notificationSettings: { newsNotifications: true, fcmTokens: [{ token: 't', platform: 'android' }] },
+      });
+      await createUser({
+        steamId: sAfter,
+        followedGames: [
+          { appId: '730', followedAt: new Date(newsDate.getTime() + HOUR) },
+        ],
+        notificationSettings: { newsNotifications: true, fcmTokens: [{ token: 't', platform: 'android' }] },
+      });
+
+      await createGameSubscription({
+        gameId: '730',
+        name: 'CSGO',
+        lastNewsTimestamp: newsTs - DAY,
+        subscribers: [sBefore, sAfter],
+      });
+
+      steamServiceMock.getGameNews.mockResolvedValue([
+        { gid: 'news-1', title: 't', url: 'u', date: newsTs, contents: '' },
+      ]);
+      notificationServiceMock.sendNewsNotification.mockResolvedValue(true);
+
+      const stats = await checkNewsRotation();
+
+      expect(stats.notificationsSent).toBe(1);
+      const notified = notificationServiceMock.sendNewsNotification.mock.calls.map(
+        (c) => c[0],
+      );
+      expect(notified).toEqual([sBefore]);
+      expect(notified).not.toContain(sAfter);
+    });
+
     it('écrit pushSentAt UNIQUEMENT pour les subscribers où sendNewsNotification renvoie true', async () => {
       const newTs = Math.floor(Date.now() / 1000);
       const sA = nextSteamId();

@@ -354,8 +354,32 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
     .lean();
   const mutedSet = new Set(mutedUsers.map((u) => u.steamId));
 
+  // Suivi récent : ne jamais notifier un subscriber d'une news ANTÉRIEURE à son
+  // follow de ce jeu. Cas type : une news publiée dans la fenêtre entre le
+  // dernier check du cron et un (re)follow sur une subscription pré-existante,
+  // détectée plus tard → sans ce garde, le follower reçoit un push d'une news
+  // plus vieille que son follow. Granularité seconde (timestamps Steam) : on ne
+  // filtre que si le follow tombe dans une seconde STRICTEMENT postérieure à la
+  // news (un follow contemporain à la seconde près reste notifié).
+  const followCutoff = new Date(((newsItem.date || 0) + 1) * 1000);
+  const tooRecentFollowers = await User.find({
+    steamId: { $in: subscribers },
+    followedGames: {
+      $elemMatch: {
+        appId: String(game.gameId),
+        followedAt: { $gte: followCutoff },
+      },
+    },
+  })
+    .select('steamId')
+    .lean();
+  const tooRecentSet = new Set(tooRecentFollowers.map((u) => u.steamId));
+
   const eligibleSubscribers = subscribers.filter(
-    (sid) => !alreadyServedSet.has(sid) && !mutedSet.has(sid)
+    (sid) =>
+      !alreadyServedSet.has(sid) &&
+      !mutedSet.has(sid) &&
+      !tooRecentSet.has(sid)
   );
 
   logger.debug(
@@ -365,6 +389,7 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
       total: subscribers.length,
       alreadyServed: alreadyServedSet.size,
       muted: mutedSet.size,
+      tooRecent: tooRecentSet.size,
     },
     'news_notification_subscribers_filtered'
   );

@@ -66,6 +66,28 @@ function getMutedAppIds(user) {
 }
 
 /**
+ * Map appId (string) → followedAt (Date) pour les entrées qui le portent.
+ * Sert à filtrer les notifications (push/toast) d'une news antérieure au follow :
+ * un nouveau follower ne doit jamais être notifié du backlog d'un jeu.
+ * Les entrées legacy (string) ou sans followedAt sont absentes de la map →
+ * pas de filtrage (rétrocompat, comportement historique préservé).
+ * @param {Object} user
+ * @returns {Map<string, Date>}
+ */
+function getFollowedAtByAppId(user) {
+  const map = new Map();
+  if (!user || !Array.isArray(user.followedGames)) {
+    return map;
+  }
+  user.followedGames.forEach((entry) => {
+    if (entry && typeof entry === 'object' && entry.appId && entry.followedAt) {
+      map.set(String(entry.appId), new Date(entry.followedAt));
+    }
+  });
+  return map;
+}
+
+/**
  * Retourne true si user suit déjà appId.
  * @param {Object} user
  * @param {string} appId
@@ -79,5 +101,6 @@ module.exports = {
   getFollowedAppIds,
   buildFollowedGamesEntry,
   getMutedAppIds,
+  getFollowedAtByAppId,
   hasFollowedGame,
 };

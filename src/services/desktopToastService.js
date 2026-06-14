@@ -1,7 +1,10 @@
 const { getNewsFeed } = require('./newsFeedService');
 const UserNewsState = require('../models/UserNewsState');
 const User = require('../models/User');
-const { getMutedAppIds } = require('../utils/followedGamesHelpers');
+const {
+  getMutedAppIds,
+  getFollowedAtByAppId,
+} = require('../utils/followedGamesHelpers');
 const logger = require('../utils/logger');
 
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
@@ -69,6 +72,11 @@ async function getPendingDesktopToasts(steamId, { language } = {}) {
   // toastent pas. (Le seed, lui, marque tout le backlog, jeux mutés inclus :
   // s'ils repassent en notifié plus tard, on ne re-toaste pas le passé.)
   const mutedAppIds = getMutedAppIds(user);
+  // Ne jamais toaster une news antérieure au follow du jeu : le seed
+  // (desktopToastSeededAt) est global au user, pas par-jeu — re-suivre (ou
+  // suivre un nouveau jeu après le 1er seed) laisse son backlog non-seedé.
+  // followedAt borne la fenêtre de notification au moment du suivi.
+  const followedAtByAppId = getFollowedAtByAppId(user);
 
   // First contact: silently mark the whole current backlog as delivered.
   if (!seeded) {
@@ -115,9 +123,24 @@ async function getPendingDesktopToasts(steamId, { language } = {}) {
   // muté est consommée silencieusement — réactiver la cloche plus tard ne doit
   // pas faire re-toaster le backlog (parité avec le cron mobile, qui ne
   // revisite jamais une vieille news).
-  const toToast = undelivered.filter(
-    (it) => !mutedAppIds.has(String(it.appId))
-  );
+  const toToast = undelivered.filter((it) => {
+    if (mutedAppIds.has(String(it.appId))) {
+      return false;
+    }
+    const followedAt = followedAtByAppId.get(String(it.appId));
+    // News publiée avant le follow → claim silencieux (cf. ops sur undelivered),
+    // jamais toastée. news.date est en ms (newsProcessor : item.date * 1000,
+    // donc granularité seconde) : on ne filtre que si le follow tombe dans une
+    // seconde STRICTEMENT postérieure (parité avec le cron mobile).
+    if (
+      followedAt &&
+      it.news?.date &&
+      followedAt.getTime() >= it.news.date + 1000
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   if (undelivered.length === 0) {
     return [];

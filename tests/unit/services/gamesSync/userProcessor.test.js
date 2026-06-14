@@ -311,6 +311,54 @@ describe('services/gamesSync/userProcessor', () => {
     });
   });
 
+  describe('garde anti-wipe (GetOwnedGames renvoie [] = profil privé/hoquet Steam)', () => {
+    it('préserve la baseline : pas de rebuild, pas d\'unfollow, pas de prompt', async () => {
+      // run 1 : 2 jeux possédés + suivis, mode prompt
+      steamServiceMock.getUserGames.mockResolvedValue([
+        { appid: 730, name: 'CSGO' },
+        { appid: 570, name: 'Dota' },
+      ]);
+      steamServiceMock.getRecentlyPlayedGames.mockResolvedValue([]);
+      const user = await createUser({
+        followedGames: ['730', '570'],
+        notificationSettings: { libraryFollowMode: 'prompt' },
+      });
+      await syncUserGames(user);
+
+      // run 2 : Steam renvoie [] (profil passé privé / hoquet)
+      const after1 = await User.findById(user._id);
+      after1.lastChecked = new Date(Date.now() - 7 * HOUR);
+      await after1.save();
+      sendFollowPromptNotifications.mockClear();
+      steamServiceMock.getUserGames.mockResolvedValue([]);
+      steamServiceMock.getRecentlyPlayedGames.mockResolvedValue([]);
+
+      const result2 = await syncUserGames(after1);
+
+      expect(result2.skipped).toBe(true);
+      expect(result2.removedGames).toEqual([]);
+      expect(sendFollowPromptNotifications).not.toHaveBeenCalled();
+
+      // baseline intacte : library + follows préservés, gamesVersion non bumpé
+      const reloaded = await User.findById(user._id).lean();
+      const libIds = reloaded.gameLibrary.games.map((g) => g.gameId).sort();
+      expect(libIds).toEqual(['570', '730']);
+      const followedIds = reloaded.followedGames.map((f) => f.appId).sort();
+      expect(followedIds).toEqual(['570', '730']);
+    });
+
+    it('un user SANS biblio préalable + [] reste un sync normal (vide, pas de skip-garde)', async () => {
+      steamServiceMock.getUserGames.mockResolvedValue([]);
+      steamServiceMock.getRecentlyPlayedGames.mockResolvedValue([]);
+      const user = await createUser(); // gameLibrary vide
+      const result = await syncUserGames(user);
+      // pas la garde anti-wipe (rien à protéger) → sync normal complet
+      expect(result.skipped).toBeUndefined();
+      const reloaded = await User.findById(user._id).lean();
+      expect(reloaded.lastChecked).toBeInstanceOf(Date); // baseline (vide) écrite
+    });
+  });
+
   describe('upsertGamesCollection', () => {
     it('insère les nouveaux jeux dans la collection Game', async () => {
       steamServiceMock.getUserGames.mockResolvedValue([
