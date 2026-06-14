@@ -15,6 +15,19 @@ const GameSubscription = require('../../models/GameSubscription');
 const isUsableHeaderImage = (imageUrl) =>
   Boolean(imageUrl && imageUrl !== 'none');
 
+// Noms placeholder (ex. "Game 3405340", "Jeu 730", "Unknown Game") qu'une source
+// — notamment la collection globale Wishlist — peut contenir. Synchronisé avec
+// subscriptionManager / userProcessor.
+const PLACEHOLDER_NAME_PATTERN = /^((Test Game|Jeu|Game)\s+\d+|Unknown Game)$/i;
+
+const isPlaceholderName = (name) =>
+  !name || typeof name !== 'string' || PLACEHOLDER_NAME_PATTERN.test(name.trim());
+
+// Premier nom RÉEL parmi les sources (on saute les placeholders d'où qu'ils
+// viennent) → une entrée poubelle de Wishlist n'écrase plus le vrai nom du Game.
+const resolveName = (appId, ...candidates) =>
+  candidates.find((n) => n && !isPlaceholderName(n)) || `Game ${appId}`;
+
 /**
  * Normalise une entrée followedGames (string legacy ou { appId, followedAt }).
  */
@@ -93,20 +106,24 @@ async function getFollowedGamesDetailsBySteamId(steamId) {
     const subscription = subscriptionsMap.get(appId);
     const game = gamesMap.get(appId);
     const wishlistGame = wishlistMap.get(appId);
+    // Image : le doc Game porte la vraie URL hashée (appdetails) ; la collection
+    // Wishlist porte souvent l'URL cloudflare DEVINÉE qui 404 pour les jeux
+    // récents → on préfère Game, Wishlist en repli (jeu wishlisté sans doc Game).
     const canonicalHeaderImage =
+      (isUsableHeaderImage(game?.header_image) && game.header_image) ||
       (isUsableHeaderImage(wishlistGame?.header_image) &&
         wishlistGame.header_image) ||
-      (isUsableHeaderImage(game?.header_image) && game.header_image) ||
       '';
     const followedAtRaw = followedAtByAppId.get(appId);
 
     return {
       appId,
-      name:
-        wishlistGame?.name ||
-        game?.name ||
-        subscription?.name ||
-        `Game ${appId}`,
+      name: resolveName(
+        appId,
+        game?.name,
+        subscription?.name,
+        wishlistGame?.name,
+      ),
       header_image: canonicalHeaderImage,
       imageUrl: subscription?.imageUrl || '',
       followedAt: followedAtRaw ? new Date(followedAtRaw).toISOString() : null,

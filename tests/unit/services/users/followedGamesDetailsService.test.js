@@ -41,13 +41,14 @@ describe('services/users/followedGamesDetailsService', () => {
       expect(byAppId.get('440').notifications).toBe(true);
     });
 
-    it('résout name/header/imageUrl en cascade Wishlist > Game > Subscription', async () => {
+    it('priorité Game (autoritaire) > Subscription > Wishlist, en ignorant les noms placeholder', async () => {
       const steamId = nextSteamId();
       await createUser({
         steamId,
-        followedGames: ['730', '570', '440'],
+        followedGames: ['730', '570', '440', '999'],
       });
-      // 730 : présent dans Wishlist (priorité)
+      // 730 : Wishlist ET Game réels → Game gagne (source faisant autorité ;
+      // appdetails-résolue, contre le cache Wishlist global moins fiable).
       await createWishlist({
         appId: '730',
         name: 'CSGO (wishlist)',
@@ -70,6 +71,18 @@ describe('services/users/followedGamesDetailsService', () => {
         name: 'TF2',
         imageUrl: 'https://logo/440.jpg',
       });
+      // 999 : le bug Megabonk — Wishlist a un nom placeholder + une image
+      // cloudflare devinée, Game a les vraies données → Game gagne.
+      await createWishlist({
+        appId: '999',
+        name: 'Game 999',
+        header_image: 'https://cdn.cloudflare.steamstatic.com/steam/apps/999/header.jpg',
+      });
+      await createGame({
+        appId: '999',
+        name: 'Megabonk',
+        header_image: 'https://shared.akamai/store_item_assets/999/hash/header.jpg',
+      });
 
       const { type, followedGames } = await getFollowedGamesDetailsBySteamId(
         steamId,
@@ -78,8 +91,8 @@ describe('services/users/followedGamesDetailsService', () => {
 
       const byId = Object.fromEntries(followedGames.map((g) => [g.appId, g]));
       expect(byId['730']).toMatchObject({
-        name: 'CSGO (wishlist)',
-        header_image: 'https://w/730.jpg',
+        name: 'CSGO (game)',
+        header_image: 'https://g/730.jpg',
         imageUrl: '',
       });
       expect(byId['570']).toMatchObject({
@@ -90,6 +103,11 @@ describe('services/users/followedGamesDetailsService', () => {
         name: 'TF2',
         header_image: '',
         imageUrl: 'https://logo/440.jpg',
+      });
+      // Megabonk : nom + image du doc Game, pas le placeholder Wishlist.
+      expect(byId['999']).toMatchObject({
+        name: 'Megabonk',
+        header_image: 'https://shared.akamai/store_item_assets/999/hash/header.jpg',
       });
     });
 
