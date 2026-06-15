@@ -36,7 +36,10 @@ const CONFIG = {
   TIER_WARM_MAX_AGE_DAYS: 60,    // news 30–60 j → warm
 
   // Cooldowns par tier (ms)
-  COOLDOWN_HOT_MS:  15 * 60 * 1000,          // 15 min
+  // hot < intervalle du cron (15 min) : sinon le jeu rate ~1 run sur 2 de
+  // quelques secondes (nextCheck tombe juste APRÈS le run) → vérifié toutes les
+  // 30 min au lieu de 15. 10 min laisse une marge pour être éligible à CHAQUE run.
+  COOLDOWN_HOT_MS:  10 * 60 * 1000,          // 10 min
   COOLDOWN_WARM_MS:  3 * 60 * 60 * 1000,   //  3 h
   COOLDOWN_COLD_MS: 12 * 60 * 60 * 1000,   // 12 h
 

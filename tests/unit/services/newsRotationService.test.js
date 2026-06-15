@@ -103,7 +103,7 @@ describe('services/newsRotationService', () => {
       expect(elapsed).toBeLessThanOrEqual(12 * HOUR + 1000);
     });
 
-    it('jeu avec news récente (<30j) → tier hot (cooldown 15min)', async () => {
+    it('jeu avec news récente (<30j) → tier hot (cooldown 10min)', async () => {
       const recentTs = Math.floor((Date.now() - 5 * DAY) / 1000);
       steamServiceMock.getGameNews.mockResolvedValue([
         { gid: 'n1', title: 't', url: 'u', date: recentTs, contents: '' },
@@ -120,7 +120,7 @@ describe('services/newsRotationService', () => {
       const updated = await GameSubscription.findById(sub._id).lean();
       const cooldown =
         updated.nextNewsCheckAt.getTime() - updated.lastNewsCheck.getTime();
-      expect(cooldown).toBeCloseTo(15 * 60 * 1000, -3);
+      expect(cooldown).toBeCloseTo(10 * 60 * 1000, -3);
     });
 
     it('jeu avec news entre 30 et 60j → tier warm (cooldown 3h)', async () => {
