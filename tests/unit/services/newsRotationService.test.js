@@ -189,6 +189,40 @@ describe('services/newsRotationService', () => {
       expect(updated.lastNewsTimestamp).toBe(newTs);
     });
 
+    it('pousse TOUTES les news plus récentes que la dernière connue (pas juste la plus récente)', async () => {
+      const t2 = Math.floor(Date.now() / 1000); // plus récente
+      const t1 = t2 - 600; // 10 min avant, toujours nouvelle
+      const oldTs = t2 - 7 * DAY / 1000;
+      const subscriber = nextSteamId();
+      await setupSubscriberWithToken(subscriber);
+      const sub = await createGameSubscription({
+        gameId: '730',
+        name: 'CSGO',
+        lastNewsTimestamp: oldTs,
+        subscribers: [subscriber],
+      });
+
+      // Steam renvoie du plus récent au plus ancien.
+      steamServiceMock.getGameNews.mockResolvedValue([
+        { gid: 'news-2', title: 'B', url: 'u2', date: t2, contents: '' },
+        { gid: 'news-1', title: 'A', url: 'u1', date: t1, contents: '' },
+      ]);
+      notificationServiceMock.sendNewsNotification.mockResolvedValue(true);
+
+      const stats = await checkNewsRotation();
+
+      // Les DEUX news sont poussées (pas juste news-2).
+      expect(stats.newNewsFound).toBe(2);
+      expect(stats.notificationsSent).toBe(2);
+      const gids = notificationServiceMock.sendNewsNotification.mock.calls.map(
+        (c) => c[5],
+      );
+      expect(gids).toEqual(['news-1', 'news-2']); // ordre chronologique
+
+      const updated = await GameSubscription.findById(sub._id).lean();
+      expect(updated.lastNewsTimestamp).toBe(t2); // la plus récente
+    });
+
     it('skip les subscribers ayant déjà pushSentAt, mais PAS ceux avec seulement inFeedAt', async () => {
       // inFeedAt ne doit JAMAIS supprimer le push : il est posé dès qu'une
       // surface (plugin Steam, web feed, app) affiche la news, ce qui ne veut

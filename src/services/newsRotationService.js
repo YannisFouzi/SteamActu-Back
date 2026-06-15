@@ -159,27 +159,35 @@ async function checkNewsRotation() {
         );
         stats.apiCalls++;
 
-        // §4 étape 2 : MAJ lastNewsTimestamp si news plus récente
+        // §4 étape 2 : notifier TOUTES les news plus récentes que la dernière
+        // connue, pas seulement news[0]. Steam renvoie du plus récent au plus
+        // ancien ; un jeu peut poster plusieurs news entre deux checks (cas
+        // Next Fest/démos) — n'envoyer que news[0] en perdait silencieusement.
+        // On notifie de la plus ANCIENNE à la plus récente (ordre chronologique).
         if (news && news.length > 0) {
-          const latestNewsTimestamp = news[0].date || 0;
           const currentTimestamp = game.lastNewsTimestamp || 0;
+          const freshNews = news
+            .filter((n) => (n.date || 0) > currentTimestamp)
+            .sort((a, b) => (a.date || 0) - (b.date || 0));
 
-          if (latestNewsTimestamp > currentTimestamp) {
-            game.lastNewsTimestamp = latestNewsTimestamp;
+          if (freshNews.length > 0) {
+            // lastNewsTimestamp = la plus récente (dernière après tri chrono).
+            game.lastNewsTimestamp = freshNews[freshNews.length - 1].date;
+            stats.newNewsFound += freshNews.length;
 
-            const firstImageUrl = extractFirstImage(news[0].contents);
-            logger.info(
-              {
-                gameId: game.gameId,
-                gameName: game.name,
-                newTimestamp: latestNewsTimestamp,
-                previousTimestamp: currentTimestamp,
-              },
-              'news_new_detected'
-            );
-            stats.newNewsFound++;
-
-            await sendNotificationsForGame(game, news[0], firstImageUrl, stats);
+            for (const item of freshNews) {
+              logger.info(
+                {
+                  gameId: game.gameId,
+                  gameName: game.name,
+                  newTimestamp: item.date,
+                  previousTimestamp: currentTimestamp,
+                },
+                'news_new_detected'
+              );
+              const firstImageUrl = extractFirstImage(item.contents);
+              await sendNotificationsForGame(game, item, firstImageUrl, stats);
+            }
           }
         }
 
