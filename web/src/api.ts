@@ -193,10 +193,12 @@ export class HttpError extends Error {
   }
 }
 
-async function getJSON<T>(url: string): Promise<T> {
+// Identity proof attached to every gated read AND every state-changing write:
+// the plugin's per-install pairing secret (X-GN-Secret) and/or the browser/
+// extension OpenID Bearer. The backend accepts either; a bare SteamID is never
+// enough anymore (see middleware/webPairSecret.js > requireWebAuth).
+export function authHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
-  // Plugin surface: per-install pairing secret. Browser/extension surface:
-  // OpenID Bearer. The server accepts either on the gated reads.
   if (PAIR_SECRET) {
     headers['X-GN-Secret'] = PAIR_SECRET;
   }
@@ -204,6 +206,11 @@ async function getJSON<T>(url: string): Promise<T> {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
+  return headers;
+}
+
+async function getJSON<T>(url: string): Promise<T> {
+  const headers = authHeaders();
   const res = await fetch(url, { credentials: 'omit', headers });
   if (!res.ok) {
     throw new HttpError(res.status);
@@ -231,15 +238,11 @@ export function fetchProfile(steamId: string): Promise<WebProfile> {
 
 // Same auth as getJSON (pairing secret and/or Bearer), POST with no body.
 async function postAction(url: string): Promise<void> {
-  const headers: Record<string, string> = {};
-  if (PAIR_SECRET) {
-    headers['X-GN-Secret'] = PAIR_SECRET;
-  }
-  const token = sessionToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  const res = await fetch(url, { method: 'POST', credentials: 'omit', headers });
+  const res = await fetch(url, {
+    method: 'POST',
+    credentials: 'omit',
+    headers: authHeaders(),
+  });
   if (!res.ok) {
     throw new HttpError(res.status);
   }

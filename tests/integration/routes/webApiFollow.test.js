@@ -12,8 +12,13 @@ const request = require('supertest');
 const { createTestApp } = require('../../helpers/createTestApp');
 const { createUser, nextSteamId } = require('../../helpers/factories');
 const User = require('../../../src/models/User');
+const { createMobileSession } = require('../../../src/services/mobileSessionService');
 
 const app = createTestApp({ mount: ['web'] });
+
+// Les writes /api/web exigent une preuve d'identite (requireWebAuth, fail-closed).
+// En test on prouve via la session Bearer liee au steamId (equivalent OpenID).
+const bearer = (steamId) => `Bearer ${createMobileSession(steamId).token}`;
 
 describe('webApi — follow à deux niveaux (cloche / +)', () => {
   beforeEach(() => {
@@ -27,6 +32,7 @@ describe('webApi — follow à deux niveaux (cloche / +)', () => {
 
       const r = await request(app)
         .get('/api/web/follow')
+        .set('Authorization', bearer(steamId))
         .query({ steamId, appId: '730', name: 'CSGO' });
       expect(r.status).toBe(200);
 
@@ -40,6 +46,7 @@ describe('webApi — follow à deux niveaux (cloche / +)', () => {
 
       const r = await request(app)
         .get('/api/web/follow')
+        .set('Authorization', bearer(steamId))
         .query({ steamId, appId: '730', name: 'CSGO', notifications: 'false' });
       expect(r.status).toBe(200);
 
@@ -96,6 +103,7 @@ describe('webApi — follow à deux niveaux (cloche / +)', () => {
 
       const r = await request(app)
         .get(`/api/web/follow-notifications/${steamId}/730`)
+        .set('Authorization', bearer(steamId))
         .query({ enabled: 'false' });
       expect(r.status).toBe(200);
       expect(r.body).toEqual({ ok: true, appId: '730', notifications: false });
@@ -114,6 +122,7 @@ describe('webApi — follow à deux niveaux (cloche / +)', () => {
 
       const r = await request(app)
         .post(`/api/web/follow-notifications/${steamId}/730`)
+        .set('Authorization', bearer(steamId))
         .send({ enabled: true });
       expect(r.status).toBe(200);
 
@@ -129,9 +138,9 @@ describe('webApi — follow à deux niveaux (cloche / +)', () => {
       });
 
       // POST sans body, flag en query — le cas qui renvoyait 400 avant le fix.
-      const r = await request(app).post(
-        `/api/web/follow-notifications/${steamId}/730?enabled=false`,
-      );
+      const r = await request(app)
+        .post(`/api/web/follow-notifications/${steamId}/730?enabled=false`)
+        .set('Authorization', bearer(steamId));
       expect(r.status).toBe(200);
 
       const u = await User.findOne({ steamId }).lean();
@@ -142,11 +151,14 @@ describe('webApi — follow à deux niveaux (cloche / +)', () => {
       const steamId = nextSteamId();
       await createUser({ steamId, followedGames: ['730'] });
 
-      let r = await request(app).get(`/api/web/follow-notifications/${steamId}/730`);
+      let r = await request(app)
+        .get(`/api/web/follow-notifications/${steamId}/730`)
+        .set('Authorization', bearer(steamId));
       expect(r.status).toBe(400);
 
       r = await request(app)
         .get(`/api/web/follow-notifications/${steamId}/730`)
+        .set('Authorization', bearer(steamId))
         .query({ enabled: 'oui' });
       expect(r.status).toBe(400);
     });
@@ -157,6 +169,7 @@ describe('webApi — follow à deux niveaux (cloche / +)', () => {
 
       const r = await request(app)
         .get(`/api/web/follow-notifications/${steamId}/730`)
+        .set('Authorization', bearer(steamId))
         .query({ enabled: 'false' });
       expect(r.status).toBe(404);
     });

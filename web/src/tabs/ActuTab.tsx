@@ -16,11 +16,13 @@ export default function ActuTab({
   editable,
   follow,
   hasFollowedGames,
+  profileLoading,
   onNavigateFollow,
 }: {
   editable: boolean;
   follow: FollowState;
   hasFollowedGames: boolean;
+  profileLoading: boolean;
   onNavigateFollow: () => void;
 }) {
   const { t, lang } = useT();
@@ -217,6 +219,14 @@ export default function ActuTab({
     return <div className="state error">{t('common.error')} — {error}</div>;
   }
   if (visibleItems.length === 0) {
+    // `visibleItems` is the feed filtered by the followed set, which comes from
+    // the network-only profile. While that profile is still loading, an empty
+    // list is ambiguous (no follows yet vs. not loaded) — so don't flash the
+    // false "you follow no game" state; show the brief loading state instead.
+    // Once the profile resolves we re-render with the real follows.
+    if (profileLoading) {
+      return <div className="state">{t('news.loadingFeed')}</div>;
+    }
     return (
       <>
         {filter}

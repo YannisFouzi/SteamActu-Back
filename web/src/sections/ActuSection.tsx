@@ -12,11 +12,13 @@ type Sub = 'fil' | 'jeux-suivis';
 
 export default function ActuSection({
   profile,
+  profileLoading,
   editable,
   follow,
   onNavigateFollow,
 }: {
   profile: WebProfile | null;
+  profileLoading: boolean;
   editable: boolean;
   follow: FollowState;
   onNavigateFollow: () => void;
@@ -63,6 +65,7 @@ export default function ActuSection({
           editable={editable}
           follow={follow}
           hasFollowedGames={followed.length > 0}
+          profileLoading={profileLoading}
           onNavigateFollow={onNavigateFollow}
         />
       )}

@@ -36,12 +36,13 @@ const logger = require('../utils/logger');
 
 // SECURITY: there is intentionally NO steamId->token endpoint here. A SteamID is
 // public, so minting a session from it alone let anyone with the /feed/<steamId>
-// URL act on the account (incl. delete). The web view now obtains its session
-// only through verified Steam OpenID (see /auth/steam/start + /auth/steam/return,
-// platform=web). The endpoints below stay public-by-steamId because the
-// Millennium plugin polls them in the background (no token there) — they are
-// low-severity (read-only mostly-public data + idempotent follow + presence) and
-// can never delete the account or change settings, which require the session.
+// URL act on the account. The web view obtains its session only through verified
+// Steam OpenID (see /auth/steam/start + /auth/steam/return, platform=web).
+// WRITES below are fail-closed via requireWebAuth: a bare SteamID is never enough
+// — they require a Bearer session bound to the SteamID OR a valid Millennium
+// pairing secret (the plugin's Lua proxy attaches ?secret= to every call). Only
+// near-public READS (profile/library) stay soft-gated, and bootstrap routes
+// (pair/register) + the single-boolean follow-state read stay open.
 
 // ── Privacy par appairage (TOFU) ────────────────────────────────────────────
 // Le token web Steam etant INRECUPERABLE depuis un plugin Millennium, le plugin
@@ -55,6 +56,7 @@ const {
   generatePairSecret,
   secretMatches,
   requireWebSecretIfPaired,
+  requireWebAuth,
 } = require('../middleware/webPairSecret');
 
 // Appairage du plugin : pose le hash du secret au 1er appel (premier arrive
@@ -203,7 +205,7 @@ router.get('/profile/:steamId', requireWebSecretIfPaired, async (req, res) => {
  * seen recently, the mobile FCM push is skipped (the Steam toast covers it).
  * GET (not POST) because the plugin's Lua proxy only does http.get reliably.
  */
-router.get('/heartbeat/:steamId', async (req, res) => {
+router.get('/heartbeat/:steamId', requireWebAuth, async (req, res) => {
   try {
     const { steamId } = req.params;
     if (!isValidSteamId(steamId)) {
@@ -264,9 +266,9 @@ router.get('/settings/:steamId', async (req, res) => {
 });
 
 /**
- * Public follow-by-SteamID. Used by the Millennium plugin's "nouveau jeu
- * détecté" toast (click to follow). Trusts the SteamID — same accepted
- * tradeoff as the zero-click session on the Steam Desktop surface. Idempotent.
+ * Follow-by-SteamID. Used by the Millennium plugin's "nouveau jeu détecté" toast
+ * (click to follow) and the store-page bell. Gated by requireWebAuth (secret or
+ * Bearer) — see the wiring below. Idempotent.
  *
  * Exposed as BOTH GET (query params) and POST (body): the Millennium plugin's
  * Lua proxy only does http.get reliably (http.request crashes the native
@@ -318,8 +320,8 @@ async function handleFollow(params, res) {
   }
 }
 
-router.get('/follow', (req, res) => handleFollow(req.query, res));
-router.post('/follow', (req, res) => handleFollow(req.body || {}, res));
+router.get('/follow', requireWebAuth, (req, res) => handleFollow(req.query, res));
+router.post('/follow', requireWebAuth, (req, res) => handleFollow(req.body || {}, res));
 
 /**
  * Public follow-state read for ONE game — drives the extension's store-page bell
@@ -403,13 +405,13 @@ async function handleFollowNotifications(params, res) {
   }
 }
 
-router.get('/follow-notifications/:steamId/:appId', (req, res) =>
+router.get('/follow-notifications/:steamId/:appId', requireWebAuth, (req, res) =>
   handleFollowNotifications(
     { steamId: req.params.steamId, appId: req.params.appId, enabled: req.query.enabled },
     res,
   ),
 );
-router.post('/follow-notifications/:steamId/:appId', (req, res) =>
+router.post('/follow-notifications/:steamId/:appId', requireWebAuth, (req, res) =>
   handleFollowNotifications(
     {
       steamId: req.params.steamId,
@@ -451,13 +453,13 @@ function handleRegister(steamId, res) {
 router.get('/register/:steamId', (req, res) => handleRegister(req.params.steamId, res));
 router.post('/register/:steamId', (req, res) => handleRegister(req.params.steamId, res));
 
-// ── Public-by-SteamID writes (Steam Desktop / Millennium surface) ───────────
-// The feed runs full-page inside the Steam Desktop client (Millennium plugin),
-// where the user is already authenticated as themselves — so these mirror the
-// session-gated /api/users writes but trust the SteamID, same accepted tradeoff
-// as /follow above. They reuse the exact same services as the authed routes.
-// Account DELETION is intentionally NOT mirrored here (destructive) — it stays
-// session-only on /api/users/:steamId.
+// ── /api/web writes (Steam Desktop / Millennium + web + extension) ──────────
+// These mirror the session-gated /api/users writes and reuse the exact same
+// services, but are reached from surfaces that prove identity differently: the
+// plugin via its pairing secret, the browser/extension via a Bearer session.
+// All are fail-closed through requireWebAuth (see the wiring on each route) — a
+// bare SteamID is rejected. Account DELETION is intentionally NOT mirrored here
+// (destructive) — it stays session-only on /api/users/:steamId.
 
 // Ne plus suivre un jeu. Exposé en DELETE (extension/web fetch) ET en GET
 // (/unfollow/:id/:appId) : le proxy Lua du plugin Millennium ne fait que
@@ -486,15 +488,15 @@ async function handleUnfollow(steamId, appId, res) {
   }
 }
 
-router.delete('/follow/:steamId/:appId', (req, res) =>
+router.delete('/follow/:steamId/:appId', requireWebAuth, (req, res) =>
   handleUnfollow(req.params.steamId, req.params.appId, res),
 );
-router.get('/unfollow/:steamId/:appId', (req, res) =>
+router.get('/unfollow/:steamId/:appId', requireWebAuth, (req, res) =>
   handleUnfollow(req.params.steamId, req.params.appId, res),
 );
 
 // Réglages de notification
-router.put('/notifications/:steamId', async (req, res) => {
+router.put('/notifications/:steamId', requireWebAuth, async (req, res) => {
   try {
     const { steamId } = req.params;
     if (!isValidSteamId(steamId)) {
@@ -518,7 +520,7 @@ router.put('/notifications/:steamId', async (req, res) => {
 });
 
 // Langue
-router.put('/language/:steamId', async (req, res) => {
+router.put('/language/:steamId', requireWebAuth, async (req, res) => {
   try {
     const { steamId } = req.params;
     if (!isValidSteamId(steamId)) {
@@ -544,7 +546,7 @@ router.put('/language/:steamId', async (req, res) => {
 });
 
 // Ajouter une news aux favoris
-router.post('/news-favorites/:steamId', async (req, res) => {
+router.post('/news-favorites/:steamId', requireWebAuth, async (req, res) => {
   try {
     const { steamId } = req.params;
     const { appId, newsId, newsDate } = req.body || {};
@@ -578,7 +580,7 @@ router.post('/news-favorites/:steamId', async (req, res) => {
 });
 
 // Retirer une news des favoris
-router.delete('/news-favorites/:steamId/:appId/:newsId', async (req, res) => {
+router.delete('/news-favorites/:steamId/:appId/:newsId', requireWebAuth, async (req, res) => {
   try {
     const { steamId, appId, newsId } = req.params;
     if (!isValidSteamId(steamId)) {
@@ -602,7 +604,7 @@ router.delete('/news-favorites/:steamId/:appId/:newsId', async (req, res) => {
 });
 
 // Marquer le fil d'actu comme vu (high-water-mark, ne recule jamais)
-router.put('/news-seen/:steamId', async (req, res) => {
+router.put('/news-seen/:steamId', requireWebAuth, async (req, res) => {
   try {
     const { steamId } = req.params;
     if (!isValidSteamId(steamId)) {

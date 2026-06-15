@@ -71,9 +71,57 @@ async function requireWebSecretIfPaired(req, res, next) {
   }
 }
 
+// Gating STRICT (fail-closed) pour les ROUTES D'ECRITURE /api/web. Contrairement
+// a requireWebSecretIfPaired (souple, pour les lectures de donnees quasi-
+// publiques), une ecriture ne doit JAMAIS se fier au seul steamId (public) :
+// elle exige une preuve d'identite, sinon 401. Deux preuves acceptees :
+//   1. Session OpenID verifiee (Authorization: Bearer) dont le steamId == cible
+//      -> surfaces navigateur (SPA web, extension Chrome).
+//   2. Secret par-installation valide (X-GN-Secret ou ?secret= pour le proxy Lua)
+//      -> surface plugin Millennium.
+// Le steamId est lu dans params / body / query (selon la route : /follow le passe
+// en query/body, les autres en params).
+async function requireWebAuth(req, res, next) {
+  try {
+    const steamId =
+      req.params.steamId ||
+      (req.body && req.body.steamId) ||
+      (req.query && req.query.steamId);
+    if (!isValidSteamId(String(steamId || ''))) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+
+    // 1. Session navigateur (extension / SPA web) : Bearer signe, steamId lie.
+    const authHeader = req.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const session = verifyMobileSessionToken(authHeader.slice(7).trim());
+      if (session && String(session.steamId) === String(steamId)) {
+        return next();
+      }
+    }
+
+    // 2. Secret par-installation (plugin Millennium) : header ou query (proxy Lua).
+    const provided = req.get('x-gn-secret') || req.query.secret;
+    if (provided) {
+      const user = await User.findOne({ steamId })
+        .select('+webPairSecretHash')
+        .lean();
+      if (user && user.webPairSecretHash && secretMatches(provided, user.webPairSecretHash)) {
+        return next();
+      }
+    }
+
+    return res.status(401).json({ message: 'Authentification requise' });
+  } catch (error) {
+    logger.error({ err: error }, 'web_auth_gate_failed');
+    return res.status(500).json({ message: 'Erreur serveur' });
+  }
+}
+
 module.exports = {
   hashSecret,
   generatePairSecret,
   secretMatches,
   requireWebSecretIfPaired,
+  requireWebAuth,
 };

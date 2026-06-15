@@ -6,7 +6,7 @@
 // here. Since the Steam client is already logged in, this is near-zero-click; a
 // stranger's browser can't pass OpenID as the owner, so it's blocked.
 
-import { CONTEXT } from './api';
+import { CONTEXT, authHeaders } from './api';
 
 const STORAGE_KEY = 'gn_session';
 
@@ -87,11 +87,11 @@ async function authedFetch(url: string, init: RequestInit = {}): Promise<Respons
   return fetch(url, { ...init, headers });
 }
 
-// Writes go through the public-by-SteamID /api/web endpoints (no session). The
-// feed runs full-page inside the authenticated Steam Desktop client, where the
-// user is already proven to be themselves; the same endpoints back the
-// Millennium plugin's own follow calls. (Account deletion is the one exception —
-// it stays session-only, see deleteAccount.)
+// Writes hit the /api/web endpoints proving identity the same way reads do: the
+// plugin's pairing secret (X-GN-Secret) or the browser/extension OpenID Bearer
+// (authHeaders). A bare SteamID is rejected server-side — the feed runs inside
+// the authenticated Steam client (plugin secret) or behind Steam OpenID
+// (browser). (Account deletion stays separate, session-only — see deleteAccount.)
 const STEAM_ID = CONTEXT.steamId;
 
 async function publicWrite(
@@ -99,9 +99,18 @@ async function publicWrite(
   method: string,
   body?: unknown,
 ): Promise<void> {
-  const init: RequestInit = { method, credentials: 'omit' };
+  const headers: Record<string, string> = authHeaders();
+  // No identity proof at all = a standalone browser tab not yet logged in (the
+  // plugin carries its secret, the extension its injected session). The write
+  // would be rejected server-side, so redirect through Steam OpenID first
+  // (near-zero-click) — mirrors the gated-read path in App.tsx. Navigates away
+  // and never resolves; the user repeats the action once logged in.
+  if (!headers['X-GN-Secret'] && !headers.Authorization) {
+    await startSteamLogin();
+  }
+  const init: RequestInit = { method, credentials: 'omit', headers };
   if (body !== undefined) {
-    init.headers = { 'Content-Type': 'application/json' };
+    headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
   const res = await fetch(url, init);

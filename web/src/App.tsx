@@ -228,6 +228,7 @@ export default function App() {
       {tab === 'actu' && (
         <ActuSection
           profile={profileData}
+          profileLoading={profile.status === 'loading'}
           editable={editable}
           follow={guard.follow}
           onNavigateFollow={() => setTab('suivre')}
