@@ -8,3 +8,6 @@ node_modules
 # Firebase credentials (NEVER commit these)
 firebase-service-account.json
 *-firebase-adminsdk-*.json
+
+# Rapports de couverture (artefacts generes par jest --coverage)
+coverage/
