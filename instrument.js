@@ -18,7 +18,13 @@ if (dsn) {
   Sentry.init({
     dsn,
     environment: process.env.NODE_ENV || 'development',
-    release: process.env.SENTRY_RELEASE || undefined,
+    // Tag de release pour grouper les erreurs par déploiement. Railway injecte
+    // automatiquement RAILWAY_GIT_COMMIT_SHA → fallback direct, pas besoin de
+    // poser SENTRY_RELEASE à la main (et évite le piège `$VAR` non-expansée).
+    release:
+      process.env.SENTRY_RELEASE ||
+      process.env.RAILWAY_GIT_COMMIT_SHA ||
+      undefined,
     tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0.1),
     sendDefaultPii: true,
   });
