@@ -358,60 +358,52 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
     newsStates.map((s) => [s.steamId, s.inFeedAt])
   );
 
-  // Suivi silencieux (bouton +) : exclure les subscribers qui ont coupé les
-  // notifications pour CE jeu (followedGames.notifications === false). Les
-  // entrées legacy sans le champ ne matchent pas → notifiées (rétrocompat).
-  // Le fil d'actu n'est PAS affecté : un suivi silencieux reste un suivi.
-  const mutedUsers = await User.find({
-    steamId: { $in: subscribers },
-    followedGames: {
-      $elemMatch: { appId: String(game.gameId), notifications: false },
-    },
-  })
-    .select('steamId')
-    .lean();
-  const mutedSet = new Set(mutedUsers.map((u) => u.steamId));
+  // UNE seule lecture User pour les 3 filtres (muted / tooRecent / seen) sur le
+  // même set `subscribers` → on dérive les 3 ensembles en mémoire (avant : 3
+  // requêtes Mongo identiques sur les mêmes documents). `followedGames` porte
+  // appId/notifications/followedAt ; `lastNewsFeedSeenAt` est le high-water-mark
+  // de vue active. Un subscriber sans entrée `followedGames` correspondante (ex.
+  // subscription-only/legacy) n'est ni muted ni tooRecent → notifié (rétrocompat).
+  const appIdStr = String(game.gameId);
 
-  // Suivi récent : ne jamais notifier un subscriber d'une news ANTÉRIEURE à son
-  // follow de ce jeu. Cas type : une news publiée dans la fenêtre entre le
-  // dernier check du cron et un (re)follow sur une subscription pré-existante,
-  // détectée plus tard → sans ce garde, le follower reçoit un push d'une news
-  // plus vieille que son follow. Granularité seconde (timestamps Steam) : on ne
-  // filtre que si le follow tombe dans une seconde STRICTEMENT postérieure à la
-  // news (un follow contemporain à la seconde près reste notifié).
+  // Suivi récent : ne jamais notifier une news ANTÉRIEURE au follow du jeu.
+  // Granularité seconde (timestamps Steam) : on ne filtre que si le follow tombe
+  // dans une seconde STRICTEMENT postérieure à la news (un follow contemporain à
+  // la seconde près reste notifié).
   const followCutoff = new Date(((newsItem.date || 0) + 1) * 1000);
-  const tooRecentFollowers = await User.find({
-    steamId: { $in: subscribers },
-    followedGames: {
-      $elemMatch: {
-        appId: String(game.gameId),
-        followedAt: { $gte: followCutoff },
-      },
-    },
-  })
-    .select('steamId')
-    .lean();
-  const tooRecentSet = new Set(tooRecentFollowers.map((u) => u.steamId));
 
-  // News déjà VUE dans le feed → ne pas notifier. `lastNewsFeedSeenAt` est le
-  // high-water-mark de la dernière consultation ACTIVE du feed (posé par mobile,
-  // web, extension, plugin ; JAMAIS par un poll). Combiné à `inFeedAt`, c'est la
-  // même règle que le grisage "vu" du feed — source de vérité unique
-  // (utils/newsReadState). Curseur par-user → "vu sur une surface" supprime la
-  // notif sur toutes les autres.
-  const seenUsers = await User.find({
+  const subscriberUsers = await User.find({
     steamId: { $in: subscribers },
   })
-    .select('steamId lastNewsFeedSeenAt')
+    .select('steamId followedGames lastNewsFeedSeenAt')
     .lean();
-  const lastSeenBySteamId = new Map(
-    seenUsers.map((u) => [u.steamId, u.lastNewsFeedSeenAt])
-  );
-  const seenSet = new Set(
-    subscribers.filter((sid) =>
-      isNewsSeenByUser(inFeedAtBySteamId.get(sid), lastSeenBySteamId.get(sid))
-    )
-  );
+
+  const mutedSet = new Set(); // suivi silencieux (bouton +) : notifications === false
+  const tooRecentSet = new Set(); // follow postérieur à la news
+  const seenSet = new Set(); // news déjà VUE dans le feed (vue active)
+
+  for (const u of subscriberUsers) {
+    const entry = (u.followedGames || []).find((g) => g.appId === appIdStr);
+
+    // Entrées legacy sans le champ `notifications` → notifiées (rétrocompat) :
+    // seul `=== false` mute. Le fil d'actu n'est jamais affecté (suivi silencieux
+    // = suivi). Équivaut au `$elemMatch { appId, notifications: false }` d'avant.
+    if (entry && entry.notifications === false) {
+      mutedSet.add(u.steamId);
+    }
+
+    // Équivaut au `$elemMatch { appId, followedAt: { $gte: followCutoff } }`.
+    if (entry && entry.followedAt && new Date(entry.followedAt) >= followCutoff) {
+      tooRecentSet.add(u.steamId);
+    }
+
+    // Même règle que le grisage "vu" du feed (source unique utils/newsReadState).
+    // `lastNewsFeedSeenAt` n'avance que sur vue ACTIVE (jamais un poll) → `inFeedAt`
+    // seul ne supprime jamais. Curseur par-user → vu sur une surface = supprimé partout.
+    if (isNewsSeenByUser(inFeedAtBySteamId.get(u.steamId), u.lastNewsFeedSeenAt)) {
+      seenSet.add(u.steamId);
+    }
+  }
 
   const eligibleSubscribers = subscribers.filter(
     (sid) =>
