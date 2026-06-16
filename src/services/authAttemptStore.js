@@ -58,8 +58,10 @@ function markSucceeded(authToken, steamId) {
   return true;
 }
 
-// Nettoyage periodique des tentatives expirees
-setInterval(() => {
+// Nettoyage periodique des tentatives expirees.
+// .unref() : ce timer ne doit pas, a lui seul, maintenir le process en vie
+// (sinon Node/Jest ne peut pas se terminer proprement a la fin des tests).
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [token, attempt] of store) {
     if (now > attempt.expiresAt) {
@@ -67,6 +69,7 @@ setInterval(() => {
     }
   }
 }, CLEANUP_INTERVAL_MS);
+cleanupTimer.unref();
 
 module.exports = {
   createAttempt,
