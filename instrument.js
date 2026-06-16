@@ -26,7 +26,9 @@ if (dsn) {
       process.env.RAILWAY_GIT_COMMIT_SHA ||
       undefined,
     tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0.1),
-    sendDefaultPii: true,
+    // false : ne pas transmettre IP / headers / cookies des utilisateurs a Sentry.
+    // Aligne avec l'extension, le SPA web et la politique de confidentialite.
+    sendDefaultPii: false,
   });
 
   console.log('[Sentry] Initialise (env:', process.env.NODE_ENV || 'development', ')');
