@@ -19,6 +19,7 @@ const steamService = require('./steamService');
 const { SteamApiError } = steamService;
 const notificationService = require('./notifications/notificationService');
 const { extractFirstImage } = require('./newsFeed/imageExtractor');
+const { isNewsSeenByUser } = require('../utils/newsReadState');
 const logger = require('../utils/logger');
 
 // ── Configuration ────────────────────────────────────────────────────────────
@@ -334,22 +335,28 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
   const subscribers = game.subscribers || [];
   const newsGid = String(newsItem.gid);
 
-  // Filtrer les abonnés déjà NOTIFIÉS (push FCM réellement envoyé pour cette news).
-  // On NE filtre volontairement PAS sur inFeedAt : ce champ est posé dès qu'une
-  // surface (app mobile, plugin Steam Desktop, web feed) *affiche* la news, ce
-  // qui n'équivaut pas à "l'utilisateur a été notifié". Le filtrer ici laissait
-  // le poll 5 min du plugin "consommer" la news avant le cron (30 min) → le push
-  // mobile n'était jamais envoyé. La dédup desktop/mobile est gérée en aval par
-  // preferSteamWhenOpen (présence via heartbeat) dans notificationService.
-  // inFeedAt conserve son seul rôle : le grisage "vu" du feed.
-  const alreadyServed = await UserNewsState.find({
+  // États par-news des subscribers, en UNE requête → deux usages :
+  //   - `pushSentAt` non-null = déjà NOTIFIÉ (push FCM réellement envoyé) ;
+  //   - `inFeedAt` = première exposition dans le feed du user. Combiné en aval à
+  //     `lastNewsFeedSeenAt` (vue active) via `isNewsSeenByUser`, il permet de ne
+  //     PAS re-notifier une news que l'user a déjà VUE dans son feed.
+  // On NE filtre toujours PAS sur `inFeedAt` SEUL (posé par tout affichage, poll
+  // 5 min du plugin inclus → ≠ "notifié/vu") : la suppression "déjà vu" est
+  // gatée par le curseur de vue active `lastNewsFeedSeenAt` (cf. seenSet plus
+  // bas). La dédup desktop/mobile temps-réel reste gérée par preferSteamWhenOpen
+  // (présence via heartbeat) dans notificationService.
+  const newsStates = await UserNewsState.find({
     steamId: { $in: subscribers },
     appId: String(game.gameId),
     newsId: newsGid,
-    pushSentAt: { $ne: null },
-  }).select('steamId').lean();
+  }).select('steamId pushSentAt inFeedAt').lean();
 
-  const alreadyServedSet = new Set(alreadyServed.map((s) => s.steamId));
+  const alreadyServedSet = new Set(
+    newsStates.filter((s) => s.pushSentAt).map((s) => s.steamId)
+  );
+  const inFeedAtBySteamId = new Map(
+    newsStates.map((s) => [s.steamId, s.inFeedAt])
+  );
 
   // Suivi silencieux (bouton +) : exclure les subscribers qui ont coupé les
   // notifications pour CE jeu (followedGames.notifications === false). Les
@@ -386,11 +393,32 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
     .lean();
   const tooRecentSet = new Set(tooRecentFollowers.map((u) => u.steamId));
 
+  // News déjà VUE dans le feed → ne pas notifier. `lastNewsFeedSeenAt` est le
+  // high-water-mark de la dernière consultation ACTIVE du feed (posé par mobile,
+  // web, extension, plugin ; JAMAIS par un poll). Combiné à `inFeedAt`, c'est la
+  // même règle que le grisage "vu" du feed — source de vérité unique
+  // (utils/newsReadState). Curseur par-user → "vu sur une surface" supprime la
+  // notif sur toutes les autres.
+  const seenUsers = await User.find({
+    steamId: { $in: subscribers },
+  })
+    .select('steamId lastNewsFeedSeenAt')
+    .lean();
+  const lastSeenBySteamId = new Map(
+    seenUsers.map((u) => [u.steamId, u.lastNewsFeedSeenAt])
+  );
+  const seenSet = new Set(
+    subscribers.filter((sid) =>
+      isNewsSeenByUser(inFeedAtBySteamId.get(sid), lastSeenBySteamId.get(sid))
+    )
+  );
+
   const eligibleSubscribers = subscribers.filter(
     (sid) =>
       !alreadyServedSet.has(sid) &&
       !mutedSet.has(sid) &&
-      !tooRecentSet.has(sid)
+      !tooRecentSet.has(sid) &&
+      !seenSet.has(sid)
   );
 
   logger.debug(
@@ -401,6 +429,7 @@ async function sendNotificationsForGame(game, newsItem, firstImageUrl, stats) {
       alreadyServed: alreadyServedSet.size,
       muted: mutedSet.size,
       tooRecent: tooRecentSet.size,
+      seen: seenSet.size,
     },
     'news_notification_subscribers_filtered'
   );

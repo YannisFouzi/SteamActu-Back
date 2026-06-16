@@ -5,6 +5,7 @@ const {
   getMutedAppIds,
   getFollowedAtByAppId,
 } = require('../utils/followedGamesHelpers');
+const { isNewsSeenByUser } = require('../utils/newsReadState');
 const logger = require('../utils/logger');
 
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
@@ -64,7 +65,7 @@ async function getPendingDesktopToasts(steamId, { language } = {}) {
   const expiresAt = new Date(now.getTime() + RETENTION_DAYS * MS_IN_DAY);
 
   const user = await User.findOne({ steamId })
-    .select('desktopToastSeededAt followedGames')
+    .select('desktopToastSeededAt followedGames lastNewsFeedSeenAt')
     .lean();
   const seeded = Boolean(user && user.desktopToastSeededAt);
   // Suivi silencieux (bouton +) : un toast desktop est une notification, même
@@ -137,6 +138,15 @@ async function getPendingDesktopToasts(steamId, { language } = {}) {
       it.news?.date &&
       followedAt.getTime() >= it.news.date + 1000
     ) {
+      return false;
+    }
+    // News déjà VUE dans le feed (vue ACTIVE, n'importe quelle surface) → pas de
+    // toast. Elle reste dans `undelivered` → CLAIM silencieux ci-dessous
+    // (steamToastSentAt), donc jamais re-toastée. Même règle que le push mobile
+    // (utils/newsReadState : inFeedAt <= lastNewsFeedSeenAt). `inFeedAt` est porté
+    // par les items de getNewsFeed (augmentés), `lastNewsFeedSeenAt` n'avance que
+    // sur vue active → pas de faux positif depuis un poll.
+    if (isNewsSeenByUser(it.inFeedAt, user.lastNewsFeedSeenAt)) {
       return false;
     }
     return true;

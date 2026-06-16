@@ -174,4 +174,66 @@ describe('services/desktopToastService — getPendingDesktopToasts', () => {
     const out = await getPendingDesktopToasts(steamId, {});
     expect(out.map((i) => i.news.id)).toEqual(['fresh']);
   });
+
+  it('après seed : une news déjà VUE dans le feed (inFeedAt <= lastNewsFeedSeenAt) n\'est PAS toastée mais est claim', async () => {
+    const steamId = nextSteamId();
+    const seenAt = new Date('2026-06-12T10:00:00Z');
+    await createUser({
+      steamId,
+      desktopToastSeededAt: new Date('2026-06-01T00:00:00Z'),
+      lastNewsFeedSeenAt: seenAt,
+      followedGames: [{ appId: '730', followedAt: new Date('2026-06-01T00:00:00Z') }],
+    });
+    newsFeedServiceMock.getNewsFeed.mockResolvedValue({
+      // apparue dans le feed AVANT la dernière vue active → déjà vue
+      items: [
+        { ...feedItem('730', 'seen-news'), inFeedAt: new Date('2026-06-12T09:00:00Z') },
+      ],
+    });
+
+    const out = await getPendingDesktopToasts(steamId, {});
+    expect(out).toEqual([]); // déjà vue → pas de toast
+
+    // mais consommée silencieusement → jamais re-toastée plus tard
+    const row = await UserNewsState.findOne({ steamId, newsId: 'seen-news' }).lean();
+    expect(row.steamToastSentAt).toBeTruthy();
+  });
+
+  it('après seed : une news apparue APRÈS la dernière vue active (inFeedAt > lastNewsFeedSeenAt) est toastée', async () => {
+    const steamId = nextSteamId();
+    const seenAt = new Date('2026-06-12T10:00:00Z');
+    await createUser({
+      steamId,
+      desktopToastSeededAt: new Date('2026-06-01T00:00:00Z'),
+      lastNewsFeedSeenAt: seenAt,
+      followedGames: [{ appId: '730', followedAt: new Date('2026-06-01T00:00:00Z') }],
+    });
+    newsFeedServiceMock.getNewsFeed.mockResolvedValue({
+      // apparue APRÈS la dernière vue active → pas encore vue
+      items: [
+        { ...feedItem('730', 'unseen-news'), inFeedAt: new Date('2026-06-12T11:00:00Z') },
+      ],
+    });
+
+    const out = await getPendingDesktopToasts(steamId, {});
+    expect(out.map((i) => i.news.id)).toEqual(['unseen-news']);
+  });
+
+  it('après seed : inFeedAt SEUL (sans lastNewsFeedSeenAt) ne supprime pas le toast', async () => {
+    const steamId = nextSteamId();
+    await createUser({
+      steamId,
+      desktopToastSeededAt: new Date('2026-06-01T00:00:00Z'),
+      // PAS de lastNewsFeedSeenAt : l'user n'a jamais consulté activement
+      followedGames: [{ appId: '730', followedAt: new Date('2026-06-01T00:00:00Z') }],
+    });
+    newsFeedServiceMock.getNewsFeed.mockResolvedValue({
+      items: [
+        { ...feedItem('730', 'in-feed-only'), inFeedAt: new Date('2026-06-12T09:00:00Z') },
+      ],
+    });
+
+    const out = await getPendingDesktopToasts(steamId, {});
+    expect(out.map((i) => i.news.id)).toEqual(['in-feed-only']);
+  });
 });

@@ -224,9 +224,10 @@ describe('services/newsRotationService', () => {
     });
 
     it('skip les subscribers ayant déjà pushSentAt, mais PAS ceux avec seulement inFeedAt', async () => {
-      // inFeedAt ne doit JAMAIS supprimer le push : il est posé dès qu'une
-      // surface (plugin Steam, web feed, app) affiche la news, ce qui ne veut
-      // pas dire que l'utilisateur a été notifié. Seul pushSentAt = déjà notifié.
+      // inFeedAt SEUL ne supprime jamais le push : il est posé dès qu'une surface
+      // (plugin Steam, web feed, app) affiche la news, ce qui ne veut pas dire que
+      // l'utilisateur l'a VUE (il faut aussi lastNewsFeedSeenAt — cf. test "déjà
+      // VU" plus bas). pushSentAt = déjà notifié.
       const newTs = Math.floor(Date.now() / 1000);
       const sA = nextSteamId(); // pushSentAt → skip
       const sB = nextSteamId(); // rien → notifié
@@ -273,6 +274,64 @@ describe('services/newsRotationService', () => {
       );
       expect(notified).toEqual(expect.arrayContaining([sB, sC]));
       expect(notified).not.toContain(sA);
+    });
+
+    it('skip un subscriber qui a déjà VU la news dans le feed (inFeedAt <= lastNewsFeedSeenAt)', async () => {
+      // La news est apparue dans son feed ET il a activement consulté le feed à
+      // ce moment-là ou après (lastNewsFeedSeenAt = curseur de vue active, posé
+      // par mobile/web/extension/plugin) → déjà vue → pas de push. L'autre, dont
+      // la news apparaît APRÈS sa dernière vue active, est notifié.
+      const newTs = Math.floor(Date.now() / 1000);
+      const sSeen = nextSteamId(); // inFeedAt <= lastNewsFeedSeenAt → skip
+      const sUnseen = nextSteamId(); // inFeedAt > lastNewsFeedSeenAt → notifié
+
+      await createUser({
+        steamId: sSeen,
+        lastNewsFeedSeenAt: new Date(Date.now() + 60 * 1000), // vue active après l'apparition
+        notificationSettings: { newsNotifications: true, fcmTokens: [{ token: 't', platform: 'android' }] },
+      });
+      await createUser({
+        steamId: sUnseen,
+        lastNewsFeedSeenAt: new Date(Date.now() - HOUR), // dernière vue active il y a 1h
+        notificationSettings: { newsNotifications: true, fcmTokens: [{ token: 't', platform: 'android' }] },
+      });
+
+      // Les deux ont la news dans leur feed (inFeedAt = maintenant)
+      await UserNewsState.create({
+        steamId: sSeen,
+        appId: '730',
+        newsId: 'news-1',
+        inFeedAt: new Date(),
+        expiresAt: new Date(Date.now() + 90 * DAY),
+      });
+      await UserNewsState.create({
+        steamId: sUnseen,
+        appId: '730',
+        newsId: 'news-1',
+        inFeedAt: new Date(),
+        expiresAt: new Date(Date.now() + 90 * DAY),
+      });
+
+      await createGameSubscription({
+        gameId: '730',
+        name: 'CSGO',
+        lastNewsTimestamp: newTs - DAY,
+        subscribers: [sSeen, sUnseen],
+      });
+
+      steamServiceMock.getGameNews.mockResolvedValue([
+        { gid: 'news-1', title: 't', url: 'u', date: newTs, contents: '' },
+      ]);
+      notificationServiceMock.sendNewsNotification.mockResolvedValue(true);
+
+      const stats = await checkNewsRotation();
+
+      expect(stats.notificationsSent).toBe(1);
+      const notified = notificationServiceMock.sendNewsNotification.mock.calls.map(
+        (c) => c[0],
+      );
+      expect(notified).toEqual([sUnseen]);
+      expect(notified).not.toContain(sSeen);
     });
 
     it('skip les subscribers en suivi silencieux (notifications:false), pas les notifiés ni les legacy', async () => {
