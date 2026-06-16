@@ -38,6 +38,36 @@ export function BellIcon({ size = 22, filled }: { size?: number; filled: boolean
   );
 }
 
+// lock-closed-outline (Ionicons v5) — the locked-library / locked-wishlist empty
+// state, mirroring the mobile EmptyStateMessage iconName "lock-closed-outline".
+export function LockIcon({ size = 64 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
+      <path
+        d="M336 208v-95a80 80 0 00-160 0v95"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={32}
+      />
+      <rect
+        x="96"
+        y="208"
+        width="320"
+        height="272"
+        rx="48"
+        ry="48"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={32}
+      />
+    </svg>
+  );
+}
+
 // [+] control (silent follow), mirrors the mobile FollowToggle: a plus when not
 // followed, a checkmark once followed. Ionicons v5 "add" / "checkmark" paths.
 export function AddIcon({ size = 22 }: { size?: number }) {

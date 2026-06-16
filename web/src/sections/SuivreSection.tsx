@@ -7,14 +7,28 @@ import {
   type WebProfile,
 } from '../api';
 import { type FollowState } from '../useFollow';
+import { checkVisibility, checkWishlistVisibility } from '../auth';
 import { sortLibrary, sortWishlist, type LibrarySort, type WishlistSort } from '../sort';
 import { useT } from '../i18n';
+import { openExternal } from '../format';
 import SubTabs, { type SubTab } from '../components/SubTabs';
 import SortOptions, { type SortOption } from '../components/SortOptions';
 import GamesGrid from '../components/GamesGrid';
+import LockedState from '../components/LockedState';
+import InfoDialog from '../components/InfoDialog';
 import UnifiedSearchView from '../components/UnifiedSearchView';
 
 type Sub = 'mes-jeux' | 'wishlist';
+
+// Steam privacy settings — same destination as the mobile EmptyStateMessage
+// "Ouvrir les paramètres Steam" action.
+const STEAM_PRIVACY_URL = 'https://steamcommunity.com/my/edit/settings';
+
+interface VisibilityHint {
+  gameDetailsVisible: boolean;
+  gamesVisible: boolean;
+  playtimeVisible: boolean;
+}
 
 type LibState =
   | { status: 'loading' }
@@ -60,6 +74,105 @@ export default function SuivreSection({
         ),
     [],
   );
+
+  // "Vérifier mon profil" : état du locked-state (mirror du visibilityHint mobile)
+  // + dialog de résultat. Le hint pilote le checkmark de la 1re étape.
+  const [visibilityHint, setVisibilityHint] = useState<VisibilityHint>({
+    gameDetailsVisible: false,
+    gamesVisible: false,
+    playtimeVisible: false,
+  });
+  const [checking, setChecking] = useState(false);
+  const [dialog, setDialog] = useState<{ title: string; message: string } | null>(
+    null,
+  );
+
+  // Mes jeux : teste la visibilité, met à jour le hint, affiche le résultat et
+  // recharge la bibliothèque si elle est devenue publique. Calque de la logique
+  // checkVisibility de MyGamesScreen.js (mobile).
+  const runCheckVisibility = useCallback(async () => {
+    if (checking) {
+      return;
+    }
+    setChecking(true);
+    try {
+      const data = await checkVisibility();
+      const gamesVisible = data.gamesVisible === true || data.visible === true;
+      const gameDetailsVisible =
+        gamesVisible ||
+        data.gameDetailsVisible === true ||
+        data.wishlistVisible === true;
+      setVisibilityHint({
+        gameDetailsVisible,
+        gamesVisible,
+        playtimeVisible: data.playtimeVisible === true,
+      });
+      if (gamesVisible) {
+        setDialog({
+          title: t('common.success'),
+          message: t('games.checkVisibilitySuccess'),
+        });
+        await loadLibrary();
+        onAccountRefreshed?.();
+      } else if (gameDetailsVisible) {
+        setDialog({
+          title: t('common.info'),
+          message: t('games.checkVisibilityPlaytimeStillPrivate'),
+        });
+      } else {
+        setDialog({
+          title: t('common.info'),
+          message: t('games.checkVisibilityStillPrivate'),
+        });
+      }
+    } catch {
+      setDialog({
+        title: t('common.info'),
+        message: t('games.checkVisibilityStillPrivate'),
+      });
+    } finally {
+      setChecking(false);
+    }
+  }, [checking, loadLibrary, onAccountRefreshed, t]);
+
+  // Wishlist : calque de la logique checkVisibility de WishlistScreen.js (mobile).
+  const runCheckWishlistVisibility = useCallback(async () => {
+    if (checking) {
+      return;
+    }
+    setChecking(true);
+    try {
+      const data = await checkWishlistVisibility();
+      if (data.visible) {
+        const gamesAlsoVisible = data.gamesVisible === true;
+        setVisibilityHint({
+          gameDetailsVisible: true,
+          gamesVisible: gamesAlsoVisible,
+          playtimeVisible: data.playtimeVisible === true,
+        });
+        setDialog({
+          title: t('common.success'),
+          message: t('games.checkVisibilityWishlistSuccess'),
+        });
+        onAccountRefreshed?.(); // re-fetch du profil parent (wishlist)
+        if (gamesAlsoVisible) {
+          await loadLibrary();
+        }
+      } else {
+        setDialog({
+          title: t('common.info'),
+          message: t('games.checkVisibilityWishlistStillPrivate'),
+        });
+      }
+    } catch {
+      setDialog({
+        title: t('common.info'),
+        message: t('games.checkVisibilityWishlistStillPrivate'),
+      });
+    } finally {
+      setChecking(false);
+    }
+  }, [checking, loadLibrary, onAccountRefreshed, t]);
 
   const runAdminRefresh = () => {
     if (adminState === 'loading') {
@@ -162,36 +275,61 @@ export default function SuivreSection({
                   {t('common.error')} — {lib.error}
                 </div>
               )}
-              {lib.status === 'ok' && (
-                <>
-                  <SortOptions
-                    options={LIB_SORTS}
-                    selected={libSort}
-                    onSelect={setLibSort}
+              {lib.status === 'ok' &&
+                (mesJeuxItems.length === 0 ? (
+                  <LockedState
+                    title={t('games.libraryEmptyTitle')}
+                    instructions={[
+                      {
+                        text: t('games.privacyGameDetailsStep'),
+                        completed: visibilityHint.gameDetailsVisible,
+                      },
+                      { text: t('games.privacyPlaytimeStep') },
+                    ]}
+                    actionText={t('games.libraryEmptyPrivacyAction')}
+                    onAction={() => openExternal(STEAM_PRIVACY_URL)}
+                    secondaryActionText={t('games.checkVisibilityAction')}
+                    onSecondaryAction={runCheckVisibility}
+                    secondaryLoading={checking}
                   />
-                  <GamesGrid
-                    items={mesJeuxItems}
-                    editable={editable}
-                    follow={follow}
-                    emptyLabel={t('games.libraryEmptyShortText')}
-                  />
-                </>
-              )}
+                ) : (
+                  <>
+                    <SortOptions
+                      options={LIB_SORTS}
+                      selected={libSort}
+                      onSelect={setLibSort}
+                    />
+                    <GamesGrid
+                      items={mesJeuxItems}
+                      editable={editable}
+                      follow={follow}
+                      emptyLabel={t('games.libraryEmptyShortText')}
+                    />
+                  </>
+                ))}
             </>
           )}
 
           {sub === 'wishlist' &&
             (profile == null ? (
               <div className="state">{t('common.loading')}</div>
+            ) : wishlist.length === 0 ? (
+              <LockedState
+                title={t('games.wishlistEmptyTitle')}
+                instructions={[{ text: t('games.privacyGameDetailsStep') }]}
+                actionText={t('games.wishlistEmptyPrivacyAction')}
+                onAction={() => openExternal(STEAM_PRIVACY_URL)}
+                secondaryActionText={t('games.checkVisibilityAction')}
+                onSecondaryAction={runCheckWishlistVisibility}
+                secondaryLoading={checking}
+              />
             ) : (
               <>
-                {wishlist.length > 0 && (
-                  <SortOptions
-                    options={WISHLIST_SORTS}
-                    selected={wishSort}
-                    onSelect={setWishSort}
-                  />
-                )}
+                <SortOptions
+                  options={WISHLIST_SORTS}
+                  selected={wishSort}
+                  onSelect={setWishSort}
+                />
                 <GamesGrid
                   items={sortWishlist(wishlist, wishSort).map((g) => ({
                     appId: g.appId,
@@ -205,6 +343,14 @@ export default function SuivreSection({
               </>
             ))}
         </>
+      )}
+
+      {dialog && (
+        <InfoDialog
+          title={dialog.title}
+          message={dialog.message}
+          onClose={() => setDialog(null)}
+        />
       )}
     </div>
   );

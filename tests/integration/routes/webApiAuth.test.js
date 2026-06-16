@@ -39,6 +39,8 @@ function writeRequest(steamId) {
     ['DELETE /news-favorites', () => request(app).delete(`/api/web/news-favorites/${steamId}/730/n1`)],
     ['PUT /news-seen', () => request(app).put(`/api/web/news-seen/${steamId}`).send({})],
     ['GET /heartbeat', () => request(app).get(`/api/web/heartbeat/${steamId}`)],
+    ['POST /check-visibility', () => request(app).post(`/api/web/check-visibility/${steamId}`)],
+    ['POST /check-wishlist-visibility', () => request(app).post(`/api/web/check-wishlist-visibility/${steamId}`)],
   ];
 }
 

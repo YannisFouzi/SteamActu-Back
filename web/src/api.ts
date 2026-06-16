@@ -275,6 +275,29 @@ export function fetchLibrary(steamId: string): Promise<LibraryGame[]> {
   return getJSON(`/api/web/library/${encodeURIComponent(steamId)}`);
 }
 
+// Result of "Vérifier mon profil" — mirrors the mobile checkVisibility response
+// (POST /api/web/check-visibility). `gameDetailsVisible` is true as soon as the
+// games OR the wishlist are readable (drives the first instruction's checkmark);
+// `playtimeVisible` distinguishes "games visible" from "games + playtime visible".
+export interface VisibilityCheckResult {
+  visible: boolean;
+  gamesVisible: boolean;
+  gameDetailsVisible?: boolean;
+  wishlistVisible?: boolean;
+  playtimeVisible: boolean;
+  gamesCount: number;
+  wishlistCount?: number;
+}
+
+export interface WishlistVisibilityCheckResult {
+  visible: boolean;
+  wishlistVisible: boolean;
+  gamesVisible: boolean;
+  playtimeVisible: boolean;
+  wishlistCount: number;
+  gamesCount: number;
+}
+
 export async function searchGames(query: string): Promise<SearchResult[]> {
   const q = query.trim();
   if (q.length < 2) return [];

@@ -6,7 +6,12 @@
 // here. Since the Steam client is already logged in, this is near-zero-click; a
 // stranger's browser can't pass OpenID as the owner, so it's blocked.
 
-import { CONTEXT, authHeaders } from './api';
+import {
+  CONTEXT,
+  authHeaders,
+  type VisibilityCheckResult,
+  type WishlistVisibilityCheckResult,
+} from './api';
 
 const STORAGE_KEY = 'gn_session';
 
@@ -117,6 +122,35 @@ async function publicWrite(
   if (!res.ok) {
     throw new Error(`${method} ${url} failed: HTTP ${res.status}`);
   }
+}
+
+// Like publicWrite, but returns the parsed JSON body. Used by "Vérifier mon
+// profil": it triggers a server-side sync (a write → same fail-closed auth and
+// near-zero-click login redirect) but the UI needs the visibility result back.
+async function publicWriteJSON<T>(url: string, method: string): Promise<T> {
+  const headers: Record<string, string> = authHeaders();
+  if (!headers['X-GN-Secret'] && !headers.Authorization) {
+    await startSteamLogin();
+  }
+  const res = await fetch(url, { method, credentials: 'omit', headers });
+  if (!res.ok) {
+    throw new Error(`${method} ${url} failed: HTTP ${res.status}`);
+  }
+  return (await res.json()) as T;
+}
+
+export function checkVisibility(): Promise<VisibilityCheckResult> {
+  return publicWriteJSON(
+    `/api/web/check-visibility/${encodeURIComponent(STEAM_ID)}`,
+    'POST',
+  );
+}
+
+export function checkWishlistVisibility(): Promise<WishlistVisibilityCheckResult> {
+  return publicWriteJSON(
+    `/api/web/check-wishlist-visibility/${encodeURIComponent(STEAM_ID)}`,
+    'POST',
+  );
 }
 
 export async function followGame(

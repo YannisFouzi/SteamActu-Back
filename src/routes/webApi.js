@@ -31,6 +31,10 @@ const {
 const {
   getPendingFollowPrompts,
 } = require('../services/followPromptService');
+const {
+  checkProfileVisibilityAndSync,
+  checkWishlistVisibilityAndSync,
+} = require('../services/steam/visibilityCheckService');
 const { isAdminSteamId } = require('../utils/adminAccess');
 const logger = require('../utils/logger');
 
@@ -676,6 +680,50 @@ router.get('/library/:steamId', requireWebSecretIfPaired, async (req, res) => {
     res.json(library);
   } catch (error) {
     logger.error({ err: error }, 'web_library_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+/**
+ * "Vérifier mon profil" pour le client Steam Desktop / web / extension — jumeau
+ * de POST /api/steam/check-visibility (mobile, session). Teste la visibilité du
+ * profil Steam et lance le sync si c'est devenu public. Réutilise EXACTEMENT le
+ * même service que la route mobile (visibilityCheckService) — aucune logique
+ * dupliquée. Gardé par requireWebAuth (fail-closed) : le sync forcé est une
+ * écriture, un SteamID nu ne suffit jamais. POST uniquement (le SPA tourne dans
+ * un contexte navigateur qui sait poser X-GN-Secret / Bearer ; pas de contrainte
+ * GET-only du proxy Lua ici, contrairement à follow/unfollow).
+ */
+router.post('/check-visibility/:steamId', requireWebAuth, async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    const result = await checkProfileVisibilityAndSync(steamId);
+    if (!result.ok) {
+      return res.status(result.status).json({ message: result.message });
+    }
+    res.json(result.body);
+  } catch (error) {
+    logger.error({ err: error }, 'web_check_visibility_failed');
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+router.post('/check-wishlist-visibility/:steamId', requireWebAuth, async (req, res) => {
+  try {
+    const { steamId } = req.params;
+    if (!isValidSteamId(steamId)) {
+      return res.status(400).json({ message: 'SteamID invalide' });
+    }
+    const result = await checkWishlistVisibilityAndSync(steamId);
+    if (!result.ok) {
+      return res.status(result.status).json({ message: result.message });
+    }
+    res.json(result.body);
+  } catch (error) {
+    logger.error({ err: error }, 'web_check_wishlist_visibility_failed');
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
