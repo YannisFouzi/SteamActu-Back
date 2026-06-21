@@ -6,10 +6,21 @@ echo   Convertisseur M4A vers MP3 320 kbps
 echo ============================================
 echo.
 
+echo [DIAGNOSTIC] Chemin ffmpeg utilise :
+where ffmpeg
+echo.
+echo [DIAGNOSTIC] Version ffmpeg :
+ffmpeg -version 2>&1 | findstr /i "ffmpeg version"
+echo.
+echo [DIAGNOSTIC] Encodeurs MP3 disponibles :
+ffmpeg -encoders 2>&1 | findstr /i "mp3\|lame"
+echo.
+echo ============================================
+echo.
+
 where ffmpeg >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERREUR] ffmpeg introuvable dans le PATH.
-    echo Installez ffmpeg et ajoutez-le au PATH.
     pause
     exit /b 1
 )
@@ -30,7 +41,7 @@ set /a errors=0
 
 for %%f in ("%SOURCE_DIR%\*.m4a") do (
     echo Conversion : %%~nxf
-    ffmpeg -i "%%f" -vn -codec:a mp3 -b:a 320k "%OUTPUT_DIR%\%%~nf.mp3" -y -loglevel error
+    ffmpeg -i "%%f" -vn -codec:a libmp3lame -b:a 320k -q:a 0 "%OUTPUT_DIR%\%%~nf.mp3" -y -loglevel warning
     if !errorlevel! equ 0 (
         set /a count+=1
         echo   [OK]
