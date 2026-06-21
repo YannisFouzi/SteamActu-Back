@@ -31,15 +31,19 @@ echo.
 set /a count=0
 set /a errors=0
 
-for %%f in ("%SOURCE_DIR%\*.m4a") do (
-    echo Conversion : %%~nxf
-    "%FFMPEG%" -i "%%f" -vn -codec:a libmp3lame -b:a 320k -q:a 0 "%OUTPUT_DIR%\%%~nf.mp3" -y -loglevel warning
-    if !errorlevel! equ 0 (
-        set /a count+=1
-        echo   [OK]
+for %%f in ("%SOURCE_DIR%\*.m4a" "%SOURCE_DIR%\*.flac") do (
+    if exist "%OUTPUT_DIR%\%%~nf.mp3" (
+        echo Ignore (deja fait) : %%~nxf
     ) else (
-        set /a errors+=1
-        echo   [ECHEC]
+        echo Conversion : %%~nxf
+        "%FFMPEG%" -i "%%f" -vn -codec:a libmp3lame -b:a 320k -q:a 0 "%OUTPUT_DIR%\%%~nf.mp3" -loglevel warning
+        if !errorlevel! equ 0 (
+            set /a count+=1
+            echo   [OK]
+        ) else (
+            set /a errors+=1
+            echo   [ECHEC]
+        )
     )
 )
 
