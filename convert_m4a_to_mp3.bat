@@ -30,7 +30,7 @@ set /a errors=0
 
 for %%f in ("%SOURCE_DIR%\*.m4a") do (
     echo Conversion : %%~nxf
-    ffmpeg -i "%%f" -vn -codec:a libmp3lame -b:a 320k -q:a 0 "%OUTPUT_DIR%\%%~nf.mp3" -y -loglevel error
+    ffmpeg -i "%%f" -vn -codec:a mp3 -b:a 320k "%OUTPUT_DIR%\%%~nf.mp3" -y -loglevel error
     if !errorlevel! equ 0 (
         set /a count+=1
         echo   [OK]
