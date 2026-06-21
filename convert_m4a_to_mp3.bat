@@ -6,24 +6,16 @@ echo   Convertisseur M4A vers MP3 320 kbps
 echo ============================================
 echo.
 
-echo [DIAGNOSTIC] Chemin ffmpeg utilise :
-where ffmpeg
-echo.
-echo [DIAGNOSTIC] Version ffmpeg :
-ffmpeg -version 2>&1 | findstr /i "ffmpeg version"
-echo.
-echo [DIAGNOSTIC] Encodeurs MP3 disponibles :
-ffmpeg -encoders 2>&1 | findstr /i "mp3\|lame"
-echo.
-echo ============================================
-echo.
+set "FFMPEG=%LOCALAPPDATA%\Microsoft\WinGet\Links\ffmpeg.exe"
 
-where ffmpeg >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERREUR] ffmpeg introuvable dans le PATH.
+if not exist "%FFMPEG%" (
+    echo [ERREUR] FFmpeg WinGet introuvable : %FFMPEG%
     pause
     exit /b 1
 )
+
+echo [OK] FFmpeg utilise : %FFMPEG%
+echo.
 
 set "SOURCE_DIR=%~1"
 if "%SOURCE_DIR%"=="" set "SOURCE_DIR=%cd%"
@@ -41,7 +33,7 @@ set /a errors=0
 
 for %%f in ("%SOURCE_DIR%\*.m4a") do (
     echo Conversion : %%~nxf
-    ffmpeg -i "%%f" -vn -codec:a libmp3lame -b:a 320k -q:a 0 "%OUTPUT_DIR%\%%~nf.mp3" -y -loglevel warning
+    "%FFMPEG%" -i "%%f" -vn -codec:a libmp3lame -b:a 320k -q:a 0 "%OUTPUT_DIR%\%%~nf.mp3" -y -loglevel warning
     if !errorlevel! equ 0 (
         set /a count+=1
         echo   [OK]
