@@ -26,7 +26,7 @@
   "license": "ISC",
   "dependencies": {
     "@sentry/node": "^10.49.0",
-    "agenda": "^5.0.0",
+    "agenda": "^6.2.5",
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
